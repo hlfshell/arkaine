@@ -2,6 +2,7 @@ import math
 import re
 from typing import List, Optional, Tuple, Union
 
+import numpy as np
 import ollama
 
 
@@ -53,19 +54,12 @@ def cosine_distance(a: List[float], b: List[float]):
     are assumed to be a 1-d array of floats. Returns 1.0 if either vector is
     all zeros.
     """
-    if len(a) != len(b):
-        raise ValueError("Vectors must have the same length.")
+    uv = np.dot(a, b)
+    uu = np.dot(a, a)
+    vv = np.dot(b, b)
+    dist = uv / math.sqrt(uu * vv)
 
-    dot_product = sum(x * y for x, y in zip(a, b))
-    magnitude_a = math.sqrt(sum(x**2 for x in a))
-    magnitude_b = math.sqrt(sum(x**2 for x in b))
-
-    if magnitude_a == 0 or magnitude_b == 0:
-        return 1.0
-
-    cosine_similarity = dot_product / (magnitude_a * magnitude_b)
-    cosine_distance = 1 - cosine_similarity
-    return cosine_distance
+    return np.clip(dist, 0.0, 2.0)
 
 
 class InMemoryEmbeddingStore:
