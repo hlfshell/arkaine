@@ -110,16 +110,13 @@ class SimpleBackend(BaseBackend):
                     out += f'"{value}"'
                 else:
                     out += f"{value}"
-            out += f") returned:\n{result}"
+            out += f") returned:\n{result}\n"
             prompt.append(
                 {
                     "role": "system",
                     "content": out,
                 }
             )
-
-        print(">>>")
-        print(prompt)
 
         return prompt
 
