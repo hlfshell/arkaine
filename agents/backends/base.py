@@ -82,6 +82,8 @@ class BaseBackend(ABC):
         # TODO - parallelize it!
         results: ToolResults = []
         for tool, args in calls:
+            if tool not in self.tools:
+                raise ToolNotFoundException(tool, args)
             results.append((tool, args, self.tools[tool](args)))
 
         return results
@@ -114,6 +116,8 @@ class BaseBackend(ABC):
                 prompt = self.tool_results_to_prompts(prompt, tool_results)
             else:
                 # No tool calls means we should have a result
+                # TODO - handle a failure to produce
+                # tool calls
                 return self.parse_for_result(response)
 
 
