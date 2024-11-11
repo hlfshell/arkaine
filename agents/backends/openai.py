@@ -77,7 +77,7 @@ class OpenAI(BaseBackend):
         return simple_tool_results_to_prompts(prompt, results)
 
     def prepare_prompt(self, **kwargs) -> List[Dict[str, str]]:
-        return self.template.render_prompt(kwargs)
+        return self.template.render(kwargs)
 
     def invoke(
         self,

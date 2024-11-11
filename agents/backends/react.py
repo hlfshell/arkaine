@@ -144,15 +144,13 @@ class ReActBackend(BaseBackend):
         for _, tool in self.tools.items():
             tools_block += f"{tool}\n"
 
-        content = self.__templater.render(
+        return self.__templater.render(
             {
                 # "agent_explanation": self.agent_explanation,
                 "tools_block": tools_block,
                 "task": kwargs["task"],
             }
         )
-
-        return [{"role": "system", "content": content}]
 
 
 class FormatException(Exception):

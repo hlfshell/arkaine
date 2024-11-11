@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional, Tuple
+import re
+from typing import Any, Dict, Optional, Tuple
 
 from agents.agent_old import Prompt
 
@@ -25,29 +26,6 @@ class PromptTemplate:
         with open(path) as f:
             return PromptTemplate(f.read())
 
-    def __isolate_templated_variables(self, input: str) -> List[str]:
-        """
-        Given a string, identify all templated variables and return them as a
-        list of strings. These are marked as any continuous variable within
-        templating delimiters. This is an internal function for initialization
-        purposes.
-        """
-        variables = []
-        start = 0
-        current = start
-        while current < len(input):
-            if input[current] == self.template_delimiters[0]:
-                start = current
-                while (
-                    current < len(input)
-                    and input[current] != self.template_delimiters[1]
-                ):
-                    current += 1
-                variables.append(input[start + 1 : current])
-            current += 1
-
-        return variables
-
     def __get_all_variables(self) -> Dict[str, Optional[Any]]:
         """
         Run through the template, be it a string or a list of dicts. Identify
@@ -57,11 +35,14 @@ class PromptTemplate:
         if isinstance(self.template, str):
             return {
                 var: None
-                for var in self.__isolate_templated_variables(self.template)
+                for var in re.findall(
+                    rf"\{self.template_delimiters[0]}(\w+)\{self.template_delimiters[1]}",
+                    self.template,
+                )
             }
         else:
             variables: Dict[str, Optional[Any]] = {}
-            for role, content in self.template:
+            for content in self.template.values():
                 for var in self.__isolate_templated_variables(content):
                     variables[var] = None
 
@@ -85,7 +66,9 @@ class PromptTemplate:
             raise ValueError(f"Variable {name} not found in template.")
         return self.variables[name]
 
-    def render(self, variables: Optional[Dict[str, any]] = None) -> Prompt:
+    def render(
+        self, variables: Optional[Dict[str, any]] = None, role: str = "system"
+    ) -> str:
         """
         Render the template with the given prompt with the current variables in
         memory. If the variables argument is set, this is used instead.
@@ -93,16 +76,18 @@ class PromptTemplate:
         if variables is None:
             variables = self.variables
 
-        if isinstance(self.template, str):
-            return self.template.format(**variables)
-        else:
-            return [
-                {
-                    "role": role,
-                    "content": content.format(**variables),
-                }
-                for role, content in self.template
-            ]
+        delimiter_pattern = (
+            re.escape(self.template_delimiters[0])
+            + r"(.*?)"
+            + re.escape(self.template_delimiters[1])
+        )
+
+        text = self.template
+        for var, value in variables.items():
+            pattern = delimiter_pattern.replace("(.*?)", re.escape(var))
+            text = re.sub(pattern, value, text)
+
+        return [{"role": role, "content": text}]
 
     @staticmethod
     def Load(path: str):

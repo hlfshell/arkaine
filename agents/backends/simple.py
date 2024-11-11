@@ -106,15 +106,13 @@ class SimpleBackend(BaseBackend):
             tools_block += f"{tool}\n"
 
         # Render the prompt
-        content = self.__templater.render(
+        return self.__templater.render(
             {
                 "agent_explanation": self.agent_explanation,
                 "tools_block": tools_block,
                 "task": kwargs["task"],
             }
         )
-
-        return [{"role": "system", "content": content}]
 
     def __parse_arg_string(self, text: str) -> Dict[str, Any]:
         args = {}
