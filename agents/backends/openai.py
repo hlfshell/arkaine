@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import openai as oaiapi
 from openai.types.chat.chat_completion import ChatCompletion
@@ -11,7 +11,7 @@ from agents.agent import Prompt
 from agents.backends.base import BaseBackend
 from agents.backends.common import simple_tool_results_to_prompts
 from agents.templater import PromptTemplate
-from agents.tools.tool import Tool, ToolResults
+from agents.tools.tool import Tool, ToolArguments, ToolResults
 
 
 class OpenAI(BaseBackend):
@@ -39,7 +39,7 @@ class OpenAI(BaseBackend):
 
     def parse_for_tool_calls(
         self, response: ChatCompletion, stop_at_first_tool: bool = False
-    ) -> ToolResults:
+    ) -> List[Tuple[str, ToolArguments]]:
         """
         parse_for_tool_calls accepts a chatgpt response, extract all tool
         calls.
@@ -47,7 +47,7 @@ class OpenAI(BaseBackend):
         Note that there is no "stop_at_first_tool" functionality on this
         function like other backends.
         """
-        tool_calls: List[str, Dict[str, Any]] = []
+        tool_calls: List[Dict[str, Any]] = []
         if response.choices[0].message.tool_calls:
             for tool_msg in response.choices[0].message.tool_calls:
                 tool_name = tool_msg.function.name
@@ -61,7 +61,7 @@ class OpenAI(BaseBackend):
         self,
         prompt: Prompt,
         results: ToolResults,
-    ) -> List[List[Dict[str, str]]]:
+    ) -> List[Prompt]:
         return simple_tool_results_to_prompts(prompt, results)
 
     def prepare_prompt(self, **kwargs) -> Prompt:
