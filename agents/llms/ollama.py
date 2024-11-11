@@ -1,4 +1,4 @@
-from ollama import Client, Message
+from ollama import Client
 
 from agents.agent import Prompt
 from agents.llms.llm import LLM
