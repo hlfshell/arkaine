@@ -3,10 +3,11 @@ from typing import Optional
 
 import openai
 
-from agents.agent_old import LLM, Prompt
+from agents.agent import Prompt
+from agents.llms.llm import LLM
 
 
-class OpenAILLM(LLM):
+class GPT(LLM):
     def __init__(
         self,
         api_key: Optional[str] = None,
@@ -18,7 +19,6 @@ class OpenAILLM(LLM):
 
         self.__api_key = api_key or os.getenv("OPENAI_API_KEY")
 
-        # self.client = openai.Client(api_key=self.__api_key)
         self.client = openai.Client(api_key=self.__api_key)
 
         self.temperature = temperature
