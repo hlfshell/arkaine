@@ -41,6 +41,8 @@ class Agent(Tool, ABC):
         pass
 
     def __call__(self, **kwargs):
+        kwargs = self.fulfill_defaults(kwargs)
+        self.check_arguments(kwargs)
         prompt = self.prepare_prompt(**kwargs)
         result = self.llm.completion(prompt)
         return self.process_answer(result) if self.process_answer else result
@@ -72,6 +74,7 @@ class ToolAgent(Tool, ABC):
         pass
 
     def __call__(self, **kwargs) -> Any:
+        kwargs = self.fulfill_defaults(kwargs)
         self.check_arguments(kwargs)
         args = self.prepare_for_backend(**kwargs)
         return self.backend.invoke(

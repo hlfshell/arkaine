@@ -16,15 +16,27 @@ ToolResults = List[Tuple[str, ToolArguments, Any]]
 
 class Argument:
     def __init__(
-        self, name: str, description: str, type: str, required: bool = False
+        self,
+        name: str,
+        description: str,
+        type: str,
+        required: bool = False,
+        default: Optional[str] = None,
     ):
         self.name = name
         self.description = description
         self.type = type
         self.required = required
+        self.default = default
 
     def __str__(self) -> str:
-        return f"{self.name} - {self.type} - Required: {self.required} - {self.description}"
+        out = f"{self.name} - {self.type} - Required: "
+        out += f"{self.required} - "
+        if self.default:
+            out += f"Default: {self.default} - "
+        out += f"{self.description}"
+
+        return out
 
 
 class Example:
@@ -80,6 +92,7 @@ class Tool:
         self.examples = examples
 
     def __call__(self, args: Dict[str, Any]):
+        args = self.fulfill_defaults(args)
         self.check_arguments(args)
         return self.func(args)
 
@@ -94,7 +107,19 @@ class Tool:
     def __str__(self) -> str:
         return Tool.stringify(self)
 
-    def check_arguments(self, args: Dict[str, Any]):
+    def fulfill_defaults(self, args: ToolArguments) -> ToolArguments:
+        """
+        Given a set of arguments, check to see if any argument that is assigned
+        a default value is missing a value and, if so, fill it with the
+        default.
+        """
+        for arg in self.args:
+            if arg.name not in args and arg.default:
+                args[arg.name] = arg.default
+
+        return args
+
+    def check_arguments(self, args: ToolArguments):
         missing_args = []
         extraneous_args = []
 
@@ -130,7 +155,12 @@ class Tool:
 
         # Create the properties dictionary
         properties = {
-            arg.name: {"title": arg.name, "type": arg.type} for arg in tool.args
+            arg.name: {
+                "title": arg.name,
+                "type": arg.type,
+                "default": arg.default,
+            }
+            for arg in tool.args
         }
 
         # Create the required list
@@ -138,8 +168,7 @@ class Tool:
 
         # Add properties and required to the output
         output += f'"properties": {properties}, '
-        output += f'"required": {required}, '
-        output += '"type": "object"}'
+        output += f'"required": {required}' + "}"
 
         return output
 

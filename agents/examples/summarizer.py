@@ -26,6 +26,7 @@ class Summarizer(Agent):
                     "The desired length of the summary, in human readable format (ie a 'few sentences')",
                     "string",
                     required=False,
+                    default="a few sentences",
                 ),
             ],
             llm=llm,
@@ -60,7 +61,13 @@ class Summarizer(Agent):
     def prepare_prompt(self, **kwargs) -> Prompt:
         pass
 
-    def __call__(self, text: str = "", length: str = "a paragraph") -> str:
+    def __call__(self, **kwargs) -> str:
+        kwargs = self.fulfill_defaults(kwargs)
+        self.check_arguments(kwargs)
+
+        text = kwargs["text"]
+        length = kwargs["length"]
+
         chunks = self.__chunk_text(text)
 
         # Summarize each chunk
