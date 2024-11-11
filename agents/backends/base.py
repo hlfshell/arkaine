@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -104,7 +105,11 @@ class BaseBackend(ABC):
             if max_steps and steps > max_steps:
                 raise Exception("too many steps")
 
-            response = self.llm.completion(prompt)
+            #     inspect.signature(method)
+
+            response = self.llm.completion(
+                prompt, tools=[tool for tool in self.tools.values()]
+            )
 
             tool_calls = self.parse_for_tool_calls(
                 response,
