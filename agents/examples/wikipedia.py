@@ -8,12 +8,11 @@ from agents.backends.react import ReActBackend
 from agents.backends.simple import SimpleBackend
 from agents.documents import InMemoryEmbeddingStore, chunk_text_by_sentences
 from agents.llms.llm import LLM
+from agents.templater import PromptTemplate
 from agents.tools.tool import Argument, Tool
 
 TOPIC_QUERY_TOOL_NAME = "wikipedia_search_pages"
 PAGE_CONTENT_TOOL_NAME = "wikipedia_get_page"
-
-from agents.templater import PromptTemplate
 
 
 class WikipediaTopicQuery(Tool):
