@@ -3,6 +3,7 @@ from typing import Any, Dict, List
 import wikipedia
 
 from agents.agent import ToolAgent
+from agents.backends.ollama import Ollama
 from agents.backends.openai import OpenAI
 from agents.backends.react import ReActBackend
 from agents.backends.simple import SimpleBackend
@@ -125,7 +126,7 @@ class WikipediaSearch(ToolAgent):
     def __init__(
         self, llm: LLM, name: str = "wikipedia_search", backend: str = "react"
     ):
-        if backend not in ["react", "simple", "openai"]:
+        if backend not in ["react", "simple", "openai", "ollama"]:
             raise ValueError(
                 "Invalid backend specified - must be one of 'react', 'simple', or 'openai'"
             )
@@ -142,14 +143,14 @@ class WikipediaSearch(ToolAgent):
             self.backend = SimpleBackend(llm, tools, self.agent_explanation)
         elif backend == "openai":
 
-            text = """
-You are an AI agent that is tasked to perform certain tasks
-with the help of additional tools. Utilizing these tools, perform
-the following task:
+            self.backend = OpenAI(tools, PROMPT)
 
-{task}
-"""
-            self.backend = OpenAI(tools, PromptTemplate(text))
+        elif backend == "ollama":
+            self.backend = Ollama(
+                "llama3.1",
+                tools,
+                lambda kwargs: PROMPT.render(kwargs, role="user"),
+            )
 
         super().__init__(
             name,
@@ -169,3 +170,13 @@ the following task:
         question = f"Answer the following question: {kwargs['question']}\n"
 
         return {"task": question}
+
+
+PROMPT_TEXT = """
+You are an AI agent that is tasked to perform certain tasks
+with the help of additional tools. Utilizing these tools, perform
+the following task:
+
+{task}
+"""
+PROMPT = PromptTemplate(PROMPT_TEXT)
