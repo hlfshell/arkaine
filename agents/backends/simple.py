@@ -6,6 +6,7 @@ from os import path
 from typing import Any, Callable, Dict, List, Tuple, Union
 
 from agents.backends.base import BaseBackend
+from agents.backends.common import simple_tool_results_to_prompts
 from agents.llms.llm import LLM, Prompt
 from agents.templater import PromptTemplate
 from agents.tools.tool import Tool, ToolArguments, ToolResults
@@ -96,29 +97,7 @@ class SimpleBackend(BaseBackend):
     def tool_results_to_prompts(
         self, prompt: Prompt, results: ToolResults
     ) -> List[Prompt]:
-        for name, args, result in results:
-            out = f"---\n{name}("
-
-            first_tool = True
-            for arg, value in args.items():
-                if first_tool:
-                    first_tool = False
-                else:
-                    out += ", "
-                out += f"{arg}="
-                if isinstance(value, str):
-                    out += f'"{value}"'
-                else:
-                    out += f"{value}"
-            out += f") returned:\n{result}\n"
-            prompt.append(
-                {
-                    "role": "system",
-                    "content": out,
-                }
-            )
-
-        return prompt
+        return simple_tool_results_to_prompts(prompt, results)
 
     def prepare_prompt(self, **kwargs) -> Prompt:
         # Create the tools block
