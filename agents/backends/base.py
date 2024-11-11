@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -89,13 +88,8 @@ class BaseBackend(ABC):
 
         return results
 
-    def get_response(self, prompt: Prompt) -> str:
-        if "tools" not in inspect.signature(self.llm.completion).parameters:
-            return self.llm.completion(prompt)
-        else:
-            return self.llm.completion(
-                prompt, tools=[tool for tool in self.tools.values()]
-            )
+    def query_model(self, prompt: Prompt) -> str:
+        return self.llm.completion(prompt)
 
     def invoke(
         self,
@@ -113,7 +107,7 @@ class BaseBackend(ABC):
             if max_steps and steps > max_steps:
                 raise Exception("too many steps")
 
-            response = self.get_response(prompt)
+            response = self.query_model(prompt)
 
             tool_calls = self.parse_for_tool_calls(
                 response,

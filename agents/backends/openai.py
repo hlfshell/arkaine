@@ -10,7 +10,6 @@ from openai.types.chat.chat_completion import ChatCompletion
 from agents.agent import Prompt
 from agents.backends.base import BaseBackend
 from agents.backends.common import simple_tool_results_to_prompts
-from agents.llms.llm import LLM
 from agents.templater import PromptTemplate
 from agents.tools.tool import Tool, ToolResults
 
@@ -27,9 +26,13 @@ class OpenAI(BaseBackend):
         temperature: float = 0.7,
         max_tokens: int = 1024,
     ):
-        llm = _OpenAI(model, temperature, max_tokens, api_key)
-        super().__init__(llm, tools, max_simultaneous_tools)
+        super().__init__(None, tools, max_simultaneous_tools)
         self.template = template
+        self.model = model
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+        api_key = api_key or os.getenv("OPENAI_API_KEY")
+        self.__client = oaiapi.Client(api_key=api_key)
 
     def parse_for_result(self, response: ChatCompletion) -> str:
         return response.choices[0].message.content
@@ -64,21 +67,16 @@ class OpenAI(BaseBackend):
     def prepare_prompt(self, **kwargs) -> Prompt:
         return self.template.render(kwargs)
 
-
-class _OpenAI(LLM):
-
-    def __init__(
-        self,
-        model: str,
-        temperature: float = 0.7,
-        max_tokens: int = 1024,
-        api_key: Optional[str] = None,
-    ):
-        self.model = model
-        self.temperature = temperature
-        self.max_tokens = max_tokens
-        api_key = api_key or os.getenv("OPENAI_API_KEY")
-        self.__client = oaiapi.Client(api_key=api_key)
+    def query_model(self, prompt: Prompt) -> ChatCompletion:
+        return self.__client.chat.completions.create(
+            model=self.model,
+            messages=prompt,
+            max_tokens=self.max_tokens,
+            temperature=self.temperature,
+            tools=[
+                self.__tool_descriptor(tool) for tool in self.tools.values()
+            ],
+        )
 
     def __tool_descriptor(self, tool: Tool) -> Dict:
         properties = {}
@@ -104,12 +102,3 @@ class _OpenAI(LLM):
                 },
             },
         }
-
-    def completion(self, prompt: Prompt, tools: List[Tool]) -> ChatCompletion:
-        return self.__client.chat.completions.create(
-            model=self.model,
-            messages=prompt,
-            max_tokens=self.max_tokens,
-            temperature=self.temperature,
-            tools=[self.__tool_descriptor(tool) for tool in tools],
-        )
