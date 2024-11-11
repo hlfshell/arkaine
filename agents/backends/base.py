@@ -89,6 +89,14 @@ class BaseBackend(ABC):
 
         return results
 
+    def get_response(self, prompt: Prompt) -> str:
+        if "tools" not in inspect.signature(self.llm.completion).parameters:
+            return self.llm.completion(prompt)
+        else:
+            return self.llm.completion(
+                prompt, tools=[tool for tool in self.tools.values()]
+            )
+
     def invoke(
         self,
         args: Dict[str, Any],
@@ -105,11 +113,7 @@ class BaseBackend(ABC):
             if max_steps and steps > max_steps:
                 raise Exception("too many steps")
 
-            #     inspect.signature(method)
-
-            response = self.llm.completion(
-                prompt, tools=[tool for tool in self.tools.values()]
-            )
+            response = self.get_response(prompt)
 
             tool_calls = self.parse_for_tool_calls(
                 response,
