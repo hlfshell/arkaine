@@ -23,4 +23,6 @@ class OllamaModel(LLM):
         return self.__client.chat(
             model=self.model,
             messages=prompt,
-        )
+        )[
+            "message"
+        ]["content"]
