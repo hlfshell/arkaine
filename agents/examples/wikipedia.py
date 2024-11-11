@@ -1,8 +1,9 @@
-from typing import Dict, List
+from typing import Any, Dict, List
 
 import wikipedia
 
 from agents.agent import ToolAgent
+from agents.backends.openai import OpenAI
 from agents.backends.react import ReActBackend
 from agents.backends.simple import SimpleBackend
 from agents.documents import InMemoryEmbeddingStore, chunk_text_by_sentences
@@ -11,6 +12,8 @@ from agents.tools.tool import Argument, Tool
 
 TOPIC_QUERY_TOOL_NAME = "wikipedia_search_pages"
 PAGE_CONTENT_TOOL_NAME = "wikipedia_get_page"
+
+from agents.templater import PromptTemplate
 
 
 class WikipediaTopicQuery(Tool):
@@ -120,10 +123,35 @@ class WikipediaPage(Tool):
 
 
 class WikipediaSearch(ToolAgent):
-    def __init__(self, llm: LLM, name: str = "wikipedia_search"):
+    def __init__(
+        self, llm: LLM, name: str = "wikipedia_search", backend: str = "react"
+    ):
+        if backend not in ["react", "simple", "openai"]:
+            raise ValueError(
+                "Invalid backend specified - must be one of 'react', 'simple', or 'openai'"
+            )
+
         self.agent_explanation = (
             "Searches for an answer to the question by utilizing Wikipedia"
         )
+
+        tools = [WikipediaPage(), WikipediaTopicQuery()]
+
+        if backend == "react":
+            self.backend = ReActBackend(llm, tools, self.agent_explanation)
+        elif backend == "simple":
+            self.backend = SimpleBackend(llm, tools, self.agent_explanation)
+        elif backend == "openai":
+
+            text = """
+You are an AI agent that is tasked to perform certain tasks
+with the help of additional tools. Utilizing these tools, perform
+the following task:
+
+{task}
+"""
+            self.backend = OpenAI(tools, PromptTemplate(text))
+
         super().__init__(
             name,
             self.agent_explanation,
@@ -135,16 +163,7 @@ class WikipediaSearch(ToolAgent):
                     required=True,
                 )
             ],
-            SimpleBackend(
-                llm,
-                [WikipediaPage(), WikipediaTopicQuery()],
-                self.agent_explanation,
-            ),
-            # ReActBackend(
-            #     llm,
-            #     [WikipediaPage(), WikipediaTopicQuery()],
-            #     1
-            # ),
+            self.backend,
         )
 
     def prepare_for_backend(self, **kwargs) -> Dict[str, Any]:
