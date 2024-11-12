@@ -84,7 +84,7 @@ class BaseBackend(ABC):
         for tool, args in calls:
             if tool not in self.tools:
                 raise ToolNotFoundException(tool, args)
-            results.append((tool, args, self.tools[tool](args)))
+            results.append((tool, args, self.tools[tool](**args)))
 
         return results
 

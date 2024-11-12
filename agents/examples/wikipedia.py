@@ -34,9 +34,8 @@ class WikipediaTopicQuery(Tool):
             self.topic_query,
         )
 
-    def topic_query(self, argdict: Dict[str, str]) -> List[str]:
-        topic = argdict["query"]
-        topics = wikipedia.search(topic)
+    def topic_query(self, query: str) -> List[str]:
+        topics = wikipedia.search(query)
         if len(topics) == 0:
             return "No topics match this query"
 
@@ -102,8 +101,7 @@ class WikipediaPage(Tool):
 
         return chunks
 
-    def page(self, args: Dict[str, str]) -> str:
-        title = args["title"]
+    def page(self, title: str, query: str) -> str:
         content = wikipedia.page(title).content
 
         chunks = self.__break_down_content(content)
@@ -112,7 +110,7 @@ class WikipediaPage(Tool):
         for chunk in chunks:
             store.add_text(chunk)
 
-        results = store.query(args["query"], top_n=5)
+        results = store.query(query, top_n=5)
 
         out = "Here are the top 5 most relevant sections of the specified article:\n"
 

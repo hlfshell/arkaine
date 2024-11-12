@@ -91,10 +91,11 @@ class Tool:
         self.func = func
         self.examples = examples
 
-    def __call__(self, args: Dict[str, Any]):
-        args = self.fulfill_defaults(args)
-        self.check_arguments(args)
-        return self.func(args)
+    # def __call__(self, args: Dict[str, Any]):
+    def __call__(self, **kwargs) -> Any:
+        kwargs = self.fulfill_defaults(kwargs)
+        self.check_arguments(kwargs)
+        return self.func(**kwargs)
 
     def examples_text(
         self, example_format: Optional[Callable[[Example], str]] = None
