@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 
 import requests
 from bs4 import BeautifulSoup
+from markdownify import markdownify as md
 
 from agents.tools.tool import Argument, Tool
 
@@ -70,16 +71,16 @@ class Website:
         soup = BeautifulSoup(self.raw_content, "html.parser")
         return soup.body
 
-    def get_body_text(self):
+    def get_markdown(self):
         """
-        Return the text content of the page. If the page has not been already
-        fetched, it will be fetched first.
+        Return the text content of the page as markdown. If the page has not
+        been already fetched, it will be fetched first.
         """
         if not self.raw_content:
             self.load_content()
 
         soup = BeautifulSoup(self.raw_content, "html.parser")
-        return soup.body.get_text()
+        return md(soup.body.get_text())
 
     def format(self, template: str) -> str:
         """
@@ -154,7 +155,6 @@ class Websearch(Tool):
             else:
                 domains = [domains]
 
-        print("domains", domains)
         query_string = query
         if domains:
             query_string += " " + " OR site:".join(f"site:{d}" for d in domains)
