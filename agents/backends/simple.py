@@ -9,7 +9,8 @@ from agents.backends.base import BaseBackend
 from agents.backends.common import simple_tool_results_to_prompts
 from agents.llms.llm import LLM, Prompt
 from agents.templater import PromptTemplate
-from agents.tools.tool import Tool, ToolArguments, ToolResults
+from agents.tools.tool import Tool
+from agents.tools.types import ToolArguments, ToolResults
 
 
 class SimpleBackend(BaseBackend):

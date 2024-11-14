@@ -1,5 +1,5 @@
 from agents.agent import Prompt
-from agents.tools.tool import ToolResults
+from agents.tools.types import ToolResults
 
 
 def simple_tool_results_to_prompts(

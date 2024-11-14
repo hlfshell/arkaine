@@ -1,7 +1,7 @@
 from typing import Any
 
 from agents.context import Event
-from agents.tools.tool import ToolArguments
+from agents.tools.types import ToolArguments
 
 
 class ToolCalled(Event):

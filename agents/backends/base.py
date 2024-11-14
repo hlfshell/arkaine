@@ -3,8 +3,16 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
 
+from agents.context import Context
+from agents.events import (
+    AgentLLMResponse,
+    AgentPrompt,
+    AgentStep,
+    AgentToolCalls,
+)
 from agents.llms.llm import LLM, Prompt
-from agents.tools.tool import Tool, ToolArguments, ToolResults
+from agents.tools.tool import Tool
+from agents.tools.types import ToolArguments, ToolResults
 
 
 class BaseBackend(ABC):
@@ -73,8 +81,8 @@ class BaseBackend(ABC):
     def prepare_prompt(self, **kwargs) -> Prompt:
         """
         prepare_prompt prepares the initial prompt to tell it what to do. This
-        is often the explanation of what the agent is and what its current task is.
-        Utilize keyword arguments to
+        is often the explanation of what the agent is and what its current task
+        is. Utilize keyword arguments to
         """
         pass
 
@@ -93,21 +101,29 @@ class BaseBackend(ABC):
 
     def invoke(
         self,
+        context: Optional[Context],
         args: Dict[str, Any],
         max_steps: Optional[int] = None,
         stop_at_first_tool: bool = False,
     ) -> str:
         # Build prompt
         prompt = self.prepare_prompt(**args)
+        if context:
+            context.broadcast(AgentPrompt("backend", prompt))
 
         steps = 0
 
         while True:
             steps += 1
+            if context:
+                context.broadcast(AgentStep("backend", steps))
+
             if max_steps and steps > max_steps:
                 raise Exception("too many steps")
 
             response = self.query_model(prompt)
+            if context:
+                context.broadcast(AgentLLMResponse("backend", response))
 
             tool_calls = self.parse_for_tool_calls(
                 response,
@@ -115,6 +131,8 @@ class BaseBackend(ABC):
             )
 
             if len(tool_calls) > 0:
+                if context:
+                    context.broadcast(AgentToolCalls("backend", tool_calls))
                 tool_results = self.call_tools(tool_calls)
                 prompt = self.tool_results_to_prompts(prompt, tool_results)
             else:

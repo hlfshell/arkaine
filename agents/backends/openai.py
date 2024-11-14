@@ -11,7 +11,8 @@ from agents.agent import Prompt
 from agents.backends.base import BaseBackend
 from agents.backends.common import simple_tool_results_to_prompts
 from agents.templater import PromptTemplate
-from agents.tools.tool import Tool, ToolArguments, ToolResults
+from agents.tools.tool import Tool
+from agents.tools.types import ToolArguments, ToolResults
 
 
 class OpenAI(BaseBackend):

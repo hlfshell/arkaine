@@ -10,7 +10,8 @@ from pydantic import BaseModel
 from agents.backends.base import BaseBackend
 from agents.llms.llm import LLM, Prompt
 from agents.templater import PromptTemplate
-from agents.tools.tool import Tool, ToolArguments, ToolResults
+from agents.tools.tool import Tool
+from agents.tools.types import ToolArguments, ToolResults
 
 
 class ReActResponse(BaseModel):

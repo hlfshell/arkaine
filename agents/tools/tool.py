@@ -1,20 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
 from agents.context import Context
 from agents.tools.events import ToolCalled, ToolReturn, ToolStart
-
-# ToolArguments are a dict of the arguments passed to a function, with the key
-# being the argument name and the value being the argument value.
-ToolArguments = Dict[str, Any]
-
-# ToolResults are a type representing a set of of possible tool calls,
-# arguments provided, and their results, representing a history of queries from
-# an LLM to their tools. The format is a list of tuples; each tuple represents
-# the name of the tool, a ToolArguments, and finally the return result of that
-# tool.
-ToolResults = List[Tuple[str, ToolArguments, Any]]
+from agents.tools.types import ToolArguments
 
 
 class Argument:
@@ -103,18 +93,21 @@ class Tool:
             ctx = None
 
         if ctx:
-            ctx.add_event(ToolCalled(self.name, kwargs))
+            ctx.broadcast(ToolCalled(self.name, kwargs))
 
         kwargs = self.fulfill_defaults(kwargs)
 
         try:
             self.check_arguments(kwargs)
 
-            ctx.add_event(ToolStart(self.name))
+            if ctx:
+                ctx.broadcast(ToolStart(self.name))
+
             results = self.func(**kwargs)
+
             if ctx:
                 ctx.output = results
-            ctx.add_event(ToolReturn(self.name, results))
+                ctx.broadcast(ToolReturn(self.name, results))
 
             return results
         except Exception as e:
