@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
+from time import time
 from typing import Any, Callable, Dict, List, Optional
 from uuid import uuid4
 
@@ -12,11 +14,22 @@ class Event:
     and are thus bubbled up through the chain of the context.
     """
 
-    def __init__(self, event_type: str, data: Any):
-        self.event_type = event_type
+    def __init__(self, event_type: str, data: Any = None):
+        self._event_type = event_type
+        self._data = data
+        self._timestamp = time()
+
+    def _get_readable_timestamp(self) -> str:
+        return datetime.fromtimestamp(
+            self._timestamp, tz=timezone.utc
+        ).strftime("%Y-%m-%d %H:%M:%S UTC")
 
     def __str__(self) -> str:
-        return self.event_type
+        out = f"{self._event_type} @ {self._get_readable_timestamp()}"
+        if self._data:
+            out += f":\n{self._data}"
+
+        return out
 
 
 class Context:
@@ -105,8 +118,8 @@ class Context:
 
             for listener in self.__event_listeners["all"]:
                 self.__executor.submit(listener, event)
-            if event.event_type in self.__event_listeners:
-                for listener in self.__event_listeners[event.event_type]:
+            if event._event_type in self.__event_listeners:
+                for listener in self.__event_listeners[event._event_type]:
                     self.__executor.submit(listener, event)
 
     def exception(self, e: Exception):
