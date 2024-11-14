@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from agents.context import Context, Event
+
 # ToolArguments are a dict of the arguments passed to a function, with the key
 # being the argument name and the value being the argument value.
 ToolArguments = Dict[str, Any]
@@ -91,11 +93,28 @@ class Tool:
         self.func = func
         self.examples = examples
 
-    # def __call__(self, args: Dict[str, Any]):
-    def __call__(self, **kwargs) -> Any:
+    def __call__(self, context: Optional[Context] = None, **kwargs) -> Any:
+        if context and not context.is_root:
+            ctx = context.child_context()
+        elif context and context.is_root:
+            ctx = context
+        else:
+            ctx = None
+
         kwargs = self.fulfill_defaults(kwargs)
-        self.check_arguments(kwargs)
-        return self.func(**kwargs)
+
+        try:
+            self.check_arguments(kwargs)
+
+            results = self.func(**kwargs)
+            if ctx:
+                ctx.output = results
+
+            return results
+        except Exception as e:
+            if ctx:
+                ctx.exception(e)
+            raise e
 
     def examples_text(
         self, example_format: Optional[Callable[[Example], str]] = None
@@ -172,6 +191,34 @@ class Tool:
         output += f'"required": {required}' + "}"
 
         return output
+
+
+class ToolCalled(Event):
+    def __init__(self, id: str, tool: str, args: ToolArguments):
+        super().__init__("tool_called", id)
+
+        self.tool = tool
+        self.args = args
+
+    def __str__(self) -> str:
+        out = f"{self.id}: {self.tool}("
+        for arg, value in self.data.items():
+            out += ", ".join(f"{arg}={value}")
+        out += ")"
+
+        return out
+
+
+class ToolStart(Event):
+    def __init__(self, id: str, tool: str):
+        super().__init__("tool_start", id)
+
+        self.tool = tool
+
+
+class ToolReturn(Event):
+    def __init__(self, id: str, result: Any):
+        super().__init__("tool_return", id, result)
 
 
 class InvalidArgumentException(Exception):
