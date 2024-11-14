@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from agents.context import Context, Event
+from agents.context import Context
+from agents.tools.events import ToolCalled, ToolReturn, ToolStart
 
 # ToolArguments are a dict of the arguments passed to a function, with the key
 # being the argument name and the value being the argument value.
@@ -101,14 +102,19 @@ class Tool:
         else:
             ctx = None
 
+        if ctx:
+            ctx.add_event(ToolCalled(self.name, kwargs))
+
         kwargs = self.fulfill_defaults(kwargs)
 
         try:
             self.check_arguments(kwargs)
 
+            ctx.add_event(ToolStart(self.name))
             results = self.func(**kwargs)
             if ctx:
                 ctx.output = results
+            ctx.add_event(ToolReturn(self.name, results))
 
             return results
         except Exception as e:
@@ -191,34 +197,6 @@ class Tool:
         output += f'"required": {required}' + "}"
 
         return output
-
-
-class ToolCalled(Event):
-    def __init__(self, id: str, tool: str, args: ToolArguments):
-        super().__init__("tool_called", id)
-
-        self.tool = tool
-        self.args = args
-
-    def __str__(self) -> str:
-        out = f"{self.id}: {self.tool}("
-        for arg, value in self.data.items():
-            out += ", ".join(f"{arg}={value}")
-        out += ")"
-
-        return out
-
-
-class ToolStart(Event):
-    def __init__(self, id: str, tool: str):
-        super().__init__("tool_start", id)
-
-        self.tool = tool
-
-
-class ToolReturn(Event):
-    def __init__(self, id: str, result: Any):
-        super().__init__("tool_return", id, result)
 
 
 class InvalidArgumentException(Exception):
