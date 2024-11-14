@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, List, Optional
 
 from agents.backends.base import BaseBackend
+from agents.context import Context
 from agents.llms.llm import LLM, Prompt
 from agents.tools.tool import Argument, Example, Tool
 
@@ -40,12 +41,32 @@ class Agent(Tool, ABC):
         """
         pass
 
-    def __call__(self, **kwargs):
+    def __call__(self, context: Optional[Context] = None, **kwargs):
+        if context and not context.is_root:
+            ctx = context.child_context()
+        elif context and context.is_root:
+            ctx = context
+        else:
+            ctx = None
+
         kwargs = self.fulfill_defaults(kwargs)
-        self.check_arguments(kwargs)
-        prompt = self.prepare_prompt(**kwargs)
-        result = self.llm.completion(prompt)
-        return self.process_answer(result) if self.process_answer else result
+
+        try:
+            self.check_arguments(kwargs)
+            prompt = self.prepare_prompt(**kwargs)
+            result = self.llm.completion(prompt)
+
+            result = (
+                self.process_answer(result) if self.process_answer else result
+            )
+            if ctx:
+                ctx.output = result
+
+            return result
+        except Exception as e:
+            if ctx:
+                ctx.exception(e)
+            raise e
 
 
 class ToolAgent(Tool, ABC):
