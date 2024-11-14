@@ -12,11 +12,10 @@ class AgentCalled(Event):
         self.args = args
 
     def __str__(self) -> str:
-        out = f"{self.agent}("
-        for arg, value in self.args.items():
-            out += ", ".join(f"{arg}={value}")
-        out += f") @ {self._get_readable_timestamp()}"
-        return out
+        args_str = ", ".join(
+            f"{arg}={value}" for arg, value in self.args.items()
+        )
+        return f"{self._get_readable_timestamp()} - {self.agent}({args_str})"
 
 
 class AgentPrompt(Event):
@@ -27,8 +26,8 @@ class AgentPrompt(Event):
 
     def __str__(self) -> str:
         return (
-            f"{self.agent} prepared prompt @ {self._get_readable_timestamp()}:"
-            f"\n{self.prompt}"
+            f"{self._get_readable_timestamp()} - {self.agent} prepared prompt:\n"
+            f"{self.prompt}"
         )
 
 
@@ -40,8 +39,8 @@ class AgentLLMResponse(Event):
 
     def __str__(self) -> str:
         return (
-            f"{self.agent} received LLM response @ "
-            f"{self._get_readable_timestamp()}:\n{self.response}"
+            f"{self._get_readable_timestamp()} - {self.agent} received LLM response:\n"
+            f"{self.response}"
         )
 
 
@@ -53,8 +52,8 @@ class AgentReturn(Event):
 
     def __str__(self) -> str:
         return (
-            f"{self.agent} returned @ "
-            f"{self._get_readable_timestamp()}:\n{self.result}"
+            f"{self._get_readable_timestamp()} - {self.agent} returned:\n"
+            f"{self.result}"
         )
 
 
@@ -64,7 +63,7 @@ class AgentLLMCalled(Event):
         self.agent = agent
 
     def __str__(self) -> str:
-        return f"{self.agent} LLM called @ {self._get_readable_timestamp()}"
+        return f"{self._get_readable_timestamp()} - {self.agent} LLM called"
 
 
 class AgentBackendCalled(Event):
@@ -75,8 +74,8 @@ class AgentBackendCalled(Event):
 
     def __str__(self) -> str:
         return (
-            f"{self.agent} backend called @ "
-            f"{self._get_readable_timestamp()}:\n{self.args}"
+            f"{self._get_readable_timestamp()} - {self.agent} backend called:\n"
+            f"{self.args}"
         )
 
 
@@ -87,15 +86,16 @@ class AgentToolCalls(Event):
         self.tool_calls = tool_calls
 
     def __str__(self) -> str:
-        out = f"{self.agent} tool calls @ {self._get_readable_timestamp()}:\n"
-
-        out += "\n".join(
+        tool_calls_str = "\n".join(
             [f"{tool.name}({tool.args})" for tool in self.tool_calls]
         )
-        return out
+        return (
+            f"{self._get_readable_timestamp()} - {self.agent} tool calls:\n"
+            f"{tool_calls_str}"
+        )
 
 
-class AgentStep(Event):
+class AgentBackendStep(Event):
     def __init__(self, agent: str, step: int):
         super().__init__("agent_step")
         self.agent = agent
@@ -103,6 +103,5 @@ class AgentStep(Event):
 
     def __str__(self) -> str:
         return (
-            f"{self.agent} step @ "
-            f"{self._get_readable_timestamp()}: {self.step}"
+            f"{self._get_readable_timestamp()} - {self.agent} step {self.step}"
         )

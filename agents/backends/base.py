@@ -5,9 +5,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from agents.context import Context
 from agents.events import (
+    AgentBackendStep,
     AgentLLMResponse,
     AgentPrompt,
-    AgentStep,
     AgentToolCalls,
 )
 from agents.llms.llm import LLM, Prompt
@@ -116,7 +116,7 @@ class BaseBackend(ABC):
         while True:
             steps += 1
             if context:
-                context.broadcast(AgentStep("backend", steps))
+                context.broadcast(AgentBackendStep("backend", steps))
 
             if max_steps and steps > max_steps:
                 raise Exception("too many steps")

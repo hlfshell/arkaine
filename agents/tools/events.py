@@ -12,11 +12,10 @@ class ToolCalled(Event):
         self.args = args
 
     def __str__(self) -> str:
-        out = f"{self.tool}("
+        out = f"{self._get_readable_timestamp()} - {self.tool}("
         for arg, value in self._data.items():
             out += ", ".join(f"{arg}={value}")
-        out += f") @ {self._get_readable_timestamp()}"
-
+        out += ")"
         return out
 
 
@@ -27,7 +26,7 @@ class ToolStart(Event):
         self.tool = tool
 
     def __str__(self) -> str:
-        return f"{self.tool} started @ {self._get_readable_timestamp()}"
+        return f"{self._get_readable_timestamp()} - {self.tool} started"
 
 
 class ToolReturn(Event):
@@ -39,6 +38,6 @@ class ToolReturn(Event):
 
     def __str__(self) -> str:
         return (
-            f"{self.tool} returned @ {self._get_readable_timestamp()}:\n"
+            f"{self._get_readable_timestamp()} - {self.tool} returned:\n"
             f"{self.result}"
         )
