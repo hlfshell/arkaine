@@ -48,18 +48,17 @@ class Example:
         self.explanation = explanation
 
     @classmethod
-    def ExampleBlock(function_name: str, example: Example) -> str:
+    def ExampleBlock(cls, function_name: str, example: Example) -> str:
         out = ""
         if example.description:
             out += f"{example.description}\n"
         out += f"{function_name}("
 
-        first_arg = True
-        for arg, value in example.args.items():
-            if not first_arg:
-                out += ", "
-            out += f"{arg}={value}"
-        out += ")"
+        args_str = ", ".join(
+            [f"{arg}={value}" for arg, value in example.args.items()]
+        )
+        out += f"{args_str})"
+
         if example.output:
             out += f"\nReturns:\n{example.output}"
 
@@ -160,10 +159,10 @@ class Tool:
     def stringify(tool: Tool) -> str:
         # Start with the tool name and description
         output = f"> Tool Name: {tool.name}\n"
-        output += (
-            "Tool Description: "
-            f"{tool.name}({', '.join([arg.name + ': ' + arg.type for arg in tool.args]            )})\n\n"
-        )
+
+        # Break the long line into multiple lines
+        args_str = ", ".join([f"{arg.name}: {arg.type}" for arg in tool.args])
+        output += f"Tool Description: {tool.name}({args_str})\n\n"
 
         # Add the function description, indented with 4 spaces
         output += f"    {tool.description}\n"
