@@ -12,7 +12,6 @@ setup(
         "markdownify",  # For HTML to markdown conversion
         "groq",  # For Groq LLM integration
         "ollama",  # For Ollama LLM integration
-        "bs4",  # BeautifulSoup alias used in some imports
         "pydantic",  # For data validation (if using OpenAI's latest client)
     ],
     extras_require={
