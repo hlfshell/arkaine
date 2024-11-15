@@ -1,12 +1,10 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import wikipedia
 
 from agents.agent import ToolAgent
-from agents.backends.ollama import Ollama
-from agents.backends.openai import OpenAI
+from agents.backends.base import BaseBackend
 from agents.backends.react import ReActBackend
-from agents.backends.simple import SimpleBackend
 from agents.documents import InMemoryEmbeddingStore, chunk_text_by_sentences
 from agents.llms.llm import LLM
 from agents.templater import PromptTemplate
@@ -122,37 +120,28 @@ class WikipediaPage(Tool):
 
 class WikipediaSearch(ToolAgent):
     def __init__(
-        self, llm: LLM, name: str = "wikipedia_search", backend: str = "react"
+        self,
+        llm: LLM,
+        name: str = "wikipedia_search",
+        backend: Optional[BaseBackend] = None,
     ):
-        if backend not in ["react", "simple", "openai", "ollama"]:
-            raise ValueError(
-                "Invalid backend specified - must be one of 'react', 'simple', or 'openai'"
-            )
-
-        self.agent_explanation = (
+        description = (
             "Searches for an answer to the question by utilizing Wikipedia"
         )
 
-        tools = [WikipediaPage(), WikipediaTopicQuery()]
-
-        if backend == "react":
-            self.backend = ReActBackend(llm, tools, self.agent_explanation)
-        elif backend == "simple":
-            self.backend = SimpleBackend(llm, tools, self.agent_explanation)
-        elif backend == "openai":
-
-            self.backend = OpenAI(tools, PROMPT)
-
-        elif backend == "ollama":
-            self.backend = Ollama(
-                "llama3.1",
-                tools,
-                lambda kwargs: PROMPT.render(kwargs, role="user"),
+        if not backend:
+            backend = ReActBackend(
+                llm,
+                [WikipediaPage(), WikipediaTopicQuery()],
+                description,
             )
+        else:
+            backend.add_tool(WikipediaPage())
+            backend.add_tool(WikipediaTopicQuery())
 
         super().__init__(
             name,
-            self.agent_explanation,
+            description,
             [
                 Argument(
                     "question",
@@ -161,7 +150,7 @@ class WikipediaSearch(ToolAgent):
                     required=True,
                 )
             ],
-            self.backend,
+            backend,
         )
 
     def prepare_for_backend(self, **kwargs) -> Dict[str, Any]:
