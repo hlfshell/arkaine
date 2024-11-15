@@ -114,3 +114,92 @@ def test_context_wait(context):
     assert completion_event.is_set()
     assert context.status == "success"
     assert context.output == "test output"
+
+
+def test_context_to_json(context):
+    """Test that context JSON serialization works correctly"""
+    # Test empty context
+    json_data = context.to_json()
+    assert json_data["id"] is not None
+    assert json_data["parent_id"] is None
+    assert json_data["status"] == "running"
+    assert json_data["output"] is None
+    assert json_data["history"] == []
+    assert json_data["children"] == []
+    assert json_data["error"] is None
+
+    # Test context with output
+    context.output = "test output"
+    json_data = context.to_json()
+    assert json_data["status"] == "success"
+    assert json_data["output"] == "test output"
+
+    # Test context with error
+    context = Context()  # Create new context since output can't be set twice
+    test_error = ValueError("test error")
+    context.exception(test_error)
+    json_data = context.to_json()
+    assert json_data["status"] == "error"
+    assert json_data["error"] == str(test_error)
+
+
+def test_context_to_json_with_events(context):
+    """Test that context JSON serialization properly handles events"""
+    # Add a simple event
+    test_event = Event("test", "test_data")
+    context.broadcast(test_event)
+
+    json_data = context.to_json()
+    assert len(json_data["history"]) == 1
+    event_json = json_data["history"][0]
+    assert event_json["type"] == "test"
+    assert event_json["data"] == "test_data"
+    assert "timestamp" in event_json
+
+
+def test_context_to_json_with_children(context):
+    """Test that context JSON serialization properly handles child contexts"""
+    child = context.child_context()
+    child.output = "child output"
+
+    json_data = context.to_json()
+    assert len(json_data["children"]) == 1
+    child_json = json_data["children"][0]
+    assert child_json["output"] == "child output"
+    assert child_json["status"] == "success"
+
+
+def test_context_to_json_complex_data(context):
+    """Test that context JSON serialization handles complex data types"""
+
+    # Test with object that has to_json method
+    class TestObject:
+        def to_json(self):
+            return {"test": "value"}
+
+    context.broadcast(Event("test", TestObject()))
+    json_data = context.to_json()
+    event_json = json_data["history"][0]
+    assert event_json["data"] == {"test": "value"}
+
+    # Test with non-serializable object
+    class NonSerializable:
+        def __str__(self):
+            return "string representation"
+
+    context = Context()  # Create new context
+    context.broadcast(Event("test", NonSerializable()))
+    json_data = context.to_json()
+    event_json = json_data["history"][0]
+    assert event_json["data"] == "string representation"
+
+    # Test with completely non-serializable object
+    class CompletelyNonSerializable:
+        def __str__(self):
+            raise Exception("Can't convert to string")
+
+    context = Context()  # Create new context
+    context.broadcast(Event("test", CompletelyNonSerializable()))
+    json_data = context.to_json()
+    event_json = json_data["history"][0]
+    assert event_json["data"] == "Unable to serialize data"

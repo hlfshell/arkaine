@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -30,6 +31,26 @@ class Event:
             out += f":\n{self._data}"
 
         return out
+
+    def to_json(self) -> dict:
+        """Convert Event to a JSON-serializable dictionary."""
+        data = self._data
+        if hasattr(data, "to_json"):
+            data = data.to_json()
+        else:
+            try:
+                json.dumps(data)
+            except (TypeError, ValueError):
+                try:
+                    data = str(data)
+                except Exception:
+                    data = "Unable to serialize data"
+
+        return {
+            "type": self._event_type,
+            "timestamp": self._timestamp,
+            "data": data,
+        }
 
 
 class Context:
@@ -149,3 +170,36 @@ class Context:
                 break
 
         self.__status_changed.clear()
+
+    def to_json(self) -> dict:
+        """Convert Context to a JSON-serializable dictionary."""
+        # We have to grab certain things prior to the lock to avoid
+        # competing locks. This introduces a possible race condition
+        status = self.status
+        output = self.__output
+
+        with self.__event_lock:
+            history = [event.to_json() for event in self.__history]
+
+            if hasattr(output, "to_json"):
+                output = output.to_json()
+            else:
+                try:
+                    json.dumps(output)
+                except (TypeError, ValueError):
+                    try:
+                        output = str(output)
+                    except Exception:
+                        output = "Unable to serialize output"
+
+            # Build and return the complete dictionary while still holding the
+            # lock
+            return {
+                "id": self.__id,
+                "parent_id": self.__parent_id,
+                "status": status,
+                "output": output,
+                "history": history,
+                "children": [child.to_json() for child in self.__children],
+                "error": str(self.__exception) if self.__exception else None,
+            }
