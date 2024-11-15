@@ -86,6 +86,14 @@ class BaseBackend(ABC):
         """
         pass
 
+    def add_tool(self, tool: Tool):
+        """
+        Adds a tool to the backend if it does not already exist.
+        """
+        if tool.name in self.tools:
+            return
+        self.tools[tool.name] = tool
+
     def call_tools(self, calls: List[Tuple[str, ToolArguments]]) -> ToolResults:
         # TODO - parallelize it!
         results: ToolResults = []
