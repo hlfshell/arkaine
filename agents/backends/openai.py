@@ -19,8 +19,8 @@ class OpenAI(BaseBackend):
 
     def __init__(
         self,
-        tools: List[Tool],
-        template: PromptTemplate,
+        tools: List[Tool] = [],
+        template: PromptTemplate = PromptTemplate.default(),
         max_simultaneous_tools: int = -1,
         api_key: Optional[str] = None,
         model: str = "gpt-3.5-turbo",
