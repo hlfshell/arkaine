@@ -100,3 +100,10 @@ class PromptTemplate:
             text = re.sub(pattern, str(value), text)
 
         return [{"role": role, "content": text}]
+
+    @classmethod
+    def default(cls) -> PromptTemplate:
+        """Create a default prompt template with agent_explanation and task
+        variables."""
+        template = "{agent_explanation}\n\n{task}"
+        return cls(template)
