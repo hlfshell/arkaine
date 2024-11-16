@@ -17,7 +17,7 @@ class Event:
 
     def __init__(self, event_type: str, data: Any = None):
         self._event_type = event_type
-        self._data = data
+        self.data = data
         self._timestamp = time()
 
     def _get_readable_timestamp(self) -> str:
@@ -27,22 +27,21 @@ class Event:
 
     def __str__(self) -> str:
         out = f"{self._event_type} @ {self._get_readable_timestamp()}"
-        if self._data:
-            out += f":\n{self._data}"
+        if self.data:
+            out += f":\n{self.data}"
 
         return out
 
     def to_json(self) -> dict:
         """Convert Event to a JSON-serializable dictionary."""
-        data = self._data
-        if hasattr(data, "to_json"):
-            data = data.to_json()
+        if hasattr(self.data, "to_json"):
+            data = self.data.to_json()
         else:
             try:
-                json.dumps(data)
+                data = json.dumps(self.data)
             except (TypeError, ValueError):
                 try:
-                    data = str(data)
+                    data = str(self.data)
                 except Exception:
                     data = "Unable to serialize data"
 
