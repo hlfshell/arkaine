@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Agent Context Monitor (Standalone)</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .context-container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .context-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .context-id {
+            font-family: monospace;
+            color: #666;
+        }
+
+        .status {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        .status-running {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .event-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .event {
+            padding: 10px;
+            margin: 5px 0;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .event-timestamp {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .event-type {
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        .connection-status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .connection-status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="connection-status" class="connection-status disconnected">Disconnected</div>
+    <div id="contexts"></div>
+
+    <script>
+        class ContextManager {
+            constructor() {
+                this.contexts = new Map();
+                this.connectionStatus = document.getElementById('connection-status');
+                this.setupWebSocket();
+            }
+
+            setupWebSocket() {
+                try {
+                    const ws = new WebSocket('ws://localhost:9001/ws');
+
+                    ws.onopen = () => {
+                        console.log('WebSocket connected');
+                        this.connectionStatus.textContent = 'Connected';
+                        this.connectionStatus.className = 'connection-status connected';
+                    };
+
+                    ws.onmessage = (event) => {
+                        console.log("MSG", event)
+                        const data = JSON.parse(event.data);
+                        if (data.type === 'context_init') {
+                            this.initContext(data);
+                        } else {
+                            console.log("parsed", data)
+                            this.updateContext(data);
+                        }
+                    };
+
+                    ws.onclose = () => {
+                        console.log('WebSocket connection closed. Retrying in 5 seconds...');
+                        this.connectionStatus.textContent = 'Disconnected (retrying...)';
+                        this.connectionStatus.className = 'connection-status disconnected';
+                        setTimeout(() => this.setupWebSocket(), 500);
+                    };
+
+                    ws.onerror = (error) => {
+                        console.log('WebSocket error:', error);
+                        ws.close();
+                    };
+                } catch (error) {
+                    console.log('Failed to connect to WebSocket:', error);
+                    this.connectionStatus.textContent = 'Disconnected (retrying...)';
+                    this.connectionStatus.className = 'connection-status disconnected';
+                    setTimeout(() => this.setupWebSocket(), 500);
+                }
+            }
+
+            initContext(data) {
+                if (!this.contexts.has(data.context_id)) {
+                    this.contexts.set(data.context_id, {
+                        id: data.context_id,
+                        parent_id: data.parent_id,
+                        status: data.status,
+                        events: []
+                    });
+                    this.render();
+                }
+            }
+
+            updateContext(event) {
+                console.log("event!", event)
+                const contextId = event.context_id;
+                if (!this.contexts.has(contextId)) {
+                    console.log("creating context", contextId)
+                    this.contexts.set(contextId, {
+                        id: contextId,
+                        parent_id: event.parent_id,
+                        status: 'running',
+                        events: []
+                    });
+                }
+
+                const context = this.contexts.get(contextId);
+
+
+                context.events.push(event);
+
+                console.log('Updated context:', contextId, context);
+                console.log('Current events:', context.events);
+
+                this.render();
+            }
+
+            formatTimestamp(timestamp) {
+                const date = new Date(timestamp * 1000);
+                return date.toLocaleString();
+            }
+
+            formatData(data) {
+                if (data === null || data === undefined) {
+                    return '';
+                }
+                if (typeof data === 'object') {
+                    try {
+                        return JSON.stringify(data, null, 2);
+                    } catch (e) {
+                        return String(data);
+                    }
+                }
+                return String(data);
+            }
+
+            render() {
+                const container = document.getElementById('contexts');
+                container.innerHTML = '';
+
+                const childrenMap = new Map();
+                this.contexts.forEach(context => {
+                    if (context.parent_id) {
+                        if (!childrenMap.has(context.parent_id)) {
+                            childrenMap.set(context.parent_id, []);
+                        }
+                        childrenMap.get(context.parent_id).push(context);
+                    }
+                });
+
+                this.contexts.forEach(context => {
+                    if (!context.parent_id) {
+                        this.renderContext(container, context, childrenMap, 0);
+                    }
+                });
+            }
+
+            renderContext(container, context, childrenMap, depth) {
+                console.log('Rendering context:', context.id, 'with events:', context.events);
+
+                const contextElement = document.createElement('div');
+                contextElement.className = 'context-container';
+                contextElement.style.marginLeft = `${depth * 20}px`;
+
+                const eventsHtml = context.events.map(event => `
+                    <li class="event">
+                        <span class="event-timestamp">${this.formatTimestamp(event.timestamp)}</span>
+                        <span class="event-type">${event.type}</span>
+                        ${event.data ? `<pre>${this.formatData(event.data)}</pre>` : ''}
+                    </li>
+                `).join('');
+
+                console.log('Generated events HTML:', eventsHtml);
+
+                contextElement.innerHTML = `
+                    <div class="context-header">
+                        <span class="context-id">Context: ${context.id}</span>
+                        <span class="status status-${context.status}">${context.status}</span>
+                    </div>
+                    <ul class="event-list">
+                        ${eventsHtml}
+                    </ul>
+                `;
+
+                container.appendChild(contextElement);
+
+                if (childrenMap.has(context.id)) {
+                    childrenMap.get(context.id).forEach(childContext => {
+                        this.renderContext(container, childContext, childrenMap, depth + 1);
+                    });
+                }
+            }
+        }
+
+        window.addEventListener('load', () => {
+            window.contextManager = new ContextManager();
+        });
+    </script>
+</body>
+
+</html>
