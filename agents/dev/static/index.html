@@ -67,21 +67,47 @@
             border-radius: 4px;
         }
 
+        .event-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            gap: 12px;
+        }
+
         .event-timestamp {
             color: #666;
             font-size: 0.9em;
+            white-space: nowrap;
         }
 
         .event-type {
             font-weight: bold;
-            margin-right: 10px;
+            padding: 2px 8px;
+            border-radius: 3px;
+            background: #e9ecef;
+            color: #495057;
+            font-size: 0.9em;
+        }
+
+        .event-data {
+            margin-top: 8px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+
+        .event-data-label {
+            color: #666;
+            font-size: 0.85em;
+            margin-bottom: 4px;
         }
 
         pre {
-            background: #f8f9fa;
+            background: #f1f3f5;
             padding: 10px;
             border-radius: 4px;
             overflow-x: auto;
+            margin: 0;
+            border: 1px solid #dee2e6;
         }
 
         .connection-status {
@@ -119,12 +145,41 @@
 
             setupWebSocket() {
                 try {
+                    // Close existing connection if any
+                    if (this.ws) {
+                        this.ws.close();
+                        this.ws = null;
+                    }
+
                     const ws = new WebSocket('ws://localhost:9001/ws');
+                    this.ws = ws;
+
+                    // Add connection timeout
+                    const connectionTimeout = setTimeout(() => {
+                        if (ws.readyState !== WebSocket.OPEN) {
+                            console.log('Connection timeout. Retrying...');
+                            ws.close();
+                        }
+                    }, 2000); // Reduced to 2 seconds
+
+                    // Add readyState check
+                    if (ws.readyState === WebSocket.CONNECTING) {
+                        console.log('WebSocket connecting...');
+                    }
 
                     ws.onopen = () => {
+                        clearTimeout(connectionTimeout);
                         console.log('WebSocket connected');
                         this.connectionStatus.textContent = 'Connected';
                         this.connectionStatus.className = 'connection-status connected';
+                        this.retryCount = 0;
+
+                        // Send a ping to verify connection
+                        try {
+                            ws.send(JSON.stringify({ type: 'ping' }));
+                        } catch (e) {
+                            console.log('Failed to send initial ping:', e);
+                        }
                     };
 
                     ws.onmessage = (event) => {
@@ -139,10 +194,20 @@
                     };
 
                     ws.onclose = () => {
-                        console.log('WebSocket connection closed. Retrying in 5 seconds...');
-                        this.connectionStatus.textContent = 'Disconnected (retrying...)';
+                        clearTimeout(connectionTimeout);
+
+                        // Implement exponential backoff
+                        this.retryCount = (this.retryCount || 0) + 1;
+                        const backoffTime = Math.min(1000 * Math.pow(2, this.retryCount - 1), 5000);
+
+                        console.log(`WebSocket connection closed. Retrying in ${backoffTime / 1000} seconds...`);
+                        this.connectionStatus.textContent = `Disconnected (retrying in ${backoffTime / 1000}s...)`;
                         this.connectionStatus.className = 'connection-status disconnected';
-                        setTimeout(() => this.setupWebSocket(), 500);
+
+                        // Clean up
+                        this.ws = null;
+
+                        setTimeout(() => this.setupWebSocket(), backoffTime);
                     };
 
                     ws.onerror = (error) => {
@@ -151,9 +216,14 @@
                     };
                 } catch (error) {
                     console.log('Failed to connect to WebSocket:', error);
-                    this.connectionStatus.textContent = 'Disconnected (retrying...)';
+                    this.connectionStatus.textContent = 'Connection failed';
                     this.connectionStatus.className = 'connection-status disconnected';
-                    setTimeout(() => this.setupWebSocket(), 500);
+
+                    // Implement exponential backoff here too
+                    this.retryCount = (this.retryCount || 0) + 1;
+                    const backoffTime = Math.min(this.retryCount * 1000, 5000);
+
+                    setTimeout(() => this.setupWebSocket(), backoffTime);
                 }
             }
 
@@ -240,13 +310,23 @@
                 contextElement.className = 'context-container';
                 contextElement.style.marginLeft = `${depth * 20}px`;
 
-                const eventsHtml = context.events.map(event => `
-                    <li class="event">
-                        <span class="event-timestamp">${this.formatTimestamp(event.timestamp)}</span>
-                        <span class="event-type">${event.type}</span>
-                        ${event.data ? `<pre>${this.formatData(event.data)}</pre>` : ''}
-                    </li>
-                `).join('');
+                const eventsHtml = context.events.map(event => {
+                    const eventData = this.formatEventData(event);
+                    return `
+                        <li class="event">
+                            <div class="event-header">
+                                <span class="event-timestamp">${this.formatTimestamp(event.timestamp)}</span>
+                                <span class="event-type">${event.type}</span>
+                            </div>
+                            ${eventData ? `
+                                <div class="event-data">
+                                    <div class="event-data-label">Event Data:</div>
+                                    <pre>${eventData}</pre>
+                                </div>
+                            ` : ''}
+                        </li>
+                    `;
+                }).join('');
 
                 console.log('Generated events HTML:', eventsHtml);
 
@@ -267,6 +347,50 @@
                         this.renderContext(container, childContext, childrenMap, depth + 1);
                     });
                 }
+            }
+
+            formatEventData(event) {
+                if (!event.data) return '';
+
+                let formattedData;
+                if (typeof event.data === 'object') {
+                    try {
+                        // Special handling for different event types
+                        switch (event.type) {
+                            case 'agent_prompt':
+                                formattedData = this.formatPromptData(event.data);
+                                break;
+                            case 'agent_tool_calls':
+                                formattedData = this.formatToolCallsData(event.data);
+                                break;
+                            default:
+                                formattedData = JSON.stringify(event.data, null, 2);
+                        }
+                    } catch (e) {
+                        formattedData = String(event.data);
+                    }
+                } else {
+                    formattedData = String(event.data);
+                }
+                return formattedData;
+            }
+
+            formatPromptData(data) {
+                if (Array.isArray(data)) {
+                    return data.map(msg => {
+                        return `${msg.role}: ${msg.content}`;
+                    }).join('\n\n');
+                }
+                return JSON.stringify(data, null, 2);
+            }
+
+            formatToolCallsData(data) {
+                if (data.tool_calls) {
+                    return data.tool_calls.map(call => {
+                        return `${call.name}(${JSON.stringify(call.args, null, 2)})`;
+                    }).join('\n\n');
+                }
+                return JSON.stringify(data, null, 2);
             }
         }
 

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import socket
 import threading
 from typing import Dict, Optional, Set
 
@@ -35,30 +34,51 @@ class ContextSocket:
 
     def _handle_client(self, websocket):
         """Handle an individual client connection"""
-        print("New client connected")
-        with self._lock:
-            self.active_connections.add(websocket)
-            # Send initial context states to new client
-            for context_id, context in self._contexts.items():
-                init_message = {
-                    "type": "context_init",
-                    "context_id": context_id,
-                    "parent_id": context._Context__parent_id,
-                    "status": context.status,
-                }
-                websocket.send(json.dumps(init_message))
+        # Store remote address early, while connection is guaranteed to be open
         try:
+            remote_addr = websocket.remote_address
+            print(f"New client connected from {remote_addr}")
+        except Exception:
+            remote_addr = "unknown"
+            print("New client connected (address unknown)")
+
+        try:
+            # Use a with statement to ensure proper cleanup
+            with self._lock:
+                self.active_connections.add(websocket)
+                # Send initial context states immediately
+                for context_id, context in self._contexts.items():
+                    try:
+                        init_message = {
+                            "type": "context_init",
+                            "context_id": context_id,
+                            "parent_id": context._Context__parent_id,
+                            "status": context.status,
+                        }
+                        websocket.send(json.dumps(init_message))
+                    except Exception as e:
+                        print(f"Failed to send initial context state: {e}")
+                        return
+
+            # Keep connection alive until client disconnects or server stops
             while self._running:
                 try:
-                    websocket.recv()
+                    # Shorter timeout to allow for faster shutdown
+                    message = websocket.recv(timeout=1)
+                    if message:  # Handle any client messages if needed
+                        pass
+                except TimeoutError:
+                    # This is expected, just continue the loop
+                    continue
                 except Exception:
                     break
+
         except Exception as e:
             print(f"Client connection error: {e}")
         finally:
             with self._lock:
-                self.active_connections.remove(websocket)
-            print("Client disconnected")
+                self.active_connections.discard(websocket)
+            print(f"Client disconnected from {remote_addr}")
 
     def _broadcast_event(self, id: str, event: Event):
         """
@@ -72,16 +92,18 @@ class ContextSocket:
 
         message = json.dumps(event_data)
 
-        dead_connections = set()
         with self._lock:
+            dead_connections = set()
             for websocket in self.active_connections:
                 try:
-                    print("SENDING", message)
                     websocket.send(message)
                 except Exception as e:
-                    print(f"Failed to send event to websocket: {e}")
+                    print(
+                        f"Failed to send event to client {websocket.remote_address}: {e}"
+                    )
                     dead_connections.add(websocket)
 
+            # Clean up dead connections
             self.active_connections -= dead_connections
 
     def attach_context(self, context: Context):
