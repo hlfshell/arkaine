@@ -83,9 +83,9 @@ class Context:
 
         self.__children: List[Context] = []
 
-        self.__event_listeners: Dict[str, List[Callable[[Event], None]]] = {
-            "all": []
-        }
+        self.__event_listeners: Dict[
+            str, List[Callable[[str, Event], None]]
+        ] = {"all": []}
 
         self.__history: List[Event] = []
 
@@ -120,9 +120,13 @@ class Context:
             else:
                 return "running"
 
+    @property
+    def id(self) -> str:
+        return self.__id
+
     def add_listener(
         self,
-        listener: Callable[[Event], None],
+        listener: Callable[[str, Event], None],
         event_type: Optional[str] = None,
     ):
         with self.__event_lock:
@@ -138,10 +142,10 @@ class Context:
             self.__history.append(event)
 
             for listener in self.__event_listeners["all"]:
-                self.__executor.submit(listener, event)
+                self.__executor.submit(listener, self.__id, event)
             if event._event_type in self.__event_listeners:
                 for listener in self.__event_listeners[event._event_type]:
-                    self.__executor.submit(listener, event)
+                    self.__executor.submit(listener, self.__id, event)
 
     def exception(self, e: Exception):
         self.broadcast(Event("error", e))
