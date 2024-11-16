@@ -3,6 +3,7 @@
 
 <head>
     <title>Agent Context Monitor (Standalone)</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -72,6 +73,7 @@
             align-items: center;
             margin-bottom: 8px;
             gap: 12px;
+            cursor: pointer;
         }
 
         .event-timestamp {
@@ -108,6 +110,8 @@
             overflow-x: auto;
             margin: 0;
             border: 1px solid #dee2e6;
+            white-space: pre-wrap;
+            word-wrap: break-word;
         }
 
         .connection-status {
@@ -128,275 +132,398 @@
             background: #f8d7da;
             color: #721c24;
         }
+
+        .collapse-button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px 8px;
+            color: #666;
+            font-size: 0.9em;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .collapse-button:hover {
+            background: #f0f0f0;
+            border-radius: 4px;
+        }
+
+        .collapse-icon {
+            transition: transform 0.2s;
+        }
+
+        .collapse-icon.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .context-content.collapsed,
+        .event-content.collapsed {
+            display: none;
+        }
+
+        .settings-panel {
+            background: white;
+            padding: 12px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            display: flex;
+            gap: 10px;
+        }
+
+        .action-button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background-color 0.2s;
+        }
+
+        .action-button:hover {
+            background: #0056b3;
+        }
+
+        .json-key {
+            color: #d63384;
+        }
+
+        .json-string {
+            color: #198754;
+        }
+
+        .json-number {
+            color: #0d6efd;
+        }
+
+        .json-boolean {
+            color: #dc3545;
+        }
+
+        .json-null {
+            color: #6c757d;
+        }
     </style>
 </head>
 
 <body>
-    <div id="connection-status" class="connection-status disconnected">Disconnected</div>
-    <div id="contexts"></div>
+    <div id="app">
+        <div class="settings-panel">
+            <button @click="expandAll" class="action-button">Expand All</button>
+            <button @click="collapseAll" class="action-button">Collapse All</button>
+        </div>
+
+        <div :class="['connection-status', connectionClass]">
+            {{ connectionStatus }}
+        </div>
+
+        <div class="contexts">
+            <context-view v-for="context in rootContexts" :key="context.id" :context="context"
+                :child-contexts="getChildContexts(context.id)" :settings="settings" :depth="0"></context-view>
+        </div>
+    </div>
 
     <script>
-        class ContextManager {
-            constructor() {
-                this.contexts = new Map();
-                this.connectionStatus = document.getElementById('connection-status');
-                this.setupWebSocket();
-            }
+        const { createApp } = Vue
 
-            setupWebSocket() {
-                try {
-                    // Close existing connection if any
-                    if (this.ws) {
-                        this.ws.close();
-                        this.ws = null;
-                    }
-
-                    const ws = new WebSocket('ws://localhost:9001/ws');
-                    this.ws = ws;
-
-                    // Add connection timeout
-                    const connectionTimeout = setTimeout(() => {
-                        if (ws.readyState !== WebSocket.OPEN) {
-                            console.log('Connection timeout. Retrying...');
-                            ws.close();
-                        }
-                    }, 2000); // Reduced to 2 seconds
-
-                    // Add readyState check
-                    if (ws.readyState === WebSocket.CONNECTING) {
-                        console.log('WebSocket connecting...');
-                    }
-
-                    ws.onopen = () => {
-                        clearTimeout(connectionTimeout);
-                        console.log('WebSocket connected');
-                        this.connectionStatus.textContent = 'Connected';
-                        this.connectionStatus.className = 'connection-status connected';
-                        this.retryCount = 0;
-
-                        // Send a ping to verify connection
-                        try {
-                            ws.send(JSON.stringify({ type: 'ping' }));
-                        } catch (e) {
-                            console.log('Failed to send initial ping:', e);
-                        }
-                    };
-
-                    ws.onmessage = (event) => {
-                        console.log("MSG", event)
-                        const data = JSON.parse(event.data);
-                        if (data.type === 'context_init') {
-                            this.initContext(data);
-                        } else {
-                            console.log("parsed", data)
-                            this.updateContext(data);
-                        }
-                    };
-
-                    ws.onclose = () => {
-                        clearTimeout(connectionTimeout);
-
-                        // Implement exponential backoff
-                        this.retryCount = (this.retryCount || 0) + 1;
-                        const backoffTime = Math.min(1000 * Math.pow(2, this.retryCount - 1), 5000);
-
-                        console.log(`WebSocket connection closed. Retrying in ${backoffTime / 1000} seconds...`);
-                        this.connectionStatus.textContent = `Disconnected (retrying in ${backoffTime / 1000}s...)`;
-                        this.connectionStatus.className = 'connection-status disconnected';
-
-                        // Clean up
-                        this.ws = null;
-
-                        setTimeout(() => this.setupWebSocket(), backoffTime);
-                    };
-
-                    ws.onerror = (error) => {
-                        console.log('WebSocket error:', error);
-                        ws.close();
-                    };
-                } catch (error) {
-                    console.log('Failed to connect to WebSocket:', error);
-                    this.connectionStatus.textContent = 'Connection failed';
-                    this.connectionStatus.className = 'connection-status disconnected';
-
-                    // Implement exponential backoff here too
-                    this.retryCount = (this.retryCount || 0) + 1;
-                    const backoffTime = Math.min(this.retryCount * 1000, 5000);
-
-                    setTimeout(() => this.setupWebSocket(), backoffTime);
+        // Event component - Define before ContextView since ContextView uses it
+        const EventView = {
+            name: 'EventView',  // Add component name
+            props: ['event', 'settings'],
+            data() {
+                return {
+                    isExpanded: this.settings.expandedByDefault
                 }
-            }
+            },
+            methods: {
+                formatTimestamp(timestamp) {
+                    return new Date(timestamp * 1000).toLocaleString()
+                },
+                formatEventData(event) {
+                    if (!event.data) return ''
 
-            initContext(data) {
-                if (!this.contexts.has(data.context_id)) {
-                    this.contexts.set(data.context_id, {
-                        id: data.context_id,
-                        parent_id: data.parent_id,
-                        status: data.status,
-                        events: []
-                    });
-                    this.render();
-                }
-            }
-
-            updateContext(event) {
-                console.log("event!", event)
-                const contextId = event.context_id;
-                if (!this.contexts.has(contextId)) {
-                    console.log("creating context", contextId)
-                    this.contexts.set(contextId, {
-                        id: contextId,
-                        parent_id: event.parent_id,
-                        status: 'running',
-                        events: []
-                    });
-                }
-
-                const context = this.contexts.get(contextId);
-
-
-                context.events.push(event);
-
-                console.log('Updated context:', contextId, context);
-                console.log('Current events:', context.events);
-
-                this.render();
-            }
-
-            formatTimestamp(timestamp) {
-                const date = new Date(timestamp * 1000);
-                return date.toLocaleString();
-            }
-
-            formatData(data) {
-                if (data === null || data === undefined) {
-                    return '';
-                }
-                if (typeof data === 'object') {
                     try {
-                        return JSON.stringify(data, null, 2);
-                    } catch (e) {
-                        return String(data);
-                    }
-                }
-                return String(data);
-            }
-
-            render() {
-                const container = document.getElementById('contexts');
-                container.innerHTML = '';
-
-                const childrenMap = new Map();
-                this.contexts.forEach(context => {
-                    if (context.parent_id) {
-                        if (!childrenMap.has(context.parent_id)) {
-                            childrenMap.set(context.parent_id, []);
+                        let data = event.data
+                        // Try to parse if it's a JSON string
+                        if (typeof data === 'string' && (data.startsWith('{') || data.startsWith('['))) {
+                            try {
+                                data = JSON.parse(data)
+                            } catch (e) {
+                                // If parsing fails, use the original string
+                                console.log('Failed to parse JSON:', e)
+                            }
                         }
-                        childrenMap.get(context.parent_id).push(context);
-                    }
-                });
 
-                this.contexts.forEach(context => {
-                    if (!context.parent_id) {
-                        this.renderContext(container, context, childrenMap, 0);
-                    }
-                });
-            }
-
-            renderContext(container, context, childrenMap, depth) {
-                console.log('Rendering context:', context.id, 'with events:', context.events);
-
-                const contextElement = document.createElement('div');
-                contextElement.className = 'context-container';
-                contextElement.style.marginLeft = `${depth * 20}px`;
-
-                const eventsHtml = context.events.map(event => {
-                    const eventData = this.formatEventData(event);
-                    return `
-                        <li class="event">
-                            <div class="event-header">
-                                <span class="event-timestamp">${this.formatTimestamp(event.timestamp)}</span>
-                                <span class="event-type">${event.type}</span>
-                            </div>
-                            ${eventData ? `
-                                <div class="event-data">
-                                    <div class="event-data-label">Event Data:</div>
-                                    <pre>${eventData}</pre>
-                                </div>
-                            ` : ''}
-                        </li>
-                    `;
-                }).join('');
-
-                console.log('Generated events HTML:', eventsHtml);
-
-                contextElement.innerHTML = `
-                    <div class="context-header">
-                        <span class="context-id">Context: ${context.id}</span>
-                        <span class="status status-${context.status}">${context.status}</span>
-                    </div>
-                    <ul class="event-list">
-                        ${eventsHtml}
-                    </ul>
-                `;
-
-                container.appendChild(contextElement);
-
-                if (childrenMap.has(context.id)) {
-                    childrenMap.get(context.id).forEach(childContext => {
-                        this.renderContext(container, childContext, childrenMap, depth + 1);
-                    });
-                }
-            }
-
-            formatEventData(event) {
-                if (!event.data) return '';
-
-                let formattedData;
-                if (typeof event.data === 'object') {
-                    try {
-                        // Special handling for different event types
                         switch (event.type) {
                             case 'agent_prompt':
-                                formattedData = this.formatPromptData(event.data);
-                                break;
+                                return this.formatPromptData(data)
                             case 'agent_tool_calls':
-                                formattedData = this.formatToolCallsData(event.data);
-                                break;
+                                return this.formatToolCallsData(data)
                             default:
-                                formattedData = JSON.stringify(event.data, null, 2);
+                                return syntaxHighlightJson(data)
                         }
                     } catch (e) {
-                        formattedData = String(event.data);
+                        console.log('Error formatting event data:', e)
+                        return String(event.data)
                     }
-                } else {
-                    formattedData = String(event.data);
-                }
-                return formattedData;
-            }
+                },
+                formatPromptData(data) {
+                    if (Array.isArray(data)) {
+                        return data.map(msg => `${msg.role}: ${msg.content}`).join('\n\n')
+                    }
+                    return JSON.stringify(data, null, 2)
+                },
+                formatToolCallsData(data) {
+                    try {
+                        if (typeof data === 'string') {
+                            data = JSON.parse(data)
+                        }
 
-            formatPromptData(data) {
-                if (Array.isArray(data)) {
-                    return data.map(msg => {
-                        return `${msg.role}: ${msg.content}`;
-                    }).join('\n\n');
+                        if (data.tool_calls) {
+                            return data.tool_calls.map(call => {
+                                if (Array.isArray(call)) {
+                                    // Handle the [name, args] format
+                                    const [name, args] = call
+                                    return `${name}(${JSON.stringify(args, null, 2)})`
+                                } else {
+                                    // Handle object format
+                                    return `${call.name}(${JSON.stringify(call.args, null, 2)})`
+                                }
+                            }).join('\n\n')
+                        }
+                        return syntaxHighlightJson(data)
+                    } catch (e) {
+                        console.log('Error formatting tool calls:', e)
+                        return JSON.stringify(data, null, 2)
+                    }
                 }
-                return JSON.stringify(data, null, 2);
-            }
-
-            formatToolCallsData(data) {
-                if (data.tool_calls) {
-                    return data.tool_calls.map(call => {
-                        return `${call.name}(${JSON.stringify(call.args, null, 2)})`;
-                    }).join('\n\n');
-                }
-                return JSON.stringify(data, null, 2);
+            },
+            template: `
+                <li class="event">
+                    <div class="event-header" @click="isExpanded = !isExpanded">
+                        <span :class="['collapse-icon', { collapsed: !isExpanded }]">▼</span>
+                        <span class="event-timestamp">{{ formatTimestamp(event.timestamp) }}</span>
+                        <span class="event-type">{{ event.type }}</span>
+                    </div>
+                    <div :class="['event-content', { collapsed: !isExpanded }]">
+                        <div v-if="formatEventData(event)" class="event-data">
+                            <div class="event-data-label">Event Data:</div>
+                            <pre v-html="formatEventData(event)"></pre>
+                        </div>
+                    </div>
+                </li>
+            `,
+            mounted() {
+                window.addEventListener('updateExpansion', (e) => {
+                    this.isExpanded = e.detail.expanded;
+                });
+            },
+            unmounted() {
+                window.removeEventListener('updateExpansion', this.handleExpansion);
             }
         }
 
-        window.addEventListener('load', () => {
-            window.contextManager = new ContextManager();
-        });
+        // Context component
+        const ContextView = {
+            name: 'ContextView',  // Add component name
+            components: {
+                EventView  // Register EventView component
+            },
+            props: ['context', 'childContexts', 'settings', 'depth'],
+            data() {
+                return {
+                    isExpanded: this.settings.expandedByDefault
+                }
+            },
+            template: `
+                <div class="context-container" :style="{ marginLeft: depth * 20 + 'px' }">
+                    <div class="context-header">
+                        <button class="collapse-button" @click="isExpanded = !isExpanded">
+                            <span :class="['collapse-icon', { collapsed: !isExpanded }]">▼</span>
+                            <span class="context-id">Context: {{ context.id }}</span>
+                        </button>
+                        <span :class="['status', 'status-' + context.status]">{{ context.status }}</span>
+                    </div>
+                    <div :class="['context-content', { collapsed: !isExpanded }]">
+                        <ul class="event-list">
+                            <event-view
+                                v-for="event in context.events"
+                                :key="event.timestamp"
+                                :event="event"
+                                :settings="settings"
+                            ></event-view>
+                        </ul>
+                    </div>
+                    <context-view
+                        v-for="childContext in childContexts"
+                        :key="childContext.id"
+                        :context="childContext"
+                        :child-contexts="getChildContexts(childContext.id)"
+                        :settings="settings"
+                        :depth="depth + 1"
+                    ></context-view>
+                </div>
+            `,
+            mounted() {
+                window.addEventListener('updateExpansion', (e) => {
+                    this.isExpanded = e.detail.expanded;
+                });
+            },
+            unmounted() {
+                window.removeEventListener('updateExpansion', this.handleExpansion);
+            }
+        }
+
+        // Add this utility function before the app definition
+        function syntaxHighlightJson(json) {
+            if (typeof json !== 'string') {
+                json = JSON.stringify(json, null, 2);
+            }
+            return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+                let cls = 'json-number';
+                if (/^"/.test(match)) {
+                    if (/:$/.test(match)) {
+                        cls = 'json-key';
+                    } else {
+                        cls = 'json-string';
+                    }
+                } else if (/true|false/.test(match)) {
+                    cls = 'json-boolean';
+                } else if (/null/.test(match)) {
+                    cls = 'json-null';
+                }
+                return '<span class="' + cls + '">' + match + '</span>';
+            });
+        }
+
+        const app = createApp({
+            components: {
+                ContextView,
+                EventView
+            },
+            data() {
+                return {
+                    contexts: new Map(),
+                    ws: null,
+                    retryCount: 0,
+                    settings: {
+                        expandedByDefault: false
+                    },
+                    wsStatus: 'disconnected'
+                }
+            },
+            computed: {
+                connectionStatus() {
+                    return this.wsStatus === 'connected' ? 'Connected' : 'Disconnected'
+                },
+                connectionClass() {
+                    return this.wsStatus
+                },
+                rootContexts() {
+                    return Array.from(this.contexts.values())
+                        .filter(context => !context.parent_id)
+                }
+            },
+            methods: {
+                getChildContexts(parentId) {
+                    return Array.from(this.contexts.values())
+                        .filter(context => context.parent_id === parentId)
+                },
+                setupWebSocket() {
+                    try {
+                        if (this.ws) {
+                            this.ws.close()
+                            this.ws = null
+                        }
+
+                        const ws = new WebSocket('ws://localhost:9001/ws')
+                        this.ws = ws
+
+                        ws.onopen = () => {
+                            console.log('WebSocket connected')
+                            this.wsStatus = 'connected'
+                            this.retryCount = 0
+                        }
+
+                        ws.onmessage = (event) => {
+                            const data = JSON.parse(event.data)
+                            console.log('Received message:', data)
+                            if (data.type === 'context_init') {
+                                this.initContext(data)
+                            } else {
+                                this.updateContext(data)
+                            }
+                        }
+
+                        ws.onclose = () => {
+                            console.log('WebSocket closed')
+                            this.wsStatus = 'disconnected'
+                            this.retryCount++
+                            const backoffTime = Math.min(1000 * Math.pow(2, this.retryCount - 1), 5000)
+                            setTimeout(() => this.setupWebSocket(), backoffTime)
+                        }
+
+                        ws.onerror = (error) => {
+                            console.log('WebSocket error:', error)
+                            ws.close()
+                        }
+                    } catch (error) {
+                        console.log('Failed to connect:', error)
+                        this.wsStatus = 'disconnected'
+                        setTimeout(() => this.setupWebSocket(), 1000)
+                    }
+                },
+                initContext(data) {
+                    if (!this.contexts.has(data.context_id)) {
+                        this.contexts.set(data.context_id, {
+                            id: data.context_id,
+                            parent_id: data.parent_id,
+                            status: data.status,
+                            events: []
+                        })
+                        // Force update to trigger reactivity
+                        this.contexts = new Map(this.contexts)
+                    }
+                },
+                updateContext(event) {
+                    const contextId = event.context_id
+                    if (!this.contexts.has(contextId)) {
+                        this.contexts.set(contextId, {
+                            id: contextId,
+                            parent_id: event.parent_id,
+                            status: 'running',
+                            events: []
+                        })
+                    }
+
+                    const context = this.contexts.get(contextId)
+                    context.events.push(event)
+                    // Force update to trigger reactivity
+                    this.contexts = new Map(this.contexts)
+                },
+                expandAll() {
+                    this.settings.expandedByDefault = true;
+                    this.updateAllExpansionStates(true);
+                },
+                collapseAll() {
+                    this.settings.expandedByDefault = false;
+                    this.updateAllExpansionStates(false);
+                },
+                updateAllExpansionStates(expanded) {
+                    // Emit a custom event that components can listen to
+                    window.dispatchEvent(new CustomEvent('updateExpansion', {
+                        detail: { expanded }
+                    }));
+                }
+            },
+            mounted() {
+                this.setupWebSocket()
+            }
+        }).mount('#app')
     </script>
 </body>
 
