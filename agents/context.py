@@ -37,13 +37,15 @@ class Event:
         if hasattr(self.data, "to_json"):
             data = self.data.to_json()
         else:
-            try:
-                data = json.dumps(self.data)
-            except (TypeError, ValueError):
+            # Don't serialize if it's already a string
+            if isinstance(self.data, str):
+                data = self.data
+            else:
                 try:
+                    # Only serialize if it's not already a string
+                    data = json.dumps(self.data)
+                except (TypeError, ValueError):
                     data = str(self.data)
-                except Exception:
-                    data = "Unable to serialize data"
 
         return {
             "type": self._event_type,
