@@ -58,6 +58,7 @@ class Agent(Tool, ABC):
             ctx = None
 
         if ctx:
+            ctx.name = self.name
             ctx.broadcast(AgentCalled(self.name, kwargs))
 
         kwargs = self.fulfill_defaults(kwargs)
@@ -124,6 +125,7 @@ class ToolAgent(Tool, ABC):
             ctx = None
 
         if ctx:
+            ctx.name = self.name
             ctx.broadcast(AgentCalled(self.name, kwargs))
 
         kwargs = self.fulfill_defaults(kwargs)

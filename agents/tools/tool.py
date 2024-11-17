@@ -92,6 +92,7 @@ class Tool:
             ctx = None
 
         if ctx:
+            ctx.name = self.name
             ctx.broadcast(ToolCalled(self.name, kwargs))
 
         kwargs = self.fulfill_defaults(kwargs)
