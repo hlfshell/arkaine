@@ -26,7 +26,7 @@ class Event:
         ).strftime("%Y-%m-%d %H:%M:%S UTC")
 
     def __str__(self) -> str:
-        out = f"{self._event_type} @ {self._get_readable_timestamp()}"
+        out = f"{self._get_readable_timestamp()}: {self._event_type}"
         if self.data:
             out += f":\n{self.data}"
 
@@ -37,12 +37,11 @@ class Event:
         if hasattr(self.data, "to_json"):
             data = self.data.to_json()
         else:
-            # Don't serialize if it's already a string
-            if isinstance(self.data, str):
+            if isinstance(self.data, dict):
                 data = self.data
             else:
                 try:
-                    # Only serialize if it's not already a string
+                    # Only serialize if it's not already a string or dict
                     data = json.dumps(self.data)
                 except (TypeError, ValueError):
                     data = str(self.data)
@@ -74,13 +73,21 @@ class Context:
     3. output - what the final output of the tool was, if any
     4. history - a temporally ordered list of events that occurred during the
        execution of that specific tool/agent
+    5. name - a human readable name for the tool/agent
+
+    Updates to the context are broadcasted under the event type ContextUpdate
+    ("context_update" for the listeners)
     """
 
-    def __init__(self, parent_id: Optional[str] = None):
+    def __init__(
+        self, name: Optional[str] = None, parent_id: Optional[str] = None
+    ):
         self.__id = str(uuid4())
+        self.__name = name
         self.__parent_id = parent_id
         self.__exception: Exception = None
         self.__output: Any = None
+        self.__created_at = time()
 
         self.__children: List[Context] = []
 
@@ -105,7 +112,20 @@ class Context:
         # to their parents as well so the root context receives
         # all events
         ctx.add_listener(lambda e: self.broadcast(e))
+
+        # Finally, broadcast that we created a child context
+        self.broadcast(ContextCreated(ctx.name))
+
         return ctx
+
+    @property
+    def name(self) -> str:
+        return self.__name
+
+    @name.setter
+    def name(self, value: str):
+        self.__name = value
+        self.broadcast(ContextUpdate(name=value))
 
     @property
     def is_root(self) -> bool:
@@ -117,7 +137,7 @@ class Context:
             if self.__exception:
                 return "error"
             elif self.__output is not None:
-                return "success"
+                return "complete"
             else:
                 return "running"
 
@@ -149,7 +169,7 @@ class Context:
                     self.__executor.submit(listener, self.__id, event)
 
     def exception(self, e: Exception):
-        self.broadcast(Event("error", e))
+        self.broadcast(ContextException(e))
 
         with self.__event_lock:
             self.__exception = e
@@ -166,7 +186,9 @@ class Context:
             if self.__output:
                 raise ValueError("Output already set")
             self.__output = value
+
         self.__status_changed.set()
+        self.broadcast(ContextOutput(value))
 
     def wait(self, timeout: Optional[float] = None):
         while True:
@@ -201,10 +223,59 @@ class Context:
             # lock
             return {
                 "id": self.__id,
+                "name": self.__name,
                 "parent_id": self.__parent_id,
                 "status": status,
                 "output": output,
                 "history": history,
+                "created_at": self.__created_at,
                 "children": [child.to_json() for child in self.__children],
                 "error": str(self.__exception) if self.__exception else None,
             }
+
+
+class ContextCreated(Event):
+    def __init__(self, name: str):
+        super().__init__("context_created", {"name": name, "timestamp": time()})
+
+    def __str__(self) -> str:
+        out = f"{self._get_readable_timestamp()}: context_created"
+        if self.data:
+            out += f":\n{self.data}"
+        return out
+
+
+class ContextUpdate(Event):
+    def __init__(self, **kwargs):
+        data = {
+            **kwargs,
+        }
+        super().__init__("context_update", data)
+
+    def __str__(self) -> str:
+        out = f"{self._get_readable_timestamp()}: context_update"
+        if self.data:
+            out += f":\n{self.data}"
+        return out
+
+
+class ContextException(Event):
+    def __init__(self, exception: Exception):
+        super().__init__("context_exception", exception)
+
+    def __str__(self) -> str:
+        out = f"{self._get_readable_timestamp()}: context_exception:"
+        if self.data:
+            out += f"\n{self.data}"
+        return out
+
+
+class ContextOutput(Event):
+    def __init__(self, output: Any):
+        super().__init__("context_output", output)
+
+    def __str__(self) -> str:
+        out = f"{self._get_readable_timestamp()}: context_output:"
+        if self.data:
+            out += f"\n{self.data}"
+        return out
