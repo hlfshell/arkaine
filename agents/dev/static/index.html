@@ -18,6 +18,23 @@
             padding: 20px;
             margin-bottom: 20px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            position: relative;
+            border-left: 2px solid #e9ecef;
+            margin-left: 20px;
+        }
+
+        .context-container:before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -20px;
+            width: 18px;
+            height: 30px;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .context-container:first-child:before {
+            display: none;
         }
 
         .context-header {
@@ -38,21 +55,30 @@
             padding: 4px 8px;
             border-radius: 4px;
             font-size: 0.9em;
+            font-weight: 500;
+            text-transform: uppercase;
+            color: white;
+            letter-spacing: 0.5px;
         }
 
         .status-running {
-            background: #fff3cd;
-            color: #856404;
+            background: #ffc107;
+            /* Yellow */
         }
 
-        .status-success {
-            background: #d4edda;
-            color: #155724;
+        .status-complete {
+            background: #28a745;
+            /* Green */
         }
 
         .status-error {
-            background: #f8d7da;
-            color: #721c24;
+            background: #dc3545;
+            /* Red */
+        }
+
+        .status-cancelled {
+            background: #6c757d;
+            /* Gray */
         }
 
         .event-list {
@@ -152,10 +178,12 @@
 
         .collapse-icon {
             transition: transform 0.2s;
-        }
-
-        .collapse-icon.collapsed {
-            transform: rotate(-90deg);
+            font-size: 0.8em;
+            width: 16px;
+            height: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .context-content.collapsed,
@@ -169,8 +197,10 @@
             margin-bottom: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            display: flex;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
             gap: 10px;
+            align-items: center;
         }
 
         .action-button {
@@ -207,23 +237,153 @@
         .json-null {
             color: #6c757d;
         }
+
+        .copy-button {
+            float: right;
+            padding: 4px 8px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+        }
+
+        .copy-button:hover {
+            opacity: 1;
+        }
+
+        .event,
+        .context-header {
+            position: relative;
+        }
+
+        .event-content {
+            margin-right: 30px;
+            /* Make room for copy button */
+        }
+
+        .context {
+            position: relative;
+        }
+
+        .context-header {
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .context-id-section {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .context-section {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .section-header {
+            margin: 0 0 10px 0;
+            color: #495057;
+            font-size: 1em;
+            font-weight: 600;
+        }
+
+        .contexts>.context-container {
+            border-left: none;
+            margin-left: 0;
+        }
+
+        .contexts>.context-container:before {
+            display: none;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .section-header:hover {
+            background-color: #f0f0f0;
+        }
+
+        .event-header {
+            display: grid;
+            grid-template-columns: 20px auto 1fr;
+            gap: 12px;
+        }
+
+        .event-timestamp {
+            text-align: right;
+            color: #666;
+        }
+
+        .connection-pill {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            margin-left: auto;
+        }
+
+        .connection-pill.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .connection-pill.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .context-name {
+            color: #495057;
+            font-weight: 500;
+            margin: 0 12px;
+            padding: 2px 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        .search-input {
+            justify-self: center;
+            width: 400px;
+            padding: 8px 12px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        .event.highlight {
+            background-color: #fff3cd;
+            border-left: 3px solid #ffc107;
+        }
+
+        .event.highlight .event-data pre {
+            background-color: #fff8e6;
+        }
     </style>
 </head>
 
 <body>
     <div id="app">
         <div class="settings-panel">
-            <button @click="expandAll" class="action-button">Expand All</button>
-            <button @click="collapseAll" class="action-button">Collapse All</button>
-        </div>
-
-        <div :class="['connection-status', connectionClass]">
-            {{ connectionStatus }}
+            <span :class="['connection-pill', connectionClass]">{{ connectionStatus }}</span>
+            <input type="text" v-model="searchQuery" placeholder="Search events..." class="search-input">
         </div>
 
         <div class="contexts">
-            <context-view v-for="context in rootContexts" :key="context.id" :context="context"
-                :child-contexts="getChildContexts(context.id)" :settings="settings" :depth="0"></context-view>
+            <context-view v-for="context in rootContexts" :key="context.id" :context="context" :contexts="contexts"
+                :settings="settings" :depth="0"></context-view>
         </div>
     </div>
 
@@ -233,10 +393,49 @@
         // Event component - Define before ContextView since ContextView uses it
         const EventView = {
             name: 'EventView',  // Add component name
-            props: ['event', 'settings'],
+            props: ['event', 'settings', 'context-id'],
             data() {
                 return {
-                    isExpanded: this.settings.expandedByDefault
+                    isExpanded: true  // Default events to expanded
+                }
+            },
+            computed: {
+                isMatch() {
+                    if (!this.$root.searchQuery) return false;
+                    const query = this.$root.searchQuery.toLowerCase();
+
+                    // Check event type
+                    if (this.event.type.toLowerCase().includes(query)) return true;
+
+                    // Check event data
+                    if (!this.event.data) return false;
+
+                    const searchInObject = (obj) => {
+                        if (typeof obj !== 'object') {
+                            return String(obj).toLowerCase().includes(query);
+                        }
+
+                        for (let key in obj) {
+                            const value = obj[key];
+                            if (typeof value === 'object' && value !== null) {
+                                if (searchInObject(value)) return true;
+                            } else if (String(value).toLowerCase().includes(query)) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    };
+
+                    let data = this.event.data;
+                    if (typeof data === 'string') {
+                        try {
+                            data = JSON.parse(data);
+                        } catch (e) {
+                            return data.toLowerCase().includes(query);
+                        }
+                    }
+
+                    return searchInObject(data);
                 }
             },
             methods: {
@@ -300,17 +499,22 @@
                         console.log('Error formatting tool calls:', e)
                         return JSON.stringify(data, null, 2)
                     }
+                },
+                copyEvent() {
+                    const eventJson = JSON.stringify(this.event, null, 2);
+                    navigator.clipboard.writeText(eventJson);
                 }
             },
             template: `
-                <li class="event">
+                <li :class="['event', { highlight: isMatch }]">
                     <div class="event-header" @click="isExpanded = !isExpanded">
-                        <span :class="['collapse-icon', { collapsed: !isExpanded }]">▼</span>
-                        <span class="event-timestamp">{{ formatTimestamp(event.timestamp) }}</span>
+                        <span class="collapse-icon">{{ isExpanded ? '−' : '+' }}</span>
                         <span class="event-type">{{ event.type }}</span>
+                        <span class="event-timestamp">{{ formatTimestamp(event.timestamp) }}</span>
                     </div>
+                    <button class="copy-button" @click.stop="copyEvent">📋</button>
                     <div :class="['event-content', { collapsed: !isExpanded }]">
-                        <div v-if="formatEventData(event)" class="event-data">
+                        <div v-if="event.data" class="event-data">
                             <div class="event-data-label">Event Data:</div>
                             <pre v-html="formatEventData(event)"></pre>
                         </div>
@@ -319,7 +523,9 @@
             `,
             mounted() {
                 window.addEventListener('updateExpansion', (e) => {
-                    this.isExpanded = e.detail.expanded;
+                    if (e.detail.contextId === this.contextId) {
+                        this.isExpanded = e.detail.expanded;
+                    }
                 });
             },
             unmounted() {
@@ -329,53 +535,207 @@
 
         // Context component
         const ContextView = {
-            name: 'ContextView',  // Add component name
+            name: 'ContextView',
             components: {
-                EventView  // Register EventView component
+                EventView
             },
-            props: ['context', 'childContexts', 'settings', 'depth'],
+            props: ['context', 'settings', 'depth', 'contexts'],
             data() {
                 return {
-                    isExpanded: this.settings.expandedByDefault
+                    isExpanded: this.settings.expandedByDefault,
+                    isEventsExpanded: false,  // Events section starts collapsed
+                    isOutputExpanded: true    // Output section starts expanded
+                }
+            },
+            methods: {
+                getChildContexts(parentId) {
+                    if (!this.contexts) return [];
+                    return Array.from(this.contexts.values())
+                        .filter(context => context.parent_id === parentId);
+                },
+                copyContext() {
+                    const contextData = {
+                        id: this.context.id,
+                        name: this.context.name,
+                        parent_id: this.context.parent_id,
+                        status: this.context.status,
+                        output: this.context.output,
+                        error: this.context.error,
+                        created_at: this.context.created_at,
+                        events: this.context.history || [], // Map history to events
+                        children: [] // Will be populated as we process child contexts
+                    };
+                    navigator.clipboard.writeText(JSON.stringify(contextData, null, 2));
+                },
+                formatOutput(output) {
+                    if (!output) return '';
+                    try {
+                        if (typeof output === 'string') {
+                            // Try to parse if it looks like JSON
+                            if (output.trim().startsWith('{') || output.trim().startsWith('[')) {
+                                try {
+                                    const parsed = JSON.parse(output);
+                                    return syntaxHighlightJson(parsed);
+                                } catch {
+                                    return output;
+                                }
+                            }
+                            return output;
+                        }
+                        return syntaxHighlightJson(output);
+                    } catch (e) {
+                        return String(output);
+                    }
+                },
+                formatTimestamp(timestamp) {
+                    if (!timestamp) return 'N/A';
+                    return new Date(timestamp * 1000).toLocaleString();
+                },
+                getCreationTime() {
+                    if (this.context.events) {
+                        const createdEvent = this.context.events.find(e => e.type === 'context_created');
+                        if (createdEvent) {
+                            return createdEvent.data.timestamp;
+                        }
+                        if (this.context.events.length > 0) {
+                            return Math.min(...this.context.events.map(e => e.timestamp));
+                        }
+                    }
+                    return null;
+                },
+                getLastEventTime() {
+                    if (this.context.events && this.context.events.length > 0) {
+                        return Math.max(...this.context.events.map(e => e.timestamp));
+                    }
+                    return null;
+                },
+                handleContextEvent(event) {
+                    switch (event.type) {
+                        case 'context_update':
+                            // Handle context updates (e.g., name changes)
+                            if (event.data.name) {
+                                this.context.name = event.data.name;
+                            }
+                            break;
+
+                        case 'context_exception':
+                            // Handle context exceptions
+                            this.context.status = 'error';
+                            this.context.error = event.data;
+                            break;
+
+                        case 'context_output':
+                            // Handle context output updates
+                            this.context.output = event.data;
+                            this.context.status = 'success';
+                            break;
+                    }
+                },
+                expandAllEvents() {
+                    this.isEventsExpanded = true;
+                    // Set all events in this context to expanded
+                    window.dispatchEvent(new CustomEvent('updateExpansion', {
+                        detail: {
+                            expanded: true,
+                            contextId: this.context.id
+                        }
+                    }));
+                },
+                collapseAllEvents() {
+                    this.isEventsExpanded = false;
+                    // Set all events in this context to collapsed
+                    window.dispatchEvent(new CustomEvent('updateExpansion', {
+                        detail: {
+                            expanded: false,
+                            contextId: this.context.id
+                        }
+                    }));
+                },
+                copyOutput() {
+                    const output = this.context.output;
+                    if (typeof output === 'object') {
+                        navigator.clipboard.writeText(JSON.stringify(output, null, 2));
+                    } else {
+                        navigator.clipboard.writeText(String(output));
+                    }
+                },
+                getEvents() {
+                    return (this.context.events || []).filter(event =>
+                        !['context_update'].includes(event.type)
+                    );
                 }
             },
             template: `
                 <div class="context-container" :style="{ marginLeft: depth * 20 + 'px' }">
                     <div class="context-header">
-                        <button class="collapse-button" @click="isExpanded = !isExpanded">
-                            <span :class="['collapse-icon', { collapsed: !isExpanded }]">▼</span>
-                            <span class="context-id">Context: {{ context.id }}</span>
-                        </button>
                         <span :class="['status', 'status-' + context.status]">{{ context.status }}</span>
+                        <div class="context-id-section">
+                            <button class="collapse-button" @click="isExpanded = !isExpanded">
+                                <span class="collapse-icon"><b>{{ isExpanded ? '−' : '+' }}</b></span>
+                                <span class="context-id">Context {{ context.id }}</span>
+                            </button>
+                            <span v-if="context.name" class="context-name">{{ context.name }}</span>
+                            <span class="context-timestamps">
+                                Created: {{ formatTimestamp(context.created_at) }}
+                            </span>
+                        </div>
+                        <button class="copy-button" @click.stop="copyContext">📋</button>
                     </div>
-                    <div :class="['context-content', { collapsed: !isExpanded }]">
-                        <ul class="event-list">
-                            <event-view
-                                v-for="event in context.events"
-                                :key="event.timestamp"
-                                :event="event"
-                                :settings="settings"
-                            ></event-view>
-                        </ul>
+                    <div v-if="isExpanded">
+                        <div class="context-content">
+                            <!-- Error section -->
+                            <div v-if="context.error" class="context-section error-section">
+                                <div class="section-header">
+                                    <span>Error</span>
+                                </div>
+                                <pre class="error-content">{{ context.error }}</pre>
+                            </div>
+                            
+                            <!-- Events section -->
+                            <div v-if="getEvents().length > 0" class="context-section">
+                                <div class="section-header" style="cursor: pointer;">
+                                    <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                                        <span>Events ({{ getEvents().length }})</span>
+                                        <div style="display: flex; gap: 10px;">
+                                            <button @click="expandAllEvents" class="action-button" style="padding: 2px 8px;"><b>+</b></button>
+                                            <button @click="collapseAllEvents" class="action-button" style="padding: 2px 8px;"><b>−</b></button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <ul v-show="isEventsExpanded" class="event-list">
+                                    <event-view
+                                        v-for="event in getEvents()"
+                                        :key="event.timestamp"
+                                        :event="event"
+                                        :settings="settings"
+                                        :context-id="context.id"
+                                    ></event-view>
+                                </ul>
+                            </div>
+                            
+                            <!-- Output section -->
+                            <div v-if="context.output" class="context-section">
+                                <div class="section-header" @click="isOutputExpanded = !isOutputExpanded" style="cursor: pointer;">
+                                    <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                                        <span>Output</span>
+                                        <button class="copy-button" @click.stop="copyOutput">📋</button>
+                                    </div>
+                                </div>
+                                <pre v-show="isOutputExpanded" v-html="formatOutput(context.output)"></pre>
+                            </div>
+                        </div>
+                        <!-- Child contexts -->
+                        <context-view
+                            v-for="childContext in getChildContexts(context.id)"
+                            :key="childContext.id"
+                            :context="childContext"
+                            :contexts="contexts"
+                            :settings="settings"
+                            :depth="depth + 1"
+                        ></context-view>
                     </div>
-                    <context-view
-                        v-for="childContext in childContexts"
-                        :key="childContext.id"
-                        :context="childContext"
-                        :child-contexts="getChildContexts(childContext.id)"
-                        :settings="settings"
-                        :depth="depth + 1"
-                    ></context-view>
                 </div>
-            `,
-            mounted() {
-                window.addEventListener('updateExpansion', (e) => {
-                    this.isExpanded = e.detail.expanded;
-                });
-            },
-            unmounted() {
-                window.removeEventListener('updateExpansion', this.handleExpansion);
-            }
+            `
         }
 
         // Add this utility function before the app definition
@@ -400,6 +760,64 @@
             });
         }
 
+        // Add this in the <script> section, before other code
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(
+                () => {
+                    // Optional: Show a brief "Copied!" tooltip
+                    console.log('Copied to clipboard');
+                },
+                (err) => {
+                    console.error('Failed to copy:', err);
+                }
+            );
+        }
+
+        // Modify the createEventElement function
+        function createEventElement(event) {
+            const eventDiv = document.createElement('div');
+            eventDiv.className = 'event';
+
+            // Create copy button
+            const copyButton = document.createElement('button');
+            copyButton.className = 'copy-button';
+            copyButton.innerHTML = '📋'; // Clipboard emoji
+            copyButton.onclick = () => copyToClipboard(JSON.stringify(event, null, 2));
+
+            // Create event content div
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'event-content';
+            contentDiv.textContent = formatEvent(event);
+
+            eventDiv.appendChild(copyButton);
+            eventDiv.appendChild(contentDiv);
+            return eventDiv;
+        }
+
+        // Modify the createContextElement function
+        function createContextElement(context) {
+            const contextDiv = document.createElement('div');
+            contextDiv.className = 'context';
+
+            const headerDiv = document.createElement('div');
+            headerDiv.className = 'context-header';
+
+            // Create copy button for context
+            const copyButton = document.createElement('button');
+            copyButton.className = 'copy-button';
+            copyButton.innerHTML = '📋';
+            copyButton.onclick = () => copyToClipboard(JSON.stringify(context, null, 2));
+
+            // Rest of your existing context creation code...
+            headerDiv.appendChild(copyButton);
+            // Add your existing header content...
+
+            contextDiv.appendChild(headerDiv);
+            // Rest of your context creation code...
+
+            return contextDiv;
+        }
+
         const app = createApp({
             components: {
                 ContextView,
@@ -408,14 +826,40 @@
             data() {
                 return {
                     contexts: new Map(),
+                    contextParentMap: new Map(),
                     ws: null,
                     retryCount: 0,
                     settings: {
-                        expandedByDefault: false
+                        expandedByDefault: true
                     },
-                    wsStatus: 'disconnected'
+                    wsStatus: 'disconnected',
+                    searchQuery: ''
                 }
             },
+            template: `
+                <div>
+                    <div class="settings-panel">
+                        <span :class="['connection-pill', connectionClass]">{{ connectionStatus }}</span>
+                        <input 
+                            type="text" 
+                            v-model="searchQuery" 
+                            placeholder="Search events..." 
+                            class="search-input"
+                        >
+                    </div>
+
+                    <div class="contexts">
+                        <context-view
+                            v-for="context in rootContexts"
+                            :key="context.id"
+                            :context="context"
+                            :contexts="contexts"
+                            :settings="settings"
+                            :depth="0"
+                        ></context-view>
+                    </div>
+                </div>
+            `,
             computed: {
                 connectionStatus() {
                     return this.wsStatus === 'connected' ? 'Connected' : 'Disconnected'
@@ -424,14 +868,16 @@
                     return this.wsStatus
                 },
                 rootContexts() {
+                    if (!this.contexts) return [];
                     return Array.from(this.contexts.values())
-                        .filter(context => !context.parent_id)
+                        .filter(context => !context.parent_id);
                 }
             },
             methods: {
                 getChildContexts(parentId) {
+                    if (!this.contexts) return [];
                     return Array.from(this.contexts.values())
-                        .filter(context => context.parent_id === parentId)
+                        .filter(context => context.parent_id === parentId);
                 },
                 setupWebSocket() {
                     try {
@@ -479,31 +925,134 @@
                 },
                 initContext(data) {
                     if (!this.contexts.has(data.context_id)) {
-                        this.contexts.set(data.context_id, {
+                        // Create the new context
+                        const newContext = {
                             id: data.context_id,
                             parent_id: data.parent_id,
-                            status: data.status,
-                            events: []
-                        })
+                            name: data.name || null,  // Add name field
+                            status: data.status || 'running',
+                            output: data.output || null,
+                            error: data.error || null,
+                            created_at: data.created_at || null,
+                            history: data.history || [],
+                            children: []
+                        };
+
+                        // Add it to our contexts map
+                        this.contexts.set(data.context_id, newContext);
+
+                        // If this context has a parent, update the parent's children
+                        if (data.parent_id && this.contexts.has(data.parent_id)) {
+                            const parentContext = this.contexts.get(data.parent_id);
+                            if (!parentContext.children.includes(data.context_id)) {
+                                parentContext.children.push(data.context_id);
+                            }
+                        }
+
+                        // Update the parent map for quick lookups
+                        this.contextParentMap.set(data.context_id, data.parent_id);
+
                         // Force update to trigger reactivity
-                        this.contexts = new Map(this.contexts)
+                        this.contexts = new Map(this.contexts);
                     }
                 },
-                updateContext(event) {
-                    const contextId = event.context_id
-                    if (!this.contexts.has(contextId)) {
-                        this.contexts.set(contextId, {
-                            id: contextId,
-                            parent_id: event.parent_id,
-                            status: 'running',
-                            events: []
-                        })
-                    }
+                updateContext(data) {
+                    if (data.type === 'context') {
+                        // Handle full context state update
+                        const contextData = data.data || data; // Handle both {type:'context', data:{...}} and direct context data
+                        const contextId = contextData.id;
 
-                    const context = this.contexts.get(contextId)
-                    context.events.push(event)
-                    // Force update to trigger reactivity
-                    this.contexts = new Map(this.contexts)
+                        // Skip if we've already processed this context in this update cycle
+                        if (this._processingContexts && this._processingContexts.has(contextId)) {
+                            return;
+                        }
+
+                        // Initialize processing set if needed
+                        if (!this._processingContexts) {
+                            this._processingContexts = new Set();
+                        }
+                        this._processingContexts.add(contextId);
+
+                        const context = {
+                            id: contextId,
+                            name: contextData.name,
+                            parent_id: contextData.parent_id,
+                            status: contextData.status,
+                            output: contextData.output,
+                            error: contextData.error,
+                            created_at: contextData.created_at,
+                            events: contextData.history || [], // Map history to events
+                            children: [] // Will be populated as we process child contexts
+                        };
+
+                        // Add/update context in our map
+                        this.contexts.set(contextId, context);
+
+                        // Update parent relationships
+                        if (context.parent_id && this.contexts.has(context.parent_id)) {
+                            const parentContext = this.contexts.get(context.parent_id);
+                            if (!parentContext.children.includes(contextId)) {
+                                parentContext.children.push(contextId);
+                            }
+                        }
+
+                        // Process any child contexts
+                        if (contextData.children) {
+                            contextData.children.forEach(childContext => {
+                                this.updateContext({
+                                    type: 'context',
+                                    data: childContext
+                                });
+                            });
+                        }
+
+                        // Clean up processing set if this is the root call
+                        if (this._processingContexts.size === 1) {
+                            this._processingContexts = null;
+                        } else {
+                            this._processingContexts.delete(contextId);
+                        }
+
+                    } else if (data.type === 'event') {
+                        // Handle individual event updates
+                        const contextId = data.context_id;
+                        const eventData = data.data;
+
+                        if (!this.contexts.has(contextId)) {
+                            console.warn(`Received event for unknown context ${contextId}`);
+                            return;
+                        }
+
+                        const context = this.contexts.get(contextId);
+                        context.events.push(eventData);
+
+                        // Update context based on event type
+                        switch (eventData.type) {
+                            case 'context_update':
+                                // Handle all fields in the context update data
+                                if (eventData.data) {
+                                    Object.entries(eventData.data).forEach(([key, value]) => {
+                                        if (key in context) {
+                                            context[key] = value;
+                                            console.log(`Updated context ${contextId} ${key} to:`, value);
+                                        }
+                                    });
+                                }
+                                break;
+                            case 'context_exception':
+                                context.status = 'error';
+                                context.error = eventData.data;
+                                break;
+                            case 'context_output':
+                                context.status = 'complete';
+                                context.output = eventData.data;
+                                break;
+                        }
+
+                        // Force a reactive update
+                        this.contexts.set(contextId, { ...context });
+                        this.contexts = new Map(this.contexts);
+                    }
                 },
                 expandAll() {
                     this.settings.expandedByDefault = true;
@@ -518,10 +1067,26 @@
                     window.dispatchEvent(new CustomEvent('updateExpansion', {
                         detail: { expanded }
                     }));
+                },
+                getContextHierarchy(contextId) {
+                    const hierarchy = [];
+                    let currentId = contextId;
+
+                    while (currentId && this.contextParentMap.has(currentId)) {
+                        hierarchy.unshift(currentId);
+                        currentId = this.contextParentMap.get(currentId);
+                    }
+
+                    return hierarchy;
                 }
             },
+            created() {
+                // Initialize the contexts Map
+                this.contexts = new Map();
+                this.contextParentMap = new Map();
+            },
             mounted() {
-                this.setupWebSocket()
+                this.setupWebSocket();
             }
         }).mount('#app')
     </script>
