@@ -8,8 +8,6 @@ from time import time
 from typing import Any, Callable, Dict, List, Optional
 from uuid import uuid4
 
-from agents.registrar.registrar import Registrar
-
 
 class Event:
     """
@@ -104,11 +102,6 @@ class Context:
 
         # No max workers due to possible lock synchronization issues
         self.__executor = ThreadPoolExecutor()
-
-        # If no parent id is provided, we are the root context and
-        # thus should attempt to register ourselves
-        if not self.__parent_id:
-            Registrar.register(self)
 
     def child_context(self) -> Context:
         ctx = Context(parent_id=self.__id)
