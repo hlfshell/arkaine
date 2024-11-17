@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, List, Optional
+from uuid import uuid4
 
 from agents.context import Context
+from agents.registrar.registrar import Registrar
 from agents.tools.events import ToolCalled, ToolReturn, ToolStart
 from agents.tools.types import ToolArguments
 
@@ -77,37 +80,58 @@ class Tool:
         func: Callable,
         examples: List[Example] = [],
     ):
+        self.__id = str(uuid4())
         self.name = name
         self.description = description
         self.args = args
         self.func = func
         self.examples = examples
+        self._on_call_listeners: List[Callable[[Context], None]] = []
+        self._called_event = ToolCalled
+        self._return_event = ToolReturn
 
-    def __call__(self, context: Optional[Context] = None, **kwargs) -> Any:
+        self.__executor = ThreadPoolExecutor()
+
+        Registrar.register(self)
+
+    @property
+    def id(self) -> str:
+        return self.__id
+
+    def __init_context_(self, context: Optional[Context], **kwargs) -> Context:
         if context and not context.is_root:
             ctx = context.child_context()
         elif context and context.is_root:
             ctx = context
         else:
-            ctx = None
+            ctx = Context()
 
-        if ctx:
-            ctx.name = self.name
-            ctx.broadcast(ToolCalled(self.name, kwargs))
+        ctx.name = self.name
+        ctx.broadcast(self._called_event(self.name, kwargs))
+
+        for listener in self._on_call_listeners:
+            self.__executor.submit(listener, ctx)
+
+        return ctx
+
+    def invoke(self, context: Context, **kwargs) -> Any:
+        return self.func(**kwargs)
+
+    def __call__(self, context: Optional[Context] = None, **kwargs) -> Any:
+        ctx = self.__init_context_(context, kwargs)
 
         kwargs = self.fulfill_defaults(kwargs)
 
         try:
             self.check_arguments(kwargs)
 
-            if ctx:
-                ctx.broadcast(ToolStart(self.name))
+            ctx.broadcast(ToolStart(self.name))
 
-            results = self.func(**kwargs)
+            results = self.invoke(ctx, **kwargs)
 
             if ctx:
                 ctx.output = results
-                ctx.broadcast(ToolReturn(self.name, results))
+                ctx.broadcast(self._return_event(self.name, results))
 
             return results
         except Exception as e:
@@ -190,6 +214,9 @@ class Tool:
         output += f'"required": {required}' + "}"
 
         return output
+
+    def add_on_call_listener(self, listener: Callable[[Context], None]):
+        self._on_call_listeners.append(listener)
 
 
 class InvalidArgumentException(Exception):

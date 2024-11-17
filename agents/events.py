@@ -66,23 +66,6 @@ class AgentLLMCalled(Event):
         return f"{self._get_readable_timestamp()} - {self.data} LLM called"
 
 
-class AgentBackendCalled(Event):
-    def __init__(self, agent: str, args: ToolArguments):
-        super().__init__("agent_backend_called")
-        self.agent = agent
-        self.args = args
-        self.data = {
-            "agent": agent,
-            "args": args,
-        }
-
-    def __str__(self) -> str:
-        return (
-            f"{self._get_readable_timestamp()} - {self.agent} backend called:\n"
-            f"{self.args}"
-        )
-
-
 class AgentToolCalls(Event):
     def __init__(self, agent: str, tool_calls: ToolResults):
         super().__init__("agent_tool_calls")

@@ -109,29 +109,26 @@ class BaseBackend(ABC):
 
     def invoke(
         self,
-        context: Optional[Context],
+        context: Context,
         args: Dict[str, Any],
         max_steps: Optional[int] = None,
         stop_at_first_tool: bool = False,
     ) -> str:
         # Build prompt
         prompt = self.prepare_prompt(**args)
-        if context:
-            context.broadcast(AgentPrompt("backend", prompt))
+        context.broadcast(AgentPrompt("backend", prompt))
 
         steps = 0
 
         while True:
             steps += 1
-            if context:
-                context.broadcast(AgentBackendStep("backend", steps))
+            context.broadcast(AgentBackendStep("backend", steps))
 
             if max_steps and steps > max_steps:
                 raise Exception("too many steps")
 
             response = self.query_model(prompt)
-            if context:
-                context.broadcast(AgentLLMResponse("backend", response))
+            context.broadcast(AgentLLMResponse("backend", response))
 
             tool_calls = self.parse_for_tool_calls(
                 response,
@@ -139,8 +136,7 @@ class BaseBackend(ABC):
             )
 
             if len(tool_calls) > 0:
-                if context:
-                    context.broadcast(AgentToolCalls("backend", tool_calls))
+                context.broadcast(AgentToolCalls("backend", tool_calls))
                 tool_results = self.call_tools(tool_calls)
                 prompt = self.tool_results_to_prompts(prompt, tool_results)
             else:

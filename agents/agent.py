@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, List, Optional
+from uuid import uuid4
 
 from agents.backends.base import BaseBackend
 from agents.context import Context
 from agents.events import (
-    AgentBackendCalled,
     AgentCalled,
     AgentLLMCalled,
     AgentLLMResponse,
@@ -12,6 +12,7 @@ from agents.events import (
     AgentReturn,
 )
 from agents.llms.llm import LLM, Prompt
+from agents.registrar.registrar import Registrar
 from agents.tools.tool import Argument, Example, Tool
 
 
@@ -34,12 +35,15 @@ class Agent(Tool, ABC):
         the LLM and converted in whatever manner you wish. If it is not
         provided, the raw output of the LLM is simply returned instead.
         """
-        self.name = name
-        self.description = description
-        self.args = args
-        self.examples = examples
+        super().__init__(name, description, args, None, examples)
         self.llm = llm
         self.process_answer = process_answer
+        self._called_event = AgentCalled
+        self._return_event = AgentReturn
+
+    @property
+    def id(self) -> str:
+        return self.__id
 
     @abstractmethod
     def prepare_prompt(self, **kwargs) -> Prompt:
@@ -49,46 +53,18 @@ class Agent(Tool, ABC):
         """
         pass
 
-    def __call__(self, context: Optional[Context] = None, **kwargs):
-        if context and not context.is_root:
-            ctx = context.child_context()
-        elif context and context.is_root:
-            ctx = context
-        else:
-            ctx = None
+    def invoke(self, context: Context, **kwargs) -> Any:
+        prompt = self.prepare_prompt(**kwargs)
+        context.broadcast(AgentPrompt(self.name, prompt))
+        context.broadcast(AgentLLMCalled(self.name))
+        result = self.llm.completion(prompt)
+        context.broadcast(AgentLLMResponse(self.name, result))
 
-        if ctx:
-            ctx.name = self.name
-            ctx.broadcast(AgentCalled(self.name, kwargs))
+        final_result = (
+            self.process_answer(result) if self.process_answer else result
+        )
 
-        kwargs = self.fulfill_defaults(kwargs)
-
-        try:
-            self.check_arguments(kwargs)
-            prompt = self.prepare_prompt(**kwargs)
-
-            if ctx:
-                ctx.broadcast(AgentPrompt(self.name, prompt))
-                ctx.broadcast(AgentLLMCalled(self.name))
-
-            result = self.llm.completion(prompt)
-
-            if ctx:
-                ctx.broadcast(AgentLLMResponse(self.name, result))
-
-            final_result = (
-                self.process_answer(result) if self.process_answer else result
-            )
-
-            if ctx:
-                ctx.broadcast(AgentReturn(self.name, final_result))
-                ctx.output = final_result
-
-            return final_result
-        except Exception as e:
-            if ctx:
-                ctx.exception(e)
-            raise e
+        return final_result
 
 
 class ToolAgent(Tool, ABC):
@@ -101,11 +77,10 @@ class ToolAgent(Tool, ABC):
         backend: BaseBackend,
         examples: List[Example] = [],
     ):
-        self.name = name
-        self.description = description
-        self.args = args
-        self.examples = examples
+        super().__init__(name, description, args, None, examples)
         self.backend = backend
+        self._called_event = AgentCalled
+        self._return_event = AgentReturn
 
     @abstractmethod
     def prepare_for_backend(self, **kwargs) -> Dict[str, Any]:
@@ -116,37 +91,5 @@ class ToolAgent(Tool, ABC):
         """
         pass
 
-    def __call__(self, context: Optional[Context] = None, **kwargs) -> Any:
-        if context and not context.is_root:
-            ctx = context.child_context()
-        elif context and context.is_root:
-            ctx = context
-        else:
-            ctx = None
-
-        if ctx:
-            ctx.name = self.name
-            ctx.broadcast(AgentCalled(self.name, kwargs))
-
-        kwargs = self.fulfill_defaults(kwargs)
-
-        try:
-            self.check_arguments(kwargs)
-            args = self.prepare_for_backend(**kwargs)
-
-            if ctx:
-                ctx.broadcast(AgentBackendCalled(self.name, args))
-
-            result = self.backend.invoke(
-                context=ctx, args=args, max_steps=5, stop_at_first_tool=True
-            )
-
-            if ctx:
-                ctx.broadcast(AgentReturn(self.name, result))
-                ctx.output = result
-
-            return result
-        except Exception as e:
-            if ctx:
-                ctx.exception(e)
-            raise e
+    def invoke(self, context: Context, **kwargs) -> Any:
+        return self.backend.invoke(context, self.prepare_for_backend(**kwargs))
