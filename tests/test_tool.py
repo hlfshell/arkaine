@@ -1,7 +1,13 @@
 import pytest
 
-from agents.context import Context
-from agents.tools.tool import Argument, Example, InvalidArgumentException, Tool
+from agents.tools.events import Event
+from agents.tools.tool import (
+    Argument,
+    Context,
+    Example,
+    InvalidArgumentException,
+    Tool,
+)
 
 
 # Test fixtures
@@ -129,7 +135,7 @@ def test_tool_call_with_valid_args(mock_tool):
 
 def test_tool_call_with_context(mock_tool):
     """Test tool execution with context"""
-    ctx = Context()
+    ctx = Context(mock_tool)
     result = mock_tool(context=ctx, required_arg="test")
     assert (
         result
@@ -182,7 +188,7 @@ def test_tool_exception_handling(mock_tool):
         func=failing_function,
     )
 
-    ctx = Context()
+    ctx = Context(mock_tool)
     with pytest.raises(ValueError):
         failing_tool(context=ctx)
     assert ctx.status == "error"

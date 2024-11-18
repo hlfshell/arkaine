@@ -1,9 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, List, Optional
-from uuid import uuid4
 
 from agents.backends.base import BaseBackend
-from agents.context import Context
 from agents.events import (
     AgentCalled,
     AgentLLMCalled,
@@ -12,8 +10,7 @@ from agents.events import (
     AgentReturn,
 )
 from agents.llms.llm import LLM, Prompt
-from agents.registrar.registrar import Registrar
-from agents.tools.tool import Argument, Example, Tool
+from agents.tools.tool import Argument, Context, Example, Tool
 
 
 class Agent(Tool, ABC):

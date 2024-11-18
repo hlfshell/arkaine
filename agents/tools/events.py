@@ -1,7 +1,57 @@
+import json
+from datetime import datetime, timezone
+from time import time
 from typing import Any
 
-from agents.context import Event
 from agents.tools.types import ToolArguments
+
+
+class Event:
+    """
+    Event are events that can occur throughout execution of the agent,
+    and are thus bubbled up through the chain of the context.
+    """
+
+    # Keep Event class here since it's the base class
+
+    def __init__(self, event_type: str, data: Any = None):
+        self._event_type = event_type
+        self.data = data
+        self._timestamp = time()
+
+    def _get_readable_timestamp(self) -> str:
+        return datetime.fromtimestamp(
+            self._timestamp, tz=timezone.utc
+        ).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    def __str__(self) -> str:
+        out = f"{self._get_readable_timestamp()}: {self._event_type}"
+        if self.data:
+            out += f":\n{self.data}"
+        return out
+
+    def to_json(self) -> dict:
+        """Convert Event to a JSON-serializable dictionary."""
+        if hasattr(self.data, "to_json"):
+            data = self.data.to_json()
+        else:
+            if isinstance(self.data, dict):
+                data = self.data
+            else:
+                try:
+                    data = json.dumps(self.data)
+                    # If it was already a string, do this to avoid
+                    # just quote enveloping the string.
+                    if data.startswith('"') or data.startswith("'"):
+                        data = self.data
+                except (TypeError, ValueError):
+                    data = str(self.data)
+
+        return {
+            "type": self._event_type,
+            "timestamp": self._timestamp,
+            "data": data,
+        }
 
 
 class ToolCalled(Event):
@@ -51,3 +101,42 @@ class ToolReturn(Event):
             f"{self._get_readable_timestamp()} - {self.tool} returned:\n"
             f"{self.result}"
         )
+
+
+class ToolException(Event):
+    def __init__(self, exception: Exception):
+        super().__init__("context_exception", exception)
+
+    def __str__(self) -> str:
+        out = f"{self._get_readable_timestamp()}: context_exception:"
+        if self.data:
+            out += f"\n{self.data}"
+        return out
+
+
+class ChildContextCreated(Event):
+    def __init__(self, parent: str, child: str):
+        super().__init__(
+            "context_created",
+            {"parent": parent, "child": child},
+        )
+
+    def __str__(self) -> str:
+        out = f"{self._get_readable_timestamp()}: context_created"
+        if self.data:
+            out += f":\n{self.data}"
+        return out
+
+
+class ContextUpdate(Event):
+    def __init__(self, **kwargs):
+        data = {
+            **kwargs,
+        }
+        super().__init__("context_update", data)
+
+    def __str__(self) -> str:
+        out = f"{self._get_readable_timestamp()}: context_update"
+        if self.data:
+            out += f":\n{self.data}"
+        return out
