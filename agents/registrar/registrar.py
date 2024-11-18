@@ -1,9 +1,9 @@
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
-from typing import Callable, Dict, List
+from typing import TYPE_CHECKING, Callable, Dict, List
 
-from agents.context import Context
-from agents.tools.tool import Tool
+if TYPE_CHECKING:
+    from agents.tools.tool import Context, Tool
 
 
 class Registrar:
@@ -11,15 +11,15 @@ class Registrar:
     _enabled = False
     __executor = ThreadPoolExecutor()
 
-    _tools: Dict[str, Tool] = {}
+    _tools: 'Dict[str, "Tool"]' = {}
 
-    _on_tool_call_listeners: List[Callable[[Context], None]] = []
+    _on_tool_call_listeners: List[Callable[["Context"], None]] = []
 
     def __new__(cls):
         raise ValueError("Registrar cannot be instantiated")
 
     @classmethod
-    def register(cls, tool: Tool):
+    def register(cls, tool: "Tool"):
         with cls._lock:
             if tool.id in cls._tools:
                 pass
@@ -28,13 +28,13 @@ class Registrar:
         tool.add_on_call_listener(cls._on_tool_call)
 
     @classmethod
-    def _on_tool_call(cls, ctx: Context):
+    def _on_tool_call(cls, ctx: "Context"):
         """
         Whenever a tool we are aware of is called, notify the listener
         """
         with cls._lock:
-            if cls.__enabled:
-                for listener in cls.__on_tool_call_listeners:
+            if cls._enabled:
+                for listener in cls._on_tool_call_listeners:
                     cls.__executor.submit(listener, ctx)
 
     @classmethod
