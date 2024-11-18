@@ -52,10 +52,10 @@ class Agent(Tool, ABC):
 
     def invoke(self, context: Context, **kwargs) -> Any:
         prompt = self.prepare_prompt(**kwargs)
-        context.broadcast(AgentPrompt(self.name, prompt))
-        context.broadcast(AgentLLMCalled(self.name))
+        context.broadcast(AgentPrompt(prompt))
+        context.broadcast(AgentLLMCalled())
         result = self.llm.completion(prompt)
-        context.broadcast(AgentLLMResponse(self.name, result))
+        context.broadcast(AgentLLMResponse(result))
 
         final_result = (
             self.process_answer(result) if self.process_answer else result
