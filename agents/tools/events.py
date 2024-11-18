@@ -117,7 +117,7 @@ class ToolException(Event):
 class ChildContextCreated(Event):
     def __init__(self, parent: str, child: str):
         super().__init__(
-            "context_created",
+            "child_context_created",
             {"parent": parent, "child": child},
         )
 
