@@ -3,7 +3,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
 
-from agents.context import Context
 from agents.events import (
     AgentBackendStep,
     AgentLLMResponse,
@@ -11,7 +10,7 @@ from agents.events import (
     AgentToolCalls,
 )
 from agents.llms.llm import LLM, Prompt
-from agents.tools.tool import Tool
+from agents.tools.tool import Context, Tool
 from agents.tools.types import ToolArguments, ToolResults
 
 
