@@ -11,7 +11,6 @@ from uuid import uuid4
 from agents.registrar.registrar import Registrar
 from agents.tools.events import (
     ChildContextCreated,
-    ContextUpdate,
     Event,
     ToolCalled,
     ToolException,
@@ -264,7 +263,7 @@ class Context:
             self.__output = value
 
         self.__status_changed.set()
-        self.broadcast(ToolReturn(self.tool.id, value))
+        self.broadcast(ToolReturn(value))
 
     def wait(self, timeout: Optional[float] = None):
         while True:
@@ -351,8 +350,7 @@ class Tool:
         else:
             ctx = Context(self)
 
-        ctx.broadcast(self._called_event(self, kwargs))
-
+        ctx.broadcast(self._called_event(kwargs))
         for listener in self._on_call_listeners:
             self._executor.submit(listener, self, ctx)
 
@@ -374,7 +372,7 @@ class Tool:
 
             if ctx:
                 ctx.output = results
-                ctx.broadcast(self._return_event(self.name, results))
+                ctx.broadcast(self._return_event(results))
 
             return results
 
