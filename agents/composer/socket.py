@@ -1,0 +1,166 @@
+from __future__ import annotations
+
+import json
+import threading
+from typing import Dict, Optional, Set
+
+from websockets.server import WebSocketServerProtocol
+from websockets.sync.server import serve
+
+from agents.registrar.registrar import Registrar
+from agents.tools.tool import Context, Event, Tool
+
+
+class ComposerSocket:
+    """
+    ComposerSocket handles WebSocket connections and broadcasts context events
+    to connected clients.
+    """
+
+    def __init__(self, port: int = 9001):
+        """
+        Initialize a ComposerSocket that creates its own WebSocket endpoint.
+
+        Args:
+            port (int): The port to run the WebSocket server on (default: 9001)
+        """
+        self.port = port
+        self.active_connections: Set[WebSocketServerProtocol] = set()
+        self._contexts: Dict[str, Context] = {}
+        self._tools: Dict[str, Tool] = {}
+        self._server = None
+        self._server_thread = None
+        self._running = False
+        self._lock = threading.Lock()
+
+        Registrar.enable()
+        with self._lock:
+            tools = Registrar.get_tools()
+            for tool in tools:
+                self._tools[tool.id] = tool
+
+        Registrar.add_on_tool_register(self._on_tool_register)
+        Registrar.add_tool_call_listener(self._on_tool_call)
+
+    def _on_tool_call(self, tool: Tool, context: Context):
+        # Subscribe to all the context's events for this tool from
+        # here on out
+        context.add_listener(self._broadcast_event)
+
+    def _on_tool_register(self, tool: Tool):
+        with self._lock:
+            self._tools[tool.id] = tool
+
+    def _broadcast_to_clients(self, message: dict):
+        """Helper function to broadcast a message to all active clients"""
+        with self._lock:
+            dead_connections = set()
+            for websocket in self.active_connections:
+                try:
+                    websocket.send(json.dumps(message))
+                except Exception as e:
+                    print(f"Failed to send to client {websocket}: {e}")
+                    dead_connections.add(websocket)
+
+            # Clean up dead connections
+            self.active_connections -= dead_connections
+
+    def _handle_client(self, websocket):
+        """Handle an individual client connection"""
+        try:
+            remote_addr = websocket.remote_address
+            print(f"New client connected from {remote_addr}")
+        except Exception:
+            remote_addr = "unknown"
+            print("New client connected (address unknown)")
+
+        try:
+            with self._lock:
+                self.active_connections.add(websocket)
+                # Send initial context states and their events immediately
+                for context in self._contexts.values():
+                    try:
+                        # Send full context state
+                        context_state = context.to_json()
+                        websocket.send(
+                            json.dumps({"type": "context", **context_state})
+                        )
+
+                        # Send historical events
+                        for event in context_state["history"]:
+                            websocket.send(json.dumps(event))
+
+                    except Exception as e:
+                        print(f"Failed to send initial context state: {e}")
+                        return
+
+            # Keep connection alive until client disconnects or server stops
+            while self._running:
+                try:
+                    message = websocket.recv(timeout=1)
+                    if message:  # Handle any client messages if needed
+                        pass
+                except TimeoutError:
+                    continue
+                except Exception:
+                    break
+
+        except Exception as e:
+            print(f"Client connection error: {e}")
+        finally:
+            with self._lock:
+                self.active_connections.discard(websocket)
+            print(f"Client disconnected from {remote_addr}")
+
+    def _broadcast_tool(self, tool: Tool):
+        """Broadcast a tool to all active clients"""
+        self._broadcast_to_clients({"type": "tool", "data": tool.to_json()})
+
+    def _broadcast_context(self, context: Context):
+        """Broadcast a context to all active clients"""
+        self._broadcast_to_clients(
+            {"type": "context", "data": context.to_json()}
+        )
+
+    def _broadcast_event(self, context: Context, event: Event):
+        """Broadcasts an event to all active WebSocket connections."""
+        event_data = event.to_json()
+        self._broadcast_to_clients(
+            {
+                "type": "event",
+                "context_id": context.id,
+                "data": event_data,
+            }
+        )
+
+    def start(self):
+        """Start the WebSocket server in a background thread"""
+        if self._running:
+            return
+
+        self._running = True
+        self._server_thread = threading.Thread(
+            target=self._run_server, daemon=True
+        )
+        self._server_thread.start()
+        print(f"WebSocket server started on ws://localhost:{self.port}")
+
+    def _run_server(self):
+        """Run the WebSocket server"""
+        with serve(self._handle_client, "localhost", self.port) as server:
+            self._server = server
+            server.serve_forever()
+
+    def stop(self):
+        """Stop the WebSocket server"""
+        self._running = False
+        if self._server:
+            self._server.shutdown()
+        if self._server_thread and self._server_thread.is_alive():
+            self._server_thread.join()
+        self._server_thread = None
+        print("WebSocket server stopped")
+
+    def __del__(self):
+        """Clean up resources when the object is deleted"""
+        self.stop()
