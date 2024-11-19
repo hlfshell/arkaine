@@ -13,7 +13,7 @@ class Registrar:
 
     _tools: 'Dict[str, "Tool"]' = {}
 
-    _on_tool_call_listeners: List[Callable[["Context"], None]] = []
+    __on_tool_call_listeners: List[Callable[["Tool", "Context"], None]] = []
 
     def __new__(cls):
         raise ValueError("Registrar cannot be instantiated")
@@ -25,17 +25,29 @@ class Registrar:
                 pass
             cls._tools[tool.id] = tool
 
-        tool.add_on_call_listener(cls._on_tool_call)
+            tool.add_on_call_listener(cls._on_tool_call)
 
     @classmethod
-    def _on_tool_call(cls, ctx: "Context"):
+    def _on_tool_call(cls, tool: "Tool", ctx: "Context"):
         """
         Whenever a tool we are aware of is called, notify the listener
         """
         with cls._lock:
             if cls._enabled:
-                for listener in cls._on_tool_call_listeners:
-                    cls.__executor.submit(listener, ctx)
+                for listener in cls.__on_tool_call_listeners:
+                    cls.__executor.submit(listener, tool, ctx)
+
+    @classmethod
+    def get_tools(cls):
+        with cls._lock:
+            return list(cls._tools.values())
+
+    @classmethod
+    def add_tool_call_listener(
+        cls, listener: Callable[["Tool", "Context"], None]
+    ):
+        with cls._lock:
+            cls.__on_tool_call_listeners.append(listener)
 
     @classmethod
     def enable(cls):

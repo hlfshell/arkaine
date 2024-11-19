@@ -5,12 +5,7 @@ import pytest
 
 from agents.events import AgentCalled, AgentLLMResponse, AgentPrompt
 from agents.logging.logger import Colors, Logger
-from agents.tools.events import (
-    ChildContextCreated,
-    ToolCalled,
-    ToolException,
-    ToolReturn,
-)
+from agents.tools.events import ToolCalled, ToolException, ToolReturn
 from agents.tools.tool import Argument, Context, Tool
 
 
@@ -63,8 +58,8 @@ def test_logger_color_disabled(output_stream: TextIO):
     logger = Logger(output_stream=output_stream, use_colors=False)
     context = Context(MockTool())
 
-    event = ToolCalled("test_tool", {"arg": "value"})
-    logger.log_event(event, context)
+    event = ToolCalled({"arg": "value"})
+    logger.log_event(context, event)
 
     output = output_stream.getvalue()
     assert Colors.RED not in output
@@ -77,18 +72,17 @@ def test_tool_event_logging(
 ):
     """Test logging of tool-related events"""
     # Test tool called event
-    tool_called = ToolCalled("test_tool", {"arg": "value"})
-    logger.log_event(tool_called, context)
+    tool_called = ToolCalled({"test_arg": "value"})
+    logger.log_event(context, tool_called)
 
     # Test tool return event
-    tool_return = ToolReturn("test_tool", "result")
-    logger.log_event(tool_return, context)
+    tool_return = ToolReturn("test result")
+    logger.log_event(context, tool_return)
 
     output = output_stream.getvalue()
-    assert "test_tool" in output
-    assert "arg" in output
+    assert "test_arg" in output
     assert "value" in output
-    assert "result" in output
+    assert "test result" in output
 
 
 def test_agent_event_logging(
@@ -96,19 +90,18 @@ def test_agent_event_logging(
 ):
     """Test logging of agent-related events"""
     # Test agent called event
-    agent_called = AgentCalled({"arg": "value"})
-    logger.log_event(agent_called, context)
+    agent_called = AgentCalled({"test_arg": "value"})
+    logger.log_event(context, agent_called)
 
     # Test agent prompt event
     agent_prompt = AgentPrompt("test prompt")
-    logger.log_event(agent_prompt, context)
+    logger.log_event(context, agent_prompt)
 
     # Test agent LLM response event
     agent_response = AgentLLMResponse("test response")
-    logger.log_event(agent_response, context)
+    logger.log_event(context, agent_response)
 
     output = output_stream.getvalue()
-    print("OUTPUT", output)
     assert "test prompt" in output
     assert "test response" in output
 
@@ -119,7 +112,7 @@ def test_exception_logging(
     """Test logging of exceptions"""
     exception = ValueError("Test error")
     event = ToolException(exception)
-    logger.log_event(event, context)
+    logger.log_event(context, event)
 
     output = output_stream.getvalue()
     assert "Test error" in output
@@ -131,8 +124,8 @@ def test_json_formatting(
 ):
     """Test JSON formatting of complex data structures"""
     data = {"key": "value", "nested": {"inner": "data"}}
-    event = ToolReturn("test_tool", data)
-    logger.log_event(event, context)
+    event = ToolReturn(data)
+    logger.log_event(context, event)
 
     output = output_stream.getvalue()
     assert '"key": "value"' in output
@@ -147,8 +140,8 @@ def test_tool_attachment(logger: Logger, tool: Tool):
     # To verify a tool is attached, I should be able to determine
     # that it was called
     context = Context(tool)
-    tool_called = ToolCalled(tool.id, {})
-    logger.log_event(tool_called, context)
+    tool_called = ToolCalled({})
+    logger.log_event(context, tool_called)
 
     output = logger.output_stream.getvalue()
     assert tool.id in output
@@ -157,8 +150,8 @@ def test_tool_attachment(logger: Logger, tool: Tool):
 def test_indentation(logger: Logger, context: Context, output_stream: TextIO):
     """Test proper indentation of multi-line output"""
     data = {"key1": "value1", "key2": {"nested": "value2"}}
-    event = ToolReturn("test_tool", data)
-    logger.log_event(event, context)
+    event = ToolReturn(data)
+    logger.log_event(context, event)
 
     output = output_stream.getvalue()
     lines = output.split("\n")
@@ -176,8 +169,8 @@ def test_thread_safety(logger: Logger, context: Context):
 
     def log_events():
         for i in range(5):
-            event = ToolCalled("test_tool", {"count": i})
-            logger.log_event(event, context)
+            event = ToolCalled({"count": i})
+            logger.log_event(context, event)
             time.sleep(0.01)
 
     threads = [threading.Thread(target=log_events) for _ in range(3)]
@@ -188,4 +181,4 @@ def test_thread_safety(logger: Logger, context: Context):
 
     output = logger.output_stream.getvalue()
     # Verify all events were logged (5 events * 3 threads = 15 events)
-    assert output.count("test_tool") == 15
+    assert output.count("mock_tool") == 15

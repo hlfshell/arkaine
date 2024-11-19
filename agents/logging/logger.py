@@ -2,9 +2,10 @@
 
 import json
 import sys
-import threading
+from threading import Lock
 from typing import Any, Dict, Optional, TextIO
 
+from agents.registrar.registrar import Registrar
 from agents.tools.tool import Context, Event, Tool
 
 
@@ -47,7 +48,7 @@ class Logger:
         self.output_stream = output_stream
         self.use_colors = use_colors
         self.indent_size = indent_size
-        self._lock = threading.Lock()
+        self._lock = Lock()
         self._event_colors = (
             event_colors
             if event_colors
@@ -69,12 +70,9 @@ class Logger:
         Attach a tool to the logger such that whenever the tool is utilized the
         logger will appropriately log the resulting context and all sub events.
         """
-        tool.add_on_call_listener(self._on_tool_call)
+        tool.add_on_call_listener(self.on_tool_call)
 
-    def _on_tool_call(self, tool: Tool, context: Context):
-        if tool.id not in self.__tool_names:
-            return
-
+    def on_tool_call(self, tool: Tool, context: Context):
         # Subscribe to the context events
         context.add_listener(self.log_event)
 
@@ -131,7 +129,7 @@ class Logger:
         header = f"{timestamp} - {event_type}"
 
         # Add tool name for tool-related events
-        header += f" [{context.tool.name}]"
+        header += f" [{context.tool.name} | {context.tool.id}]"
 
         # Format the event data
         if event.data:
@@ -167,7 +165,7 @@ class Logger:
                 self.output_stream.write(f"{text}\n")
                 self.output_stream.flush()
 
-    def log_event(self, event: Event, context: Context):
+    def log_event(self, context: Context, event: Event):
         """Log a single event with optional context information.
 
         Args:
@@ -176,3 +174,38 @@ class Logger:
         """
         formatted = self._format_event(event, context)
         self._write(formatted)
+
+    def cleanup(self):
+        self.output_stream = None
+
+    def __del__(self):
+        self.cleanup()
+
+
+class GlobalLogger:
+    """
+    Global logger is just a singleton instance of a logger
+    that utilizes the registrar to automatically detect and
+    thus log all tools.
+    """
+
+    _instance: Logger = None
+
+    def __init__(self):
+        raise ValueError("GlobalLogger is a singleton")
+
+    @classmethod
+    def get_instance(cls):
+        if not cls._instance:
+            cls._instance = Logger()
+        return cls._instance
+
+    @classmethod
+    def enable(cls):
+        Registrar.enable()
+        instance = cls.get_instance()
+        Registrar.add_tool_call_listener(instance.on_tool_call)
+
+    @classmethod
+    def disable(cls):
+        del cls._instance
