@@ -13,6 +13,7 @@ class Registrar:
 
     _tools: 'Dict[str, "Tool"]' = {}
 
+    __on_tool_listener: List[Callable[["Tool"], None]] = []
     __on_tool_call_listeners: List[Callable[["Tool", "Context"], None]] = []
 
     def __new__(cls):
@@ -25,6 +26,9 @@ class Registrar:
                 pass
             cls._tools[tool.id] = tool
 
+            for listener in cls.__on_tool_listeners:
+                cls.__executor.submit(listener, tool)
+
             tool.add_on_call_listener(cls._on_tool_call)
 
     @classmethod
@@ -36,6 +40,11 @@ class Registrar:
             if cls._enabled:
                 for listener in cls.__on_tool_call_listeners:
                     cls.__executor.submit(listener, tool, ctx)
+
+    @classmethod
+    def add_on_tool_register(cls, listener: Callable[["Tool"], None]):
+        with cls._lock:
+            cls.__on_tool_listeners.append(listener)
 
     @classmethod
     def get_tools(cls):
