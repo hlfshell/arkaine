@@ -295,11 +295,8 @@ class Context:
                     except Exception:
                         output = "Unable to serialize output"
 
-        # Build and return the complete dictionary while still holding the
-        # lock
         return {
             "id": self.__id,
-            # "name": self.__name,
             "parent_id": self.__parent.id if self.__parent else None,
             "root_id": self.root.id,
             "tool_id": self.__tool.id,
