@@ -59,11 +59,10 @@ class ToolCalled(Event):
         super().__init__("tool_called", args)
 
     def __str__(self) -> str:
-        out = f"{self._get_readable_timestamp()} ("
-        for arg, value in self.data.items():
-            out += ", ".join(f"{arg}={value}")
-        out += ")"
-        return out
+        args_str = ", ".join(
+            f"{arg}={value}" for arg, value in self.data.items()
+        )
+        return f"{self._get_readable_timestamp()} ({args_str!s})"
 
 
 class ToolStart(Event):
@@ -73,7 +72,7 @@ class ToolStart(Event):
         self.data = tool
 
     def __str__(self) -> str:
-        return f"{self._get_readable_timestamp()} - {self.tool} started"
+        return f"{self._get_readable_timestamp()} - {self.data} started"
 
 
 class ToolReturn(Event):
@@ -81,7 +80,7 @@ class ToolReturn(Event):
         super().__init__("tool_return", result)
 
     def __str__(self) -> str:
-        return f"{self._get_readable_timestamp()} returned:\n" f"{self.result}"
+        return f"{self._get_readable_timestamp()} returned:\n" f"{self.data}"
 
 
 class ToolException(Event):

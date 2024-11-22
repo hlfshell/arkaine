@@ -1,8 +1,8 @@
-from typing import Any
+from typing import Any, List, Tuple
 
 from agents.llms.llm import Prompt
 from agents.tools.tool import Event
-from agents.tools.types import ToolArguments, ToolResults
+from agents.tools.types import ToolArguments
 
 
 class AgentCalled(Event):
@@ -59,14 +59,18 @@ class AgentLLMCalled(Event):
 
 
 class AgentToolCalls(Event):
-    def __init__(self, tool_calls: ToolResults):
+    def __init__(self, tool_calls: List[Tuple[str, ToolArguments]]):
         super().__init__("agent_tool_calls")
         self.data = tool_calls
 
     def __str__(self) -> str:
-        tool_calls_str = "\n".join(
-            [f"{tool.name}({tool.args})" for tool in self.data]
-        )
+        tool_calls_str = ""
+        for tool_name, tool_args in self.data:
+            arg_str = ", ".join(
+                f"{arg}={value}" for arg, value in tool_args.items()
+            )
+            tool_calls_str += f"- {tool_name}({arg_str})\n"
+
         return (
             f"{self._get_readable_timestamp()} tool calls:\n"
             f"{tool_calls_str}"
