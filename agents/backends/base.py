@@ -101,8 +101,7 @@ class BaseBackend(ABC):
         for tool, args in calls:
             if tool not in self.tools:
                 raise ToolNotFoundException(tool, args)
-            ctx = context.child_context(self.tools[tool])
-            results.append((tool, args, self.tools[tool](ctx, **args)))
+            results.append((tool, args, self.tools[tool](context, **args)))
 
         return results
 
