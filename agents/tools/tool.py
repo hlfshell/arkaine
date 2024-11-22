@@ -122,6 +122,7 @@ class Context:
         self.__exception: Exception = None
         self.__output: Any = None
         self.__created_at = time()
+        self.__triggered: bool = False
 
         self.__children: List[Context] = []
 
@@ -202,7 +203,6 @@ class Context:
         # to their parents as well so the root context receives all events
         ctx.add_listener(
             lambda event_context, event: self.broadcast(
-                # event, source_context=ctx
                 event,
                 source_context=event_context,
             )
@@ -307,7 +307,6 @@ class Context:
             self.__output = value
 
         self.__status_changed.set()
-        self.broadcast(ToolReturn(value))
 
     def wait(self, timeout: Optional[float] = None):
         while True:
@@ -391,12 +390,11 @@ class Tool:
         return Context(self)
 
     def __init_context_(self, context: Optional[Context], **kwargs) -> Context:
-        if context and not context.is_root:
-            ctx = context.child_context(self)
-        elif context and context.is_root:
+        if context and not context.tool:
             ctx = context
-            if not ctx.tool:
-                ctx.tool = self
+            ctx.tool = self
+        elif context:
+            ctx = context.child_context(self)
         else:
             ctx = Context(self)
 
@@ -416,13 +414,12 @@ class Tool:
 
             self.check_arguments(kwargs)
 
-            ctx.broadcast(ToolStart(self.name))
+            ctx.broadcast(self._called_event(self.name))
 
             results = self.invoke(ctx, **kwargs)
 
-            if ctx:
-                ctx.output = results
-                ctx.broadcast(self._return_event(results))
+            ctx.output = results
+            ctx.broadcast(self._return_event(results))
 
             return results
 
