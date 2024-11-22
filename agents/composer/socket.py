@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import threading
-from typing import Dict, Optional, Set
+from typing import Dict, Set
 
 from websockets.server import WebSocketServerProtocol
 from websockets.sync.server import serve
@@ -17,12 +17,14 @@ class ComposerSocket:
     to connected clients.
     """
 
-    def __init__(self, port: int = 9001):
+    def __init__(self, port: int = 9001, max_contexts: int = 1024):
         """
         Initialize a ComposerSocket that creates its own WebSocket endpoint.
 
         Args:
             port (int): The port to run the WebSocket server on (default: 9001)
+            max_contexts (int): The maximum number of contexts to keep in
+                memory (default: 1024)
         """
         self.port = port
         self.active_connections: Set[WebSocketServerProtocol] = set()
@@ -32,24 +34,42 @@ class ComposerSocket:
         self._server_thread = None
         self._running = False
         self._lock = threading.Lock()
+        self.__max_contexts = max_contexts
 
         Registrar.enable()
+        Registrar.add_tool_call_listener(self._on_tool_call)
         with self._lock:
             tools = Registrar.get_tools()
             for tool in tools:
                 self._tools[tool.id] = tool
 
         Registrar.add_on_tool_register(self._on_tool_register)
-        Registrar.add_tool_call_listener(self._on_tool_call)
 
     def _on_tool_call(self, tool: Tool, context: Context):
         # Subscribe to all the context's events for this tool from
-        # here on out
-        context.add_listener(self._broadcast_event)
+        # here on out if its a root context
+        self._handle_context_creation(context)
+        self._broadcast_context(context)
+        context.add_listener(self._broadcast_event, ignore_children_events=True)
 
     def _on_tool_register(self, tool: Tool):
         with self._lock:
             self._tools[tool.id] = tool
+
+    def _handle_context_creation(self, context: Context):
+        """
+        Add the context to the internal state memory and remove contexts by
+        age if over a certain threshold.
+        """
+        with self._lock:
+            if not context.is_root:
+                return
+            self._contexts[context.id] = context
+            if len(self._contexts) > self.__max_contexts:
+                oldest_context = min(
+                    self._contexts.values(), key=lambda x: x.created_at
+                )
+                del self._contexts[oldest_context.id]
 
     def _broadcast_to_clients(self, message: dict):
         """Helper function to broadcast a message to all active clients"""
@@ -78,17 +98,17 @@ class ComposerSocket:
             with self._lock:
                 self.active_connections.add(websocket)
                 # Send initial context states and their events immediately
+
                 for context in self._contexts.values():
                     try:
-                        # Send full context state
-                        context_state = context.to_json()
                         websocket.send(
-                            json.dumps({"type": "context", **context_state})
+                            json.dumps(self.__build_context_message(context))
                         )
+                        # self._broadcast_context(context)
 
                         # Send historical events
-                        for event in context_state["history"]:
-                            websocket.send(json.dumps(event))
+                        # for event in context_state["history"]:
+                        #     websocket.send(json.dumps(event))
 
                     except Exception as e:
                         print(f"Failed to send initial context state: {e}")
@@ -116,11 +136,12 @@ class ComposerSocket:
         """Broadcast a tool to all active clients"""
         self._broadcast_to_clients({"type": "tool", "data": tool.to_json()})
 
+    def __build_context_message(self, context: Context):
+        return {"type": "context", "data": context.to_json()}
+
     def _broadcast_context(self, context: Context):
         """Broadcast a context to all active clients"""
-        self._broadcast_to_clients(
-            {"type": "context", "data": context.to_json()}
-        )
+        self._broadcast_to_clients(self.__build_context_message(context))
 
     def _broadcast_event(self, context: Context, event: Event):
         """Broadcasts an event to all active WebSocket connections."""

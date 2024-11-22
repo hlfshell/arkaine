@@ -107,7 +107,9 @@ class Context:
     ("context_update" for the listeners)
     """
 
-    def __init__(self, tool: Tool, parent: Optional[Context] = None):
+    def __init__(
+        self, tool: Optional[Tool] = None, parent: Optional[Context] = None
+    ):
         self.__id = str(uuid4())
         self.__tool = tool
         self.__parent = parent
@@ -123,7 +125,10 @@ class Context:
 
         self.__children: List[Context] = []
 
-        self.__event_listeners: Dict[
+        self.__event_listeners_all: Dict[
+            str, List[Callable[[Context, Event], None]]
+        ] = {"all": []}
+        self.__event_listeners_filtered: Dict[
             str, List[Callable[[Context, Event], None]]
         ] = {"all": []}
 
@@ -152,7 +157,8 @@ class Context:
 
     def __del__(self):
         self.__executor.shutdown(wait=False)
-        self.__event_listeners.clear()
+        self.__event_listeners_all.clear()
+        self.__event_listeners_filtered.clear()
         self.__children.clear()
 
     @property
@@ -169,6 +175,23 @@ class Context:
     def tool(self) -> Tool:
         return self.__tool
 
+    @tool.setter
+    def tool(self, tool: Tool):
+        with self.__lock:
+            if self.__tool:
+                raise ValueError("Tool already set")
+            self.__tool = tool
+
+    @property
+    def children(self) -> List[Context]:
+        with self.__lock:
+            return self.__children
+
+    @property
+    def events(self) -> List[Event]:
+        with self.__lock:
+            return self.__history
+
     def child_context(self, tool: Tool) -> Context:
         """Create a new child context for the given tool."""
         ctx = Context(tool=tool, parent=self)
@@ -178,22 +201,16 @@ class Context:
         # All events happening in the children contexts are broadcasted
         # to their parents as well so the root context receives all events
         ctx.add_listener(
-            lambda ctx, event: self.broadcast(event, source_context=ctx)
+            lambda event_context, event: self.broadcast(
+                # event, source_context=ctx
+                event,
+                source_context=event_context,
+            )
         )
 
         # Broadcast that we created a child context
         self.broadcast(ChildContextCreated(self.id, ctx.id))
         return ctx
-
-    # @property
-    # def name(self) -> str:
-    #     return self.__name
-
-    # @name.setter
-    # def name(self, value: str):
-    #     with self.__lock:
-    #         self.__name = value
-    #     self.broadcast(ContextUpdate(name=value))
 
     @property
     def is_root(self) -> bool:
@@ -217,14 +234,31 @@ class Context:
         self,
         listener: Callable[[Context, Event], None],
         event_type: Optional[str] = None,
+        ignore_children_events: bool = False,
     ):
+        """
+        Adds a listener to the context. If ignore_children_events is True, the
+        listener will not be notified of events from child contexts, only from
+        this context. The event_type, if not specified, or set to "all", will
+        return all events.
+
+        Args:
+            listener (Callable[[Context, Event], None]): The listener to add
+            event_type (Optional[str]): The type of event to listen for, or
+                "all" to listen for all events
+            ignore_children_events (bool): If True, the listener will not be
+                notified of events from child contexts
+        """
         with self.__lock:
-            if event_type is None or event_type == "all":
-                self.__event_listeners["all"].append(listener)
+            event_type = event_type or "all"
+            if ignore_children_events:
+                if event_type not in self.__event_listeners_filtered:
+                    self.__event_listeners_filtered[event_type] = []
+                self.__event_listeners_filtered[event_type].append(listener)
             else:
-                if event_type not in self.__event_listeners:
-                    self.__event_listeners[event_type] = []
-                self.__event_listeners[event_type].append(listener)
+                if event_type not in self.__event_listeners_all:
+                    self.__event_listeners_all[event_type] = []
+                self.__event_listeners_all[event_type].append(listener)
 
     def broadcast(self, event: Event, source_context: Optional[Context] = None):
         """
@@ -235,13 +269,23 @@ class Context:
             source_context = self
 
         with self.__lock:
-            self.__history.append(event)
+            if source_context.id == self.id:
+                self.__history.append(event)
 
-            for listener in self.__event_listeners["all"]:
+            for listener in self.__event_listeners_all["all"]:
                 self.__executor.submit(listener, source_context, event)
-            if event._event_type in self.__event_listeners:
-                for listener in self.__event_listeners[event._event_type]:
+            if event._event_type in self.__event_listeners_all:
+                for listener in self.__event_listeners_all[event._event_type]:
                     self.__executor.submit(listener, source_context, event)
+
+            if source_context.id == self.id:
+                for listener in self.__event_listeners_filtered["all"]:
+                    self.__executor.submit(listener, source_context, event)
+                if event._event_type in self.__event_listeners_filtered:
+                    for listener in self.__event_listeners_filtered[
+                        event._event_type
+                    ]:
+                        self.__executor.submit(listener, source_context, event)
 
     def exception(self, e: Exception):
         self.broadcast(ToolException(e))
@@ -300,6 +344,7 @@ class Context:
             "parent_id": self.__parent.id if self.__parent else None,
             "root_id": self.root.id,
             "tool_id": self.__tool.id,
+            "tool_name": self.__tool.name,
             "status": status,
             "output": output,
             "history": history,
@@ -339,11 +384,19 @@ class Tool:
     def id(self) -> str:
         return self.__id
 
+    def get_context(self) -> Context:
+        """
+        get_context returns a blank context for use with this tool.
+        """
+        return Context(self)
+
     def __init_context_(self, context: Optional[Context], **kwargs) -> Context:
         if context and not context.is_root:
             ctx = context.child_context(self)
         elif context and context.is_root:
             ctx = context
+            if not ctx.tool:
+                ctx.tool = self
         else:
             ctx = Context(self)
 

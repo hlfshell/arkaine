@@ -93,13 +93,16 @@ class BaseBackend(ABC):
             return
         self.tools[tool.name] = tool
 
-    def call_tools(self, calls: List[Tuple[str, ToolArguments]]) -> ToolResults:
+    def call_tools(
+        self, context: Context, calls: List[Tuple[str, ToolArguments]]
+    ) -> ToolResults:
         # TODO - parallelize it!
         results: ToolResults = []
         for tool, args in calls:
             if tool not in self.tools:
                 raise ToolNotFoundException(tool, args)
-            results.append((tool, args, self.tools[tool](**args)))
+            ctx = context.child_context(self.tools[tool])
+            results.append((tool, args, self.tools[tool](ctx, **args)))
 
         return results
 
@@ -136,7 +139,7 @@ class BaseBackend(ABC):
 
             if len(tool_calls) > 0:
                 context.broadcast(AgentToolCalls(tool_calls))
-                tool_results = self.call_tools(tool_calls)
+                tool_results = self.call_tools(context, tool_calls)
                 prompt = self.tool_results_to_prompts(prompt, tool_results)
             else:
                 # No tool calls means we should have a result

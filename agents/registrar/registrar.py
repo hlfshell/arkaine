@@ -13,7 +13,7 @@ class Registrar:
 
     _tools: 'Dict[str, "Tool"]' = {}
 
-    __on_tool_listener: List[Callable[["Tool"], None]] = []
+    __on_tool_listeners: List[Callable[["Tool"], None]] = []
     __on_tool_call_listeners: List[Callable[["Tool", "Context"], None]] = []
 
     def __new__(cls):
