@@ -15,7 +15,6 @@ from agents.tools.events import (
     ToolCalled,
     ToolException,
     ToolReturn,
-    ToolStart,
 )
 from agents.tools.types import ToolArguments
 
@@ -422,6 +421,22 @@ class Tool:
             ctx.broadcast(self._return_event(results))
 
             return results
+
+    def async_call(
+        self, context: Optional[Context] = None, **kwargs
+    ) -> Context:
+        if context is None:
+            context = self.get_context()
+
+        def wrapped_call():
+            try:
+                self.__call__(context, **kwargs)
+            except Exception as e:
+                context.exception(e)
+
+        # Use the existing thread pool instead of creating raw threads
+        self._executor.submit(wrapped_call)
+        return context
 
     def examples_text(
         self, example_format: Optional[Callable[[Example], str]] = None
