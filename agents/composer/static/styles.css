@@ -283,6 +283,15 @@ pre {
     border-radius: 4px;
 }
 
+.context-section.highlight {
+    background-color: #fff3cd;
+    border-left: 3px solid #ffc107;
+}
+
+.context-section.highlight pre {
+    background-color: #fff8e6;
+}
+
 .section-header {
     margin: 0 0 10px 0;
     color: #495057;
@@ -379,4 +388,11 @@ pre {
     padding: 2px 8px;
     border-radius: 4px;
     margin-right: 8px;
+}
+
+.search-highlight {
+    background-color: #ffeb3b;
+    padding: 2px;
+    border-radius: 2px;
+    margin: -2px;
 }

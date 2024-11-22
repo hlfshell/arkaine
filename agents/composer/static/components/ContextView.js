@@ -1,11 +1,33 @@
 import { EventView } from './EventView.js';
 
+// Add syntaxHighlightJson function at the top level
+function syntaxHighlightJson(obj) {
+    if (typeof obj !== 'string') {
+        obj = JSON.stringify(obj, null, 2);
+    }
+    return obj.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+        let cls = 'json-number';
+        if (/^"/.test(match)) {
+            if (/:$/.test(match)) {
+                cls = 'json-key';
+            } else {
+                cls = 'json-string';
+            }
+        } else if (/true|false/.test(match)) {
+            cls = 'json-boolean';
+        } else if (/null/.test(match)) {
+            cls = 'json-null';
+        }
+        return '<span class="' + cls + '">' + match + '</span>';
+    });
+}
+
 export const ContextView = {
     name: 'ContextView',
     components: {
         EventView
     },
-    props: ['context', 'settings', 'depth', 'contexts'],
+    props: ['context', 'settings', 'depth', 'contexts', 'searchQuery'],
     data() {
         return {
             isExpanded: true,
@@ -25,6 +47,10 @@ export const ContextView = {
                 .sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
         },
         copyContext() {
+            const events = this.getEvents();
+
+            const childContexts = this.getChildContexts(this.context.id);
+
             const contextData = {
                 id: this.context.id,
                 tool_name: this.context.tool_name,
@@ -33,27 +59,32 @@ export const ContextView = {
                 output: this.context.output,
                 error: this.context.error,
                 created_at: this.context.created_at,
-                events: this.context.history || [], // Map history to events
-                children: [] // Will be populated as we process child contexts
+                events: events,
+                children: childContexts,
             };
             navigator.clipboard.writeText(JSON.stringify(contextData, null, 2));
         },
         formatOutput(output) {
             if (!output) return '';
             try {
+                let formatted = '';
                 if (typeof output === 'string') {
                     // Try to parse if it looks like JSON
                     if (output.trim().startsWith('{') || output.trim().startsWith('[')) {
                         try {
                             const parsed = JSON.parse(output);
-                            return syntaxHighlightJson(parsed);
+                            formatted = syntaxHighlightJson(parsed);
                         } catch {
-                            return output;
+                            formatted = output;
                         }
+                    } else {
+                        formatted = output;
                     }
-                    return output;
+                } else {
+                    formatted = syntaxHighlightJson(output);
                 }
-                return syntaxHighlightJson(output);
+
+                return formatted;
             } catch (e) {
                 return String(output);
             }
@@ -131,9 +162,19 @@ export const ContextView = {
             }
         },
         getEvents() {
-            return (this.context.events || []).filter(event =>
+            let events = (this.context.events || []).filter(event =>
                 !['context_update'].includes(event.type)
             );
+
+            if (this.searchQuery?.trim()) {
+                const searchTerm = this.searchQuery.trim().toLowerCase();
+                events = events.filter(event => {
+                    const eventData = JSON.stringify(event.data).toLowerCase();
+                    return eventData.includes(searchTerm);
+                });
+            }
+
+            return events;
         },
         getCombinedTimelineItems() {
             const events = this.getEvents().map(event => ({
@@ -149,10 +190,49 @@ export const ContextView = {
             }));
 
             return [...events, ...childContexts].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+        },
+        isMatch() {
+            if (!this.$root.searchQuery) return false;
+            const query = this.$root.searchQuery.toLowerCase();
+
+            if (!this.context.output) return false;
+            return this.context.output.trim().toLowerCase().includes(query);
+        },
+        shouldShowContext() {
+            if (!this.searchQuery?.trim()) return true;
+
+            const searchTerm = this.searchQuery.trim().toLowerCase();
+
+            // Check output
+            const output = this.context.output;
+            const outputStr = typeof output === 'object' ?
+                JSON.stringify(output) : String(output || '');
+            if (outputStr.toLowerCase().includes(searchTerm)) {
+                return true;
+            }
+
+            // Check events
+            if (this.context.events?.some(event =>
+                JSON.stringify(event.data).toLowerCase().includes(searchTerm)
+            )) {
+                return true;
+            }
+
+            // Check error
+            if (this.context.error?.toLowerCase().includes(searchTerm)) {
+                return true;
+            }
+
+            // Check tool name
+            if (this.context.tool_name?.toLowerCase().includes(searchTerm)) {
+                return true;
+            }
+
+            return false;
         }
     },
     template: `
-        <div class="context-container">
+        <div v-if="shouldShowContext()" class="context-container">
             <div class="context-header">
                 <span :class="['status', 'status-' + context.status]">{{ context.status }}</span>
                 <div class="context-id-section">
@@ -184,6 +264,7 @@ export const ContextView = {
                                 :event="item.data"
                                 :settings="settings"
                                 :context-id="context.id"
+                                :search-query="searchQuery"
                             ></event-view>
                             <context-view
                                 v-else
@@ -191,6 +272,7 @@ export const ContextView = {
                                 :contexts="contexts"
                                 :settings="settings"
                                 :depth="depth + 1"
+                                :search-query="searchQuery"
                             ></context-view>
                         </template>
                     </ul>
@@ -221,12 +303,13 @@ export const ContextView = {
                             :contexts="contexts"
                             :settings="settings"
                             :depth="depth + 1"
+                            :search-query="searchQuery"
                         ></context-view>
                     </div>
                 </div>
 
                 <!-- Output section -->
-                <div v-if="context.output" class="context-section">
+                <div v-if="context.output" class="context-section" :class="{ highlight: isMatch }">
                     <div class="section-header" @click="isOutputExpanded = !isOutputExpanded" style="cursor: pointer;">
                         <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
                             <span>Output</span>
