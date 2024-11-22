@@ -5,4 +5,378 @@ body {
     background: #f5f5f5;
 }
 
-/* ... rest of the CSS ... */
+.context-container {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    position: relative;
+}
+
+.context-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+.context-id {
+    font-family: monospace;
+    color: #666;
+}
+
+.status {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    font-weight: 500;
+    text-transform: uppercase;
+    color: white;
+    letter-spacing: 0.5px;
+}
+
+.status-running {
+    background: #ffc107;
+    /* Yellow */
+}
+
+.status-complete {
+    background: #28a745;
+    /* Green */
+}
+
+.status-error {
+    background: #dc3545;
+    /* Red */
+}
+
+.status-cancelled {
+    background: #6c757d;
+    /* Gray */
+}
+
+.event-list {
+    list-style: none;
+    padding: 0;
+    margin: 10px 0;
+    border-left: 2px solid #e9ecef;
+    margin-left: 20px;
+}
+
+.event,
+.context-container {
+    margin-left: 20px;
+    padding-left: 20px;
+    position: relative;
+}
+
+.event:before,
+.context-container:before {
+    content: '';
+    position: absolute;
+    left: -2px;
+    top: 0;
+    height: 100%;
+    border-left: 2px solid #e9ecef;
+}
+
+.event {
+    padding: 10px;
+    margin: 5px 0;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+.event-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    gap: 12px;
+    cursor: pointer;
+}
+
+.event-timestamp {
+    color: #666;
+    font-size: 0.9em;
+    white-space: nowrap;
+}
+
+.event-type {
+    font-weight: bold;
+    padding: 2px 8px;
+    border-radius: 3px;
+    background: #e9ecef;
+    color: #495057;
+    font-size: 0.9em;
+}
+
+.event-data {
+    margin-top: 8px;
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+.event-data-label {
+    color: #666;
+    font-size: 0.85em;
+    margin-bottom: 4px;
+}
+
+pre {
+    background: #f1f3f5;
+    padding: 10px;
+    border-radius: 4px;
+    overflow-x: auto;
+    margin: 0;
+    border: 1px solid #dee2e6;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.connection-status {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.connection-status.connected {
+    background: #d4edda;
+    color: #155724;
+}
+
+.connection-status.disconnected {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.collapse-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 8px;
+    color: #666;
+    font-size: 0.9em;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.collapse-button:hover {
+    background: #f0f0f0;
+    border-radius: 4px;
+}
+
+.collapse-icon {
+    transition: transform 0.2s;
+    font-size: 0.8em;
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.context-content.collapsed,
+.event-content.collapsed {
+    display: none;
+}
+
+.settings-panel {
+    background: white;
+    padding: 12px;
+    margin-bottom: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.action-button {
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: background-color 0.2s;
+}
+
+.action-button:hover {
+    background: #0056b3;
+}
+
+.json-key {
+    color: #d63384;
+}
+
+.json-string {
+    color: #198754;
+}
+
+.json-number {
+    color: #0d6efd;
+}
+
+.json-boolean {
+    color: #dc3545;
+}
+
+.json-null {
+    color: #6c757d;
+}
+
+.copy-button {
+    float: right;
+    padding: 4px 8px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+.copy-button:hover {
+    opacity: 1;
+}
+
+.event,
+.context-header {
+    position: relative;
+}
+
+.event-content {
+    margin-right: 30px;
+    /* Make room for copy button */
+}
+
+.context {
+    position: relative;
+}
+
+.context-header {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 10px;
+}
+
+.context-id-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.context-section {
+    margin: 10px 0;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+.section-header {
+    margin: 0 0 10px 0;
+    color: #495057;
+    font-size: 1em;
+    font-weight: 600;
+}
+
+.contexts>.context-container {
+    border-left: none;
+    margin-left: 0;
+}
+
+.contexts>.context-container:before {
+    display: none;
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.section-header:hover {
+    background-color: #f0f0f0;
+}
+
+.event-header {
+    display: grid;
+    grid-template-columns: 20px auto 1fr;
+    gap: 12px;
+}
+
+.event-timestamp {
+    text-align: right;
+    color: #666;
+}
+
+.connection-pill {
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    margin-left: auto;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.connection-pill.connected {
+    background: #28a745;
+    /* Darker green */
+    color: white;
+}
+
+.connection-pill.disconnected {
+    background: #dc3545;
+    /* Darker red */
+    color: white;
+}
+
+.context-name {
+    color: #495057;
+    font-weight: 500;
+    margin: 0 12px;
+    padding: 2px 8px;
+    background: #e9ecef;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.search-input {
+    justify-self: center;
+    width: 400px;
+    padding: 8px 12px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.event.highlight {
+    background-color: #fff3cd;
+    border-left: 3px solid #ffc107;
+}
+
+.event.highlight .event-data pre {
+    background-color: #fff8e6;
+}
+
+.tool-name {
+    font-weight: 500;
+    color: #495057;
+    background: #e9ecef;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-right: 8px;
+}
