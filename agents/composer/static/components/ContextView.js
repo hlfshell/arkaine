@@ -10,12 +10,16 @@ export const ContextView = {
         return {
             isExpanded: true,
             isEventsExpanded: false,  // Events section starts collapsed
-            isOutputExpanded: true    // Output section starts expanded
+            isOutputExpanded: true,    // Output section starts expanded
+            isChildrenExpanded: true  // Add new state for children section
         }
     },
     methods: {
         getChildContexts(parentId) {
             if (!this.contexts) return [];
+            if (this.context.children && this.context.children.length > 0) {
+                return this.context.children.sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
+            }
             return Array.from(this.contexts.values())
                 .filter(context => context.parent_id === parentId)
                 .sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
@@ -200,6 +204,27 @@ export const ContextView = {
                     <pre class="error-content">{{ context.error }}</pre>
                 </div>
 
+                <!-- Child contexts section -->
+                <div v-if="getChildContexts(context.id).length > 0" class="context-section">
+                    <div class="section-header" @click="isChildrenExpanded = !isChildrenExpanded" style="cursor: pointer;">
+                        <span>Tools Used ({{ getChildContexts(context.id).length }})</span>
+                        <div style="display: flex; gap: 10px;">
+                            <button @click.stop="isChildrenExpanded = true" class="action-button" style="padding: 2px 8px;"><b>+</b></button>
+                            <button @click.stop="isChildrenExpanded = false" class="action-button" style="padding: 2px 8px;"><b>−</b></button>
+                        </div>
+                    </div>
+                    <div v-show="isChildrenExpanded" class="child-contexts">
+                        <context-view
+                            v-for="childContext in getChildContexts(context.id)"
+                            :key="childContext.id"
+                            :context="childContext"
+                            :contexts="contexts"
+                            :settings="settings"
+                            :depth="depth + 1"
+                        ></context-view>
+                    </div>
+                </div>
+
                 <!-- Output section -->
                 <div v-if="context.output" class="context-section">
                     <div class="section-header" @click="isOutputExpanded = !isOutputExpanded" style="cursor: pointer;">
@@ -209,18 +234,6 @@ export const ContextView = {
                         </div>
                     </div>
                     <pre v-show="isOutputExpanded" v-html="formatOutput(context.output)"></pre>
-                </div>
-
-                <!-- Child contexts section -->
-                <div v-if="getChildContexts(context.id).length > 0" class="child-contexts">
-                    <context-view
-                        v-for="childContext in getChildContexts(context.id)"
-                        :key="childContext.id"
-                        :context="childContext"
-                        :contexts="contexts"
-                        :settings="settings"
-                        :depth="depth + 1"
-                    ></context-view>
                 </div>
             </div>
         </div>

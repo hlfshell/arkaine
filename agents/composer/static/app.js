@@ -8,14 +8,11 @@ const app = Vue.createApp({
     },
     data() {
         return {
-            // contexts is what's displayed, contextsAll is
-            // a quick reference to prevent having to search
+            // contexts are only root contexts and is what is displayed
+            // contextsAll is a quick reference to prevent having to search
             // through the network of contexts for referencing,
-            // and contextParentMap is a quick lookup for the parent
-            // of a given context
             contexts: new Map(),
             contextsAll: new Map(),
-            contextParentMap: new Map(),
             ws: null,
             retryCount: 0,
             settings: {
@@ -62,7 +59,7 @@ const app = Vue.createApp({
                 error: contextData.error,
                 created_at: contextData.created_at,
                 events: contextData.history || [],
-                children: []
+                children: [],
             };
 
             // Store in contextsAll for quick lookup
@@ -70,24 +67,30 @@ const app = Vue.createApp({
 
             // Update parent mapping
             if (context.parent_id) {
-                this.contextParentMap.set(context.id, context.parent_id);
-            }
-
-            // If it's a sub-context, add to parent's children
-            if (context.parent_id) {
+                // If it's a sub-context, add to parent's children
                 const parentContext = this.contextsAll.get(context.parent_id);
                 if (parentContext) {
-                    // Ensure children array exists
                     if (!parentContext.children) {
                         parentContext.children = [];
                     }
-                    if (!parentContext.children.some(child => child.id === context.id)) {
-                        parentContext.children.push(context);
+                    // Remove any existing entry for this child to avoid duplicates
+                    parentContext.children = parentContext.children.filter(child => child.id !== context.id);
+                    parentContext.children.push(context);
+
+                    // Force update on parent context
+                    this.contextsAll.set(context.parent_id, { ...parentContext });
+                    if (!parentContext.parent_id) {
+                        this.contexts.set(context.parent_id, { ...parentContext });
                     }
                 }
             } else {
-                // It's a root context, so add it as a standalone
+                // It's a root context
                 this.contexts.set(context.id, context);
+            }
+
+            // Now iterate over all children to handle/load them
+            for (const child of contextData.children) {
+                this.handleContext(child);
             }
 
             // Force reactivity
@@ -113,13 +116,7 @@ const app = Vue.createApp({
             context.events.push(eventData);
 
             // Update context based on event type
-            if (eventData.type === 'context_update' && eventData.data) {
-                Object.entries(eventData.data).forEach(([key, value]) => {
-                    if (key in context) {
-                        context[key] = value;
-                    }
-                });
-            } else if (eventData.type === 'tool_return') {
+            if (eventData.type === 'tool_return' || eventData.type === 'agent_return') {
                 context.output = eventData.data;
                 context.status = 'complete';
             } else if (eventData.type === 'tool_exception') {
