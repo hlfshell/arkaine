@@ -37,19 +37,10 @@ export const ContextView = {
         }
     },
     methods: {
-        getChildContexts(parentId) {
-            if (!this.contexts) return [];
-            if (this.context.children && this.context.children.length > 0) {
-                return this.context.children.sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
-            }
-            return Array.from(this.contexts.values())
-                .filter(context => context.parent_id === parentId)
-                .sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
-        },
         copyContext() {
             const events = this.getEvents();
 
-            const childContexts = this.getChildContexts(this.context.id);
+            const childContexts = this.context.children;
 
             const contextData = {
                 id: this.context.id,
@@ -183,10 +174,10 @@ export const ContextView = {
                 data: event
             }));
 
-            const childContexts = this.getChildContexts(this.context.id).map(context => ({
+            const childContexts = (this.context.children || []).map(child => ({
                 type: 'context',
-                timestamp: context.created_at,
-                data: context
+                timestamp: child.created_at,
+                data: child
             }));
 
             return [...events, ...childContexts].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
@@ -231,6 +222,7 @@ export const ContextView = {
             return false;
         }
     },
+    // template: '{{contexts}}'
     template: `
         <div v-if="shouldShowContext()" class="context-container">
             <div class="context-header">
@@ -239,11 +231,11 @@ export const ContextView = {
                     <button class="collapse-button" @click="isExpanded = !isExpanded">
                         <span class="collapse-icon"><b>{{ isExpanded ? '−' : '+' }}</b></span>
                         <span class="tool-name" v-if="context.tool_name">{{ context.tool_name }}</span>
-                        <span class="context-id" v-else>Context {{ context.id }}</span>
+                        <span class="context-id" >Context {{ context.id }}</span>
+                        <span class="context-timestamps">
+                            Created: {{ formatTimestamp(context.created_at) }}
+                        </span>
                     </button>
-                    <span class="context-timestamps">
-                        Created: {{ formatTimestamp(context.created_at) }}
-                    </span>
                 </div>
                 <button class="copy-button" @click.stop="copyContext">📋</button>
             </div>
@@ -287,9 +279,9 @@ export const ContextView = {
                 </div>
 
                 <!-- Child contexts section -->
-                <div v-if="getChildContexts(context.id).length > 0" class="context-section">
+                <div v-if="context.children && context.children.length > 0" class="context-section">
                     <div class="section-header" @click="isChildrenExpanded = !isChildrenExpanded" style="cursor: pointer;">
-                        <span>Tools Used ({{ getChildContexts(context.id).length }})</span>
+                        <span>Tools Used ({{ context.children.length }})</span>
                         <div style="display: flex; gap: 10px;">
                             <button @click.stop="isChildrenExpanded = true" class="action-button" style="padding: 2px 8px;"><b>+</b></button>
                             <button @click.stop="isChildrenExpanded = false" class="action-button" style="padding: 2px 8px;"><b>−</b></button>
@@ -297,7 +289,7 @@ export const ContextView = {
                     </div>
                     <div v-show="isChildrenExpanded" class="child-contexts">
                         <context-view
-                            v-for="childContext in getChildContexts(context.id)"
+                            v-for="childContext in context.children"
                             :key="childContext.id"
                             :context="childContext"
                             :contexts="contexts"

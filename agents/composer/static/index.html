@@ -2,7 +2,7 @@
 <html>
 
 <head>
-    <title>Agent Context Monitor (Standalone)</title>
+    <title>Composer</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -15,7 +15,7 @@
         </div>
 
         <div class="contexts">
-            <context-view v-for="context in rootContexts" :key="context.id" :context="context" :contexts="contexts"
+            <context-view v-for="context in contexts.values()" :key="context.id" :context="context" :contexts="contexts"
                 :settings="settings" :depth="0"></context-view>
         </div>
         <br />

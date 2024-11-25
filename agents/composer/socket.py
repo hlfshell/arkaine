@@ -104,11 +104,6 @@ class ComposerSocket:
                         websocket.send(
                             json.dumps(self.__build_context_message(context))
                         )
-                        # self._broadcast_context(context)
-
-                        # Send historical events
-                        # for event in context_state["history"]:
-                        #     websocket.send(json.dumps(event))
 
                     except Exception as e:
                         print(f"Failed to send initial context state: {e}")

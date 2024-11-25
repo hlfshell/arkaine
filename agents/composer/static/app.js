@@ -11,7 +11,6 @@ const app = Vue.createApp({
             // contexts are only root contexts and is what is displayed
             // contextsAll is a quick reference to prevent having to search
             // through the network of contexts for referencing,
-            contexts: new Map(),
             contextsAll: new Map(),
             ws: null,
             retryCount: 0,
@@ -24,11 +23,6 @@ const app = Vue.createApp({
         }
     },
     computed: {
-        rootContexts() {
-            if (!this.contexts) return [];
-            return Array.from(this.contexts.values())
-                .filter(context => !context.parent_id);
-        },
         connectionClass() {
             return {
                 'connection-connected': this.wsStatus === 'connected',
@@ -38,7 +32,44 @@ const app = Vue.createApp({
         },
         connectionStatus() {
             return this.wsStatus.charAt(0).toUpperCase() + this.wsStatus.slice(1);
-        }
+        },
+        contexts() {
+            // Helper function to build the tree for a context
+            const buildContextTree = (contextId) => {
+
+                const context = this.contextsAll.get(contextId);
+                if (!context) return null;
+
+                // Create a new object with all properties
+                const contextWithChildren = { ...context };
+
+                // Find all direct children
+                const children = Array.from(this.contextsAll.values())
+                    .filter(c => c.parent_id === contextId);
+
+                // Recursively build tree for each child
+                contextWithChildren.children = children
+                    .map(child => buildContextTree(child.id))
+                    .filter(child => child !== null);
+
+                return contextWithChildren;
+            };
+
+            // Find all root contexts (those without parent_id)
+            const rootContexts = Array.from(this.contextsAll.values())
+                .filter(context => !context.parent_id);
+
+            // Build the complete tree for each root context
+            const contextMap = new Map();
+            rootContexts.forEach(rootContext => {
+                const tree = buildContextTree(rootContext.id);
+                if (tree) {
+                    contextMap.set(rootContext.id, tree);
+                }
+            });
+
+            return contextMap;
+        },
     },
     methods: {
         formatTimestamp(timestamp) {
@@ -48,6 +79,7 @@ const app = Vue.createApp({
         },
         handleContext(data) {
             let contextData = data.data || data;
+
             const context = {
                 id: contextData.id,
                 parent_id: contextData.parent_id,
@@ -62,39 +94,14 @@ const app = Vue.createApp({
                 children: [],
             };
 
-            // Store in contextsAll for quick lookup
             this.contextsAll.set(context.id, context);
 
-            // Update parent mapping
-            if (context.parent_id) {
-                // If it's a sub-context, add to parent's children
-                const parentContext = this.contextsAll.get(context.parent_id);
-                if (parentContext) {
-                    if (!parentContext.children) {
-                        parentContext.children = [];
-                    }
-                    // Remove any existing entry for this child to avoid duplicates
-                    parentContext.children = parentContext.children.filter(child => child.id !== context.id);
-                    parentContext.children.push(context);
-
-                    // Force update on parent context
-                    this.contextsAll.set(context.parent_id, { ...parentContext });
-                    if (!parentContext.parent_id) {
-                        this.contexts.set(context.parent_id, { ...parentContext });
-                    }
-                }
-            } else {
-                // It's a root context
-                this.contexts.set(context.id, context);
-            }
-
-            // Now iterate over all children to handle/load them
             for (const child of contextData.children) {
                 this.handleContext(child);
             }
 
             // Force reactivity
-            this.contexts = new Map(this.contexts);
+            this.contextsAll = new Map(this.contextsAll);
         },
         handleEvent(data) {
             const contextId = data.context_id;
@@ -126,10 +133,9 @@ const app = Vue.createApp({
 
             // Force reactivity by updating both maps
             this.contextsAll.set(contextId, { ...context });
-            if (!context.parent_id) {
-                this.contexts.set(contextId, { ...context });
-            }
-            this.contexts = new Map(this.contexts);
+            // if (!context.parent_id) {
+            //     this.contexts.set(contextId, { ...context });
+            // }
         },
         setupWebSocket() {
             try {
@@ -148,7 +154,6 @@ const app = Vue.createApp({
                 };
 
                 ws.onmessage = (event) => {
-                    console.log("Message received:", event);
                     const data = JSON.parse(event.data);
                     if (data.type === 'context') {
                         this.handleContext(data);
