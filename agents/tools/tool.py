@@ -5,8 +5,9 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from time import time
 from types import TracebackType
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Union
 from uuid import uuid4
+from threading import Event as ThreadEvent
 
 from agents.registrar.registrar import Registrar
 from agents.tools.events import (
@@ -15,7 +16,9 @@ from agents.tools.events import (
     ToolCalled,
     ToolException,
     ToolReturn,
+    ContextUpdate,
 )
+from concurrent.futures import Future
 from agents.tools.types import ToolArguments
 
 
@@ -102,14 +105,43 @@ class Context:
        execution of that specific tool/agent
     5. name - a human readable name for the tool/agent
 
-    Updates to the context are broadcasted under the event type ContextUpdate
-    ("context_update" for the listeners)
+    Updates to the context's attributes are broadcasted under the event type
+    ContextUpdate ("context_update" for the listeners). The output is
+    broadcasted as tool_return, and errors/exceptions as tool_exception.
+
+    Contexts can have listeners assigned. They are:
+        - event listeners via add_event_listener() - with an option to filter
+          specific event types, and whether or not to ignore propagated
+          children's events
+        - output listeners - when the context's output value is set
+        - error listeners - when the context's error value is set
+        - on end - when either the output or the error value is set
+
+    Events in contexts can be utilized for your own purposes as well utilizing
+    the broadcast() function, as long as they follow the Event class's
+    interface.
+
+    Contexts have several useful flow control functions as well:
+        - wait() - wait for the context to complete (blocking)
+        - future() - returns a concurrent.futures.Future object for the context
+          to be compatible with standard async approaches
+        - cancel() - cancel the context NOT IMPLEMENTED
+
+    A context's executing attribute is assigned once, when it is utilized by a
+    tool or agent. It can never be changed, and is utilized to determine if a
+    context is being passed to create a child context or if its being passed to
+    be utilized as the current execution's context. If the context is marked as
+    executing already, a child context will be created as it is implied that
+    this context is the root of the execution of the tool. If the execution is
+    not marked as executing, the context is assumed to be the root of the
+    execution process and utilized as the tool's current context.
     """
 
     def __init__(
         self, tool: Optional[Tool] = None, parent: Optional[Context] = None
     ):
         self.__id = str(uuid4())
+        self.__executing = False
         self.__tool = tool
         self.__parent = parent
         self.__tool = tool
@@ -121,7 +153,6 @@ class Context:
         self.__exception: Exception = None
         self.__output: Any = None
         self.__created_at = time()
-        self.__triggered: bool = False
 
         self.__children: List[Context] = []
 
@@ -132,15 +163,22 @@ class Context:
             str, List[Callable[[Context, Event], None]]
         ] = {"all": []}
 
+        self.__on_output_listeners: List[Callable[[Context, Any], None]] = []
+        self.__on_exception_listeners: List[
+            Callable[[Context, Exception], None]
+        ] = []
+        self.__on_end_listeners: List[Callable[[Context], None]] = []
+
         self.__history: List[Event] = []
 
         self.__lock = threading.Lock()
-        self.__status_changed = threading.Event()
 
         # No max workers due to possible lock synchronization issues
         self.__executor = ThreadPoolExecutor(
             thread_name_prefix=f"context-{self.__id}"
         )
+
+        self.__completion_event = ThreadEvent()
 
     def __enter__(self):
         return self
@@ -152,7 +190,7 @@ class Context:
         traceback: Optional[TracebackType],
     ) -> bool:
         if exc_type is not None:
-            self.exception(exc_value)
+            self.exception = exc_value
         return False
 
     def __del__(self):
@@ -182,6 +220,14 @@ class Context:
                 raise ValueError("Tool already set")
             self.__tool = tool
 
+        self.broadcast(
+            ContextUpdate(tool_id=self.tool.id, tool_name=self.tool.name)
+        )
+
+    @property
+    def parent(self) -> Context:
+        return self.__parent
+
     @property
     def children(self) -> List[Context]:
         with self.__lock:
@@ -195,12 +241,13 @@ class Context:
     def child_context(self, tool: Tool) -> Context:
         """Create a new child context for the given tool."""
         ctx = Context(tool=tool, parent=self)
+
         with self.__lock:
             self.__children.append(ctx)
 
         # All events happening in the children contexts are broadcasted
         # to their parents as well so the root context receives all events
-        ctx.add_listener(
+        ctx.add_event_listener(
             lambda event_context, event: self.broadcast(
                 event,
                 source_context=event_context,
@@ -229,7 +276,19 @@ class Context:
     def id(self) -> str:
         return self.__id
 
-    def add_listener(
+    @property
+    def executing(self) -> bool:
+        with self.__lock:
+            return self.__executing
+
+    @executing.setter
+    def executing(self, executing: bool):
+        with self.__lock:
+            if self.__executing:
+                raise ValueError("already executing")
+            self.__executing = executing
+
+    def add_event_listener(
         self,
         listener: Callable[[Context, Event], None],
         event_type: Optional[str] = None,
@@ -286,12 +345,89 @@ class Context:
                     ]:
                         self.__executor.submit(listener, source_context, event)
 
+    def add_on_output_listener(self, listener: Callable[[Context, Any], None]):
+        with self.__lock:
+            self.__on_output_listeners.append(listener)
+
+    def add_on_exception_listener(
+        self, listener: Callable[[Context, Exception], None]
+    ):
+        with self.__lock:
+            self.__on_exception_listeners.append(listener)
+
+    def add_on_end_listener(self, listener: Callable[[Context], None]):
+        with self.__lock:
+            self.__on_end_listeners.append(listener)
+
+    def wait(self, timeout: Optional[float] = None):
+        """
+        Wait for the context to complete (either with a result or exception).
+
+        Args:
+            timeout: Maximum time to wait in seconds. If None, wait
+            indefinitely.
+
+        Raises:
+            TimeoutError: If the timeout is reached before completion The
+            original exception: If the context failed with an exception
+        """
+        with self.__lock:
+            if self.__output is not None or self.__exception is not None:
+                return
+
+        if not self.__completion_event.wait(timeout):
+            with self.__lock:
+                if self.__output is not None or self.__exception is not None:
+                    return
+
+            raise TimeoutError(
+                "Context did not complete within the specified timeout"
+            )
+
+    def future(self) -> Future:
+        """Return a concurrent.futures.Future object for the context."""
+        future = Future()
+
+        def on_output(context: Context, value: Any):
+            if self.exception:
+                future.set_exception(self.exception)
+            else:
+                future.set_result(value)
+
+        # Due to timing issues, we have to manually create the listeners within
+        # the lock instead of our usual methods to avoid race conditions.
+        with self.__lock:
+            if self.__output is not None:
+                future.set_result(self.__output)
+                return future
+            if self.__exception is not None:
+                future.set_exception(self.__exception)
+                return future
+
+            self.__on_output_listeners.append(on_output)
+
+        return future
+
+    def cancel(self):
+        """Cancel the context."""
+        raise NotImplementedError("Not implemented")
+
+    @property
+    def exception(self) -> Optional[Exception]:
+        with self.__lock:
+            return self.__exception
+
+    @exception.setter
     def exception(self, e: Exception):
         self.broadcast(ToolException(e))
-
         with self.__lock:
             self.__exception = e
-        self.__status_changed.set()
+        self.__completion_event.set()
+
+        for listener in self.__on_exception_listeners:
+            self.__executor.submit(listener, self, e)
+        for listener in self.__on_end_listeners:
+            self.__executor.submit(listener, self)
 
     @property
     def output(self) -> Any:
@@ -304,16 +440,12 @@ class Context:
             if self.__output:
                 raise ValueError("Output already set")
             self.__output = value
+        self.__completion_event.set()
 
-        self.__status_changed.set()
-
-    def wait(self, timeout: Optional[float] = None):
-        while True:
-            self.__status_changed.wait(timeout=timeout or 0.1)
-            if timeout or self.status != "running":
-                break
-
-        self.__status_changed.clear()
+        for listener in self.__on_output_listeners:
+            self.__executor.submit(listener, self, value)
+        for listener in self.__on_end_listeners:
+            self.__executor.submit(listener, self)
 
     def to_json(self) -> dict:
         """Convert Context to a JSON-serializable dictionary."""
@@ -368,8 +500,6 @@ class Tool:
         self.func = func
         self.examples = examples
         self._on_call_listeners: List[Callable[[Tool, Context], None]] = []
-        self._called_event = ToolCalled
-        self._return_event = ToolReturn
 
         self._executor = ThreadPoolExecutor()
 
@@ -389,13 +519,18 @@ class Tool:
         return Context(self)
 
     def __init_context_(self, context: Optional[Context], **kwargs) -> Context:
-        if context and not context.tool:
-            ctx = context
-            ctx.tool = self
-        elif context:
-            ctx = context.child_context(self)
-        else:
+        if context is None:
             ctx = Context(self)
+        else:
+            ctx = context
+
+        if ctx.executing:
+            ctx = context.child_context(self)
+            ctx.executing = True
+        else:
+            if not ctx.tool:
+                ctx.tool = self
+            ctx.executing = True
 
         ctx.broadcast(self._called_event(kwargs))
         for listener in self._on_call_listeners:
@@ -404,6 +539,8 @@ class Tool:
         return ctx
 
     def invoke(self, context: Context, **kwargs) -> Any:
+        if "context" in self.func.__code__.co_varnames:
+            return self.func(context=context, **kwargs)
         return self.func(**kwargs)
 
     def __call__(self, context: Optional[Context] = None, **kwargs) -> Any:
@@ -413,12 +550,13 @@ class Tool:
 
             self.check_arguments(kwargs)
 
-            ctx.broadcast(self._called_event(self.name))
+            ctx.broadcast(ToolCalled(self.name))
 
             results = self.invoke(ctx, **kwargs)
 
             ctx.output = results
-            ctx.broadcast(self._return_event(results))
+
+            ctx.broadcast(ToolReturn(results))
 
             return results
 
@@ -426,16 +564,25 @@ class Tool:
         self, context: Optional[Context] = None, **kwargs
     ) -> Context:
         if context is None:
-            context = self.get_context()
+            context = Context()
+        else:
+            # If we are passed a context, we need to determine if its a new
+            # context or if it is an existing one that means we need to create
+            # a child context. We don't mark it as executing so that the call
+            # itself can do this. If it isn't executing we'll just continue
+            # using the current context.
+            if context.executing:
+                context = context.child_context(self)
 
-        def wrapped_call():
+        def wrapped_call(context: Context, **kwargs):
             try:
                 self.__call__(context, **kwargs)
             except Exception as e:
-                context.exception(e)
+                context.exception = e
 
         # Use the existing thread pool instead of creating raw threads
-        self._executor.submit(wrapped_call)
+        self._executor.submit(wrapped_call, context, **kwargs)
+
         return context
 
     def examples_text(
