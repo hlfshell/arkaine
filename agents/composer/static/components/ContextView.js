@@ -161,8 +161,8 @@ export const ContextView = {
             return [...events, ...childContexts].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
         },
         isMatch() {
-            if (!this.$root.searchQuery) return false;
-            const query = this.$root.searchQuery.toLowerCase();
+            const query = this.searchQuery?.trim().toLowerCase();
+            if (!query) return false;
 
             if (!this.context.output) return false;
             return this.context.output.trim().toLowerCase().includes(query);
@@ -248,14 +248,6 @@ export const ContextView = {
                     </ul>
                 </div>
 
-                <!-- Error section -->
-                <div v-if="context.error" class="context-section error-section">
-                    <div class="section-header">
-                        <span>Error</span>
-                    </div>
-                    <pre class="error-content">{{ context.error }}</pre>
-                </div>
-
                 <!-- Child contexts section -->
                 <div v-if="context.children && context.children.length > 0" class="context-section">
                     <div class="section-header" @click="isChildrenExpanded = !isChildrenExpanded" style="cursor: pointer;">
@@ -288,6 +280,16 @@ export const ContextView = {
                     </div>
                     <pre v-show="isOutputExpanded" v-html="formatOutput(context.output)"></pre>
                 </div>
+
+
+                <!-- Error section -->
+                <div v-if="context.error" class="context-section error-section">
+                    <div class="section-header">
+                        <span>Error</span>
+                    </div>
+                    <pre class="error-content">{{ context.error }}</pre>
+                </div>
+                
             </div>
         </div>
     `
