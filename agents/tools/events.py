@@ -85,7 +85,7 @@ class ToolReturn(Event):
 
 class ToolException(Event):
     def __init__(self, exception: Exception):
-        super().__init__("context_exception", exception)
+        super().__init__("tool_exception", exception)
 
     def __str__(self) -> str:
         out = f"{self._get_readable_timestamp()}: context_exception:"
