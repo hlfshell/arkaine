@@ -21,6 +21,8 @@ from agents.tools.events import (
 from concurrent.futures import Future
 from agents.tools.types import ToolArguments
 
+import traceback
+
 
 class Argument:
     def __init__(
@@ -453,7 +455,19 @@ class Context:
         # competing locks. This introduces a possible race condition
         # but should be fine for most purposes for now.
         status = self.status
-        output = self.__output
+        output = self.output
+        if self.exception:
+            exception = f"\n{self.exception}\n\n"
+
+            exception += "".join(
+                traceback.format_exception(
+                    type(self.exception),
+                    self.exception,
+                    self.exception.__traceback__,
+                )
+            )
+        else:
+            exception = None
 
         with self.__lock:
             history = [event.to_json() for event in self.__history]
@@ -480,7 +494,7 @@ class Context:
             "history": history,
             "created_at": self.__created_at,
             "children": [child.to_json() for child in self.__children],
-            "error": str(self.__exception) if self.__exception else None,
+            "error": exception,
         }
 
 
