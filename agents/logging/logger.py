@@ -74,7 +74,7 @@ class Logger:
 
     def on_tool_call(self, tool: Tool, context: Context):
         # Subscribe to the context events
-        context.add_listener(self.log_event, ignore_children_events=True)
+        context.add_event_listener(self.log_event, ignore_children_events=True)
 
     def _colorize(self, text: str, color: str) -> str:
         """Apply ANSI color codes to text if colors are enabled.
