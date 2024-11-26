@@ -1,16 +1,41 @@
+/* Add CSS variables for theming */
+:root {
+    --bg-color: #f5f5f5;
+    --bg-content: #ffffff;
+    --text-color: #333333;
+    --border-color: #dee2e6;
+    --hover-bg: #f0f0f0;
+    --shadow-color: rgba(0, 0, 0, 0.1);
+    --code-bg: #f1f3f5;
+    --section-bg: #f8f9fa;
+}
+
+.dark-mode {
+    --bg-color: #1a1a1a;
+    --bg-content: #2d2d2d;
+    --text-color: #e0e0e0;
+    --border-color: #404040;
+    --hover-bg: #3d3d3d;
+    --shadow-color: rgba(0, 0, 0, 0.3);
+    --code-bg: #363636;
+    --section-bg: #363636;
+}
+
+/* Update existing styles to use variables */
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     margin: 0;
     padding: 20px;
-    background: #f5f5f5;
+    background: var(--bg-color);
+    color: var(--text-color);
 }
 
 .context-container {
-    background: white;
+    background: var(--bg-content);
     border-radius: 8px;
     padding: 20px;
     margin-bottom: 20px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 4px var(--shadow-color);
     position: relative;
 }
 
@@ -86,7 +111,7 @@ body {
 .event {
     padding: 10px;
     margin: 5px 0;
-    background: #f8f9fa;
+    background: var(--section-bg);
     border-radius: 4px;
 }
 
@@ -126,14 +151,15 @@ body {
 }
 
 pre {
-    background: #f1f3f5;
+    background: var(--code-bg);
     padding: 10px;
     border-radius: 4px;
     overflow-x: auto;
     margin: 0;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--border-color);
     white-space: pre-wrap;
     word-wrap: break-word;
+    color: var(--text-color);
 }
 
 .connection-status {
@@ -188,11 +214,11 @@ pre {
 }
 
 .settings-panel {
-    background: white;
+    background: var(--bg-content);
     padding: 12px;
     margin-bottom: 20px;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 4px var(--shadow-color);
     display: grid;
     grid-template-columns: auto auto 1fr;
     gap: 20px;
@@ -279,17 +305,26 @@ pre {
 .context-section {
     margin: 10px 0;
     padding: 10px;
-    background: #f8f9fa;
+    background: var(--section-bg);
     border-radius: 4px;
 }
 
+.context-section:has(> .section-header:has(+ pre)) {
+    background-color: rgba(40, 167, 69, 0.08);
+    border-left: 3px solid #28a745;
+}
+
+.context-section:has(> .section-header:has(+ pre)) pre {
+    background-color: rgba(40, 167, 69, 0.04);
+}
+
 .context-section.highlight {
-    background-color: #fff3cd;
-    border-left: 3px solid #ffc107;
+    background-color: rgba(255, 193, 7, 0.2) !important;
+    border-left: 3px solid #ffc107 !important;
 }
 
 .context-section.highlight pre {
-    background-color: #fff8e6;
+    background-color: rgba(255, 193, 7, 0.1) !important;
 }
 
 .section-header {
@@ -525,7 +560,7 @@ pre {
 }
 
 .settings-group {
-    background: #f8f9fa;
+    background: var(--section-bg);
     padding: 16px;
     border-radius: 8px;
     margin-bottom: 16px;
@@ -646,11 +681,27 @@ pre {
     align-items: center;
     justify-content: center;
     font-size: 1.8em;
-    transition: transform 0.2s;
+    transition: all 0.3s;
+    color: white;
 }
 
 .global-settings-button:hover {
     transform: rotate(30deg);
+}
+
+/* Connection status colors for the button background */
+.global-settings-button.connection-connected {
+    background-color: #28a745;
+}
+
+.global-settings-button.connection-disconnected {
+    background-color: #dc3545;
+}
+
+.global-settings-button.connection-connecting,
+.global-settings-button.connection-error {
+    background-color: #ffc107;
+    color: #000;
 }
 
 .settings-panel-overlay {
@@ -677,7 +728,7 @@ pre {
     right: 0;
     bottom: 0;
     width: 300px;
-    background: white;
+    background: var(--bg-content);
     padding: 20px;
     box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
     transform: translateX(100%);
@@ -813,8 +864,9 @@ pre {
     border: 1px solid #dee2e6;
     border-radius: 6px;
     font-size: 0.95em;
-    background: white;
+    background: var(--bg-content);
     transition: border-color 0.2s;
+    color: var(--text-color);
 }
 
 .connection-input-group input:focus {
@@ -923,7 +975,7 @@ pre {
     left: 0;
     bottom: 0;
     width: 300px;
-    background: white;
+    background: var(--bg-content);
     padding: 20px;
     box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
     transform: translateX(-100%);
@@ -982,4 +1034,182 @@ pre {
     .main-content.with-tools {
         padding-left: 20px;
     }
+}
+
+/* Theme toggle button styles */
+.theme-button {
+    width: 100%;
+    padding: 10px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 0.9em;
+    background: var(--bg-content);
+    color: var(--text-color);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.theme-button:hover {
+    background: var(--hover-bg);
+}
+
+/* Update JSON syntax highlighting for dark mode */
+.dark-mode .json-key {
+    color: #ff79c6;
+}
+
+.dark-mode .json-string {
+    color: #50fa7b;
+}
+
+.dark-mode .json-number {
+    color: #bd93f9;
+}
+
+.dark-mode .json-boolean {
+    color: #ff5555;
+}
+
+.dark-mode .json-null {
+    color: #8be9fd;
+}
+
+/* Update error section for dark mode */
+.dark-mode .error-section {
+    background-color: rgba(220, 53, 69, 0.1);
+}
+
+.dark-mode .error-content {
+    background-color: rgba(220, 53, 69, 0.05);
+}
+
+.dark-mode .error-section.highlight {
+    background-color: rgba(255, 193, 7, 0.1);
+}
+
+/* Update event highlighting for dark mode */
+.dark-mode .event.highlight,
+.dark-mode .context-section.highlight {
+    background-color: rgba(255, 193, 7, 0.1);
+}
+
+/* Update search input for dark mode */
+.dark-mode .search-input {
+    background: var(--bg-content);
+    color: var(--text-color);
+    border-color: var(--border-color);
+}
+
+/* Update view toggle for dark mode */
+.dark-mode .view-toggle {
+    background: var(--bg-content);
+    border: 1px solid var(--border-color);
+}
+
+.dark-mode .view-toggle button {
+    color: var(--text-color);
+    border-color: var(--border-color);
+    background: transparent;
+}
+
+.dark-mode .view-toggle button:hover:not(.active) {
+    background: var(--hover-bg);
+}
+
+.dark-mode .view-toggle button.active {
+    background: #0d6efd;
+    color: white;
+    border-color: #0d6efd;
+}
+
+/* Update tools button and panel for dark mode */
+.dark-mode .global-tools-button {
+    background: var(--bg-content);
+    color: var(--text-color);
+}
+
+.dark-mode .tools-header h3 {
+    color: var(--text-color);
+}
+
+/* Update tool name and event type backgrounds */
+.dark-mode .tool-name,
+.dark-mode .event-type {
+    background: var(--section-bg);
+    color: var(--text-color);
+}
+
+/* Update context sections for dark mode */
+.dark-mode .context-section {
+    background: var(--section-bg);
+}
+
+/* Update error section title */
+.dark-mode .section-header {
+    color: var(--text-color);
+}
+
+/* Update event backgrounds */
+.dark-mode .event {
+    background: var(--section-bg);
+}
+
+/* Update borders and dividers */
+.dark-mode .context-header {
+    border-bottom-color: var(--border-color);
+}
+
+.dark-mode .tools-header {
+    border-bottom-color: var(--border-color);
+}
+
+/* Update close button in dark mode */
+.dark-mode .close-button {
+    color: var(--text-color);
+}
+
+.dark-mode .close-button:hover {
+    background: var(--hover-bg);
+}
+
+/* Fix header hover states in dark mode */
+.dark-mode .section-header:hover {
+    background-color: var(--hover-bg);
+}
+
+.dark-mode .collapse-button:hover {
+    background: var(--hover-bg);
+}
+
+/* Dark mode output */
+.dark-mode .context-section:has(> .section-header:has(+ pre)) {
+    background-color: rgba(40, 167, 69, 0.15);
+    border-left: 3px solid #2fd655;
+}
+
+.dark-mode .context-section:has(> .section-header:has(+ pre)) pre {
+    background-color: rgba(40, 167, 69, 0.08);
+}
+
+/* Keep the highlight behavior for search matches */
+.context-section.highlight {
+    background-color: rgba(255, 193, 7, 0.2) !important;
+    border-left: 3px solid #ffc107 !important;
+}
+
+.context-section.highlight pre {
+    background-color: rgba(255, 193, 7, 0.1) !important;
+}
+
+.dark-mode .context-section.highlight {
+    background-color: rgba(255, 193, 7, 0.15) !important;
+    border-left: 3px solid #ffc107 !important;
+}
+
+.dark-mode .context-section.highlight pre {
+    background-color: rgba(255, 193, 7, 0.08) !important;
 }

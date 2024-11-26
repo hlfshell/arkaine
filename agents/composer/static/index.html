@@ -17,14 +17,15 @@
         </button>
 
         <!-- Settings Toggle Button (right side) -->
-        <button class="global-settings-button" @click="showSettings = !showSettings" title="Settings">
+        <button class="global-settings-button" :class="connectionClass" @click="showSettings = !showSettings"
+            title="Settings">
             &#x2699;
         </button>
 
         <!-- Tools Panel (left side) -->
         <div :class="['tools-panel', { active: showTools }]">
             <div class="tools-header">
-                <h3>Tools</h3>
+                <h3>Tools and Agents</h3>
                 <button class="close-button" @click="showTools = false">&#10060;</button>
             </div>
             <div class="tools-content">
@@ -80,6 +81,16 @@
                         <button :class="{ active: settings.viewMode === 'timeline' }"
                             @click="settings.viewMode = 'timeline'">
                             Timeline
+                        </button>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <label>Theme</label>
+                    <div class="theme-toggle">
+                        <button @click="toggleTheme" class="theme-button">
+                            <span v-if="isDarkMode">☀️ Light Mode</span>
+                            <span v-else>🌙 Dark Mode</span>
                         </button>
                     </div>
                 </div>

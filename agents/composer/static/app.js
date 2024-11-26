@@ -8,24 +8,20 @@ const app = Vue.createApp({
     },
     data() {
         return {
-            // contexts are only root contexts and is what is displayed
-            // contextsAll is a quick reference to prevent having to search
-            // through the network of contexts for referencing,
             contextsAll: new Map(),
             ws: null,
             retryCount: 0,
             settings: {
-                expandedByDefault: true,
-                viewMode: 'separate'
+                expandedByDefault: localStorage.getItem('expandedByDefault') === 'true' || true,
+                viewMode: localStorage.getItem('viewMode') || 'separate'
             },
             wsStatus: 'disconnected',
             searchQuery: '',
             isExpanded: true,
-            viewMode: 'separate',
-            wsHost: 'localhost',
-            wsPort: 9001,
+            wsHost: localStorage.getItem('wsHost') || 'localhost',
+            wsPort: parseInt(localStorage.getItem('wsPort')) || 9001,
             showSettings: false,
-            autoReconnect: true,
+            autoReconnect: localStorage.getItem('autoReconnect') !== 'false',
             showTools: false,
             toolEmojis: [
                 '&#129818;', // Carpentry Saw
@@ -39,7 +35,28 @@ const app = Vue.createApp({
                 '&#9874;',   // Hammer and Pick
                 '&#129520;'  // Toolbox
             ],
-            currentToolEmoji: '&#128296;' // Default to wrench
+            currentToolEmoji: '&#128296;',
+            isDarkMode: localStorage.getItem('darkMode') === 'true' || false,
+        }
+    },
+    watch: {
+        'settings.viewMode'(newValue) {
+            localStorage.setItem('viewMode', newValue);
+        },
+        'settings.expandedByDefault'(newValue) {
+            localStorage.setItem('expandedByDefault', newValue);
+        },
+        wsHost(newValue) {
+            localStorage.setItem('wsHost', newValue);
+        },
+        wsPort(newValue) {
+            localStorage.setItem('wsPort', newValue);
+        },
+        autoReconnect(newValue) {
+            localStorage.setItem('autoReconnect', newValue);
+        },
+        isDarkMode(newValue) {
+            localStorage.setItem('darkMode', newValue);
         }
     },
     computed: {
@@ -233,10 +250,15 @@ const app = Vue.createApp({
         randomizeToolEmoji() {
             const randomIndex = Math.floor(Math.random() * this.toolEmojis.length);
             this.currentToolEmoji = this.toolEmojis[randomIndex];
+        },
+        toggleTheme() {
+            this.isDarkMode = !this.isDarkMode;
+            document.documentElement.classList.toggle('dark-mode', this.isDarkMode);
         }
     },
     mounted() {
         this.setupWebSocket();
+        document.documentElement.classList.toggle('dark-mode', this.isDarkMode);
     }
 });
 
