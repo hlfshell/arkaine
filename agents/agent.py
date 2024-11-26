@@ -3,11 +3,9 @@ from typing import Any, Callable, Dict, List, Optional
 
 from agents.backends.base import BaseBackend
 from agents.events import (
-    AgentCalled,
     AgentLLMCalled,
     AgentLLMResponse,
     AgentPrompt,
-    AgentReturn,
 )
 from agents.llms.llm import LLM, Prompt
 from agents.tools.tool import Argument, Context, Example, Tool
