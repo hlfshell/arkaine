@@ -5,18 +5,6 @@ from agents.tools.tool import Event
 from agents.tools.types import ToolArguments
 
 
-class AgentCalled(Event):
-    def __init__(self, args: ToolArguments):
-        super().__init__("agent_called")
-        self.data = args
-
-    def __str__(self) -> str:
-        args_str = ", ".join(
-            f"{arg}={value}" for arg, value in self.data.items()
-        )
-        return f"{self._get_readable_timestamp()}({args_str})"
-
-
 class AgentPrompt(Event):
     def __init__(self, prompt: Prompt):
         super().__init__("agent_prompt")
@@ -39,15 +27,6 @@ class AgentLLMResponse(Event):
             f"{self._get_readable_timestamp()} received "
             f"LLM response:\n{self.data}"
         )
-
-
-class AgentReturn(Event):
-    def __init__(self, result: Any):
-        super().__init__("agent_return")
-        self.data = result
-
-    def __str__(self) -> str:
-        return f"{self._get_readable_timestamp()} returned:\n" f"{self.data}"
 
 
 class AgentLLMCalled(Event):
