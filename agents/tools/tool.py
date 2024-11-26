@@ -532,7 +532,7 @@ class Tool:
                 ctx.tool = self
             ctx.executing = True
 
-        ctx.broadcast(self._called_event(kwargs))
+        ctx.broadcast(ToolCalled(kwargs))
         for listener in self._on_call_listeners:
             self._executor.submit(listener, self, ctx)
 
