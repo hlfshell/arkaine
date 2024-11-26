@@ -43,46 +43,16 @@ class SelfConsistency(Tool):
 
     def invoke(self, context: Context, **kwargs):
         contexts: List[Context] = []
-        futures = []
 
         # Launch all executions
-        print("LAUNCHING")
         for _ in range(self.executions):
             ctx = self.__tool.async_call(context, **kwargs)
             contexts.append(ctx)
 
         for idx, ctx in enumerate(contexts):
-            print(f"Waiting for {ctx.id}")
             ctx.wait(timeout=self.timeout)
-            print("context out", ctx.id, ctx.output)
 
-        # for _ in range(self.executions):
-        #     ctx = self.__tool.async_call(context, **kwargs)
-        #     contexts.append(ctx)
-        #     # Create a future for each context's completion
-        #     future = self._threadpool.submit(ctx.wait, timeout=self.timeout)
-        #     futures.append(future)
-
-        # print("NOW WAITING")
-        # # Wait for all futures to complete with timeout
-        # try:
-        #     wait(futures, timeout=self.timeout, return_when="ALL_COMPLETED")
-        #     print("ALL COMPLETED")
-        # except TimeoutError:
-        #     raise TimeoutError("Execution took too long")
-
-        print("POST WAIT")
-
-        # For each context, check to see if they threw exceptions. If they did,
-        # reject their context for moving forward. If all threw an exception,
-        # raise one of them. This should probably be handled better. Also,
-        # since we need at least three contexts to compare with clustering, we
-        # must have at least three contexts that completed successfully. If we
-        # fail that, then we also return one of the first exception. Yes, this
-        # should be handled in a smarter way, but this is also a first pass of
-        # the feature.
         done_contexts = [ctx for ctx in contexts if ctx.status == "complete"]
-        print("DONE CONTEXTS", len(done_contexts))
 
         if len(done_contexts) <= 2:
             for ctx in contexts:
