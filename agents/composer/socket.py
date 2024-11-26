@@ -50,7 +50,9 @@ class ComposerSocket:
         # here on out if its a root context
         self._handle_context_creation(context)
         self._broadcast_context(context)
-        context.add_listener(self._broadcast_event, ignore_children_events=True)
+        context.add_event_listener(
+            self._broadcast_event, ignore_children_events=True
+        )
 
     def _on_tool_register(self, tool: Tool):
         with self._lock:
