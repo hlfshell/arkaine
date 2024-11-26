@@ -3,6 +3,8 @@ from datetime import datetime, timezone
 from time import time
 from typing import Any
 
+import traceback
+
 from agents.tools.types import ToolArguments
 
 
@@ -88,10 +90,25 @@ class ToolException(Event):
         super().__init__("tool_exception", exception)
 
     def __str__(self) -> str:
-        out = f"{self._get_readable_timestamp()}: context_exception:"
+        out = f"{self._get_readable_timestamp()}: tool_exception -"
         if self.data:
-            out += f"\n{self.data}"
+            e: Exception = self.data
+
+            # Grab the stack trace from the Exception and add it to the output
+            out += f"\n{e}\n\n"
+
+            out += "".join(
+                traceback.format_exception(type(e), e, e.__traceback__)
+            )
+
         return out
+
+    def to_json(self) -> dict:
+        return {
+            "type": self._event_type,
+            "timestamp": self._timestamp,
+            "data": str(self),
+        }
 
 
 class ChildContextCreated(Event):
