@@ -8,6 +8,7 @@ from websockets.server import WebSocketServerProtocol
 from websockets.sync.server import serve
 
 from agents.registrar.registrar import Registrar
+from agents.tools.events import ToolException, ToolReturn
 from agents.tools.tool import Context, Event, Tool
 
 
@@ -53,6 +54,13 @@ class ComposerSocket:
         context.add_event_listener(
             self._broadcast_event, ignore_children_events=True
         )
+        context.add_on_end_listener(self._context_complete)
+
+    def _context_complete(self, context: Context):
+        if context.exception:
+            self._broadcast_event(context, ToolException(context.exception))
+        else:
+            self._broadcast_event(context, ToolReturn(context.output))
 
     def _on_tool_register(self, tool: Tool):
         with self._lock:
