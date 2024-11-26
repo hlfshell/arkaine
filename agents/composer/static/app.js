@@ -15,11 +15,31 @@ const app = Vue.createApp({
             ws: null,
             retryCount: 0,
             settings: {
-                expandedByDefault: true
+                expandedByDefault: true,
+                viewMode: 'separate'
             },
             wsStatus: 'disconnected',
             searchQuery: '',
-            isExpanded: true
+            isExpanded: true,
+            viewMode: 'separate',
+            wsHost: 'localhost',
+            wsPort: 9001,
+            showSettings: false,
+            autoReconnect: true,
+            showTools: false,
+            toolEmojis: [
+                '&#129818;', // Carpentry Saw
+                '&#129819;', // Screwdriver
+                '&#128295;', // Clamp
+                '&#9986;',   // Scissors
+                '&#128295;', // Wrench
+                '&#128301;', // Telescope
+                '&#128300;', // Microscope
+                '&#128736;', // Hammer and Wrench
+                '&#9874;',   // Hammer and Pick
+                '&#129520;'  // Toolbox
+            ],
+            currentToolEmoji: '&#128296;' // Default to wrench
         }
     },
     computed: {
@@ -153,7 +173,7 @@ const app = Vue.createApp({
                     this.ws = null;
                 }
 
-                const ws = new WebSocket('ws://localhost:9001');
+                const ws = new WebSocket(`ws://${this.wsHost}:${this.wsPort}`);
                 this.ws = ws;
 
                 ws.onopen = () => {
@@ -168,7 +188,6 @@ const app = Vue.createApp({
                     } else if (data.type === 'event') {
                         this.handleEvent(data);
                     } else if (data.type === 'tool') {
-                        // Handle tool registration if needed
                         console.log('Tool registered:', data.data);
                     }
                 };
@@ -176,7 +195,9 @@ const app = Vue.createApp({
                 ws.onclose = () => {
                     console.log('WebSocket disconnected');
                     this.wsStatus = 'disconnected';
-                    if (this.retryCount < 5) {
+                    this.ws = null;
+
+                    if (this.autoReconnect && this.retryCount < 5) {
                         this.retryCount++;
                         setTimeout(() => this.setupWebSocket(), 1000 * this.retryCount);
                     }
@@ -190,9 +211,29 @@ const app = Vue.createApp({
             } catch (error) {
                 console.error('Failed to connect:', error);
                 this.wsStatus = 'disconnected';
-                setTimeout(() => this.setupWebSocket(), 1000);
+                if (this.autoReconnect) {
+                    setTimeout(() => this.setupWebSocket(), 1000);
+                }
             }
         },
+        reconnectWebSocket() {
+            this.autoReconnect = true;
+            this.retryCount = 0;
+            this.wsStatus = 'connecting';
+            this.setupWebSocket();
+        },
+        disconnectWebSocket() {
+            this.autoReconnect = false;
+            if (this.ws) {
+                this.ws.close();
+                this.ws = null;
+            }
+            this.wsStatus = 'disconnected';
+        },
+        randomizeToolEmoji() {
+            const randomIndex = Math.floor(Math.random() * this.toolEmojis.length);
+            this.currentToolEmoji = this.toolEmojis[randomIndex];
+        }
     },
     mounted() {
         this.setupWebSocket();

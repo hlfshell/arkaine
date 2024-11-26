@@ -9,16 +9,95 @@
 
 <body>
     <div id="app">
-        <div class="settings-panel">
-            <span :class="['connection-pill', connectionClass]">{{ connectionStatus }}</span>
-            <input type="text" v-model="searchQuery" placeholder="Search events..." class="search-input">
+        <!-- Tools Toggle Button (left side) -->
+        <button class="global-tools-button" @click="showTools = !showTools" @mouseover="randomizeToolEmoji"
+            title="Tools">
+            <span class="button-icon">{{ showTools ? '&#10060;' : '&#x1F916;' }}</span>
+            <span class="button-icon-hover" v-html="currentToolEmoji"></span>
+        </button>
+
+        <!-- Settings Toggle Button (right side) -->
+        <button class="global-settings-button" @click="showSettings = !showSettings" title="Settings">
+            &#x2699;
+        </button>
+
+        <!-- Tools Panel (left side) -->
+        <div :class="['tools-panel', { active: showTools }]">
+            <div class="tools-header">
+                <h3>Tools</h3>
+                <button class="close-button" @click="showTools = false">&#10060;</button>
+            </div>
+            <div class="tools-content">
+                <!-- Content to come later -->
+            </div>
         </div>
 
-        <div class="contexts">
-            <context-view v-for="context in contexts.values()" :key="context.id" :context="context" :contexts="contexts"
-                :settings="settings" :depth="0"></context-view>
+        <!-- Settings Panel (right side) -->
+        <div :class="['settings-panel-overlay', { active: showSettings }]" @click.self="showSettings = false">
+            <div :class="['floating-settings-panel', { active: showSettings }]">
+                <div class="settings-header">
+                    <h3>Settings</h3>
+                    <button class="close-button" @click="showSettings = false">&#10060;</button>
+                </div>
+
+                <div class="settings-group">
+                    <div class="connection-section">
+                        <span :class="['connection-pill', connectionClass]">{{ connectionStatus }}</span>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <label>Host</label>
+                    <div class="connection-input-group">
+                        <input type="text" v-model="wsHost" class="host-input" placeholder="localhost">
+                    </div>
+                    <label>Port</label>
+                    <div class="connection-input-group">
+                        <input type="number" v-model="wsPort" class="port-input">
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <div class="connection-buttons">
+                        <button @click="reconnectWebSocket" class="reconnect-button"
+                            :disabled="wsStatus === 'connected'">
+                            Connect
+                        </button>
+                        <button @click="disconnectWebSocket" class="disconnect-button"
+                            :disabled="wsStatus === 'disconnected'">
+                            Disconnect
+                        </button>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <label>View Mode</label>
+                    <div class="view-toggle">
+                        <button :class="{ active: settings.viewMode === 'separate' }"
+                            @click="settings.viewMode = 'separate'">
+                            Separate
+                        </button>
+                        <button :class="{ active: settings.viewMode === 'timeline' }"
+                            @click="settings.viewMode = 'timeline'">
+                            Timeline
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
-        <br />
+
+        <!-- Main Content -->
+        <div class="main-content" :class="{ 'with-tools': showTools }">
+            <div class="search-container">
+                <input type="text" v-model="searchQuery" placeholder="Search events..." class="search-input">
+            </div>
+
+            <div class="contexts">
+                <context-view v-for="context in contexts.values()" :key="context.id" :context="context"
+                    :contexts="contexts" :settings="settings" :depth="0" :search-query="searchQuery">
+                </context-view>
+            </div>
+        </div>
     </div>
 
     <script type="module" src="app.js"></script>

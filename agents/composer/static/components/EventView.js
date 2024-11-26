@@ -153,7 +153,6 @@ export const EventView = {
             <button class="copy-button" @click.stop="copyEvent">📋</button>
             <div :class="['event-content', { collapsed: !isExpanded }]">
                 <div v-if="event.data" class="event-data">
-                    <div class="event-data-label">Event Data:</div>
                     <pre v-html="formatEventData(event)"></pre>
                 </div>
             </div>

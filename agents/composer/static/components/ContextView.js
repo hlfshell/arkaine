@@ -30,10 +30,15 @@ export const ContextView = {
     props: ['context', 'settings', 'depth', 'contexts', 'searchQuery'],
     data() {
         return {
-            isExpanded: true,
+            isExpanded: false,
             isEventsExpanded: false,  // Events section starts collapsed
             isOutputExpanded: true,    // Output section starts expanded
-            isChildrenExpanded: true  // Add new state for children section
+            isChildrenExpanded: false  // Add new state for children section
+        }
+    },
+    computed: {
+        showTimelineOnly() {
+            return this.settings.viewMode === 'timeline';
         }
     },
     methods: {
@@ -198,6 +203,13 @@ export const ContextView = {
             }
 
             return false;
+        },
+        isErrorMatch() {
+            const query = this.searchQuery?.trim().toLowerCase();
+            if (!query) return false;
+
+            if (!this.context.error) return false;
+            return this.context.error.toLowerCase().includes(query);
         }
     },
     // template: '{{contexts}}'
@@ -219,7 +231,7 @@ export const ContextView = {
             </div>
             <div v-if="isExpanded">
                 <!-- Combined timeline section -->
-                <div v-if="getCombinedTimelineItems().length > 0" class="context-section">
+                <div v-if="showTimelineOnly &&getCombinedTimelineItems().length > 0" class="context-section">
                     <div class="section-header" @click="isEventsExpanded = !isEventsExpanded" style="cursor: pointer;">
                         <span>Timeline ({{ getCombinedTimelineItems().length }})</span>
                         <div style="display: flex; gap: 10px;">
@@ -248,8 +260,8 @@ export const ContextView = {
                     </ul>
                 </div>
 
-                <!-- Child contexts section -->
-                <div v-if="context.children && context.children.length > 0" class="context-section">
+                <!-- Child contexts section - only show in separate view -->
+                <div v-if="!showTimelineOnly && context.children && context.children.length > 0" class="context-section">
                     <div class="section-header" @click="isChildrenExpanded = !isChildrenExpanded" style="cursor: pointer;">
                         <span>Tools Used ({{ context.children.length }})</span>
                         <div style="display: flex; gap: 10px;">
@@ -270,6 +282,27 @@ export const ContextView = {
                     </div>
                 </div>
 
+                <!-- Events section - only show in separate view -->
+                <div v-if="!showTimelineOnly && getEvents().length > 0" class="context-section">
+                    <div class="section-header" @click="isEventsExpanded = !isEventsExpanded" style="cursor: pointer;">
+                        <span>Events ({{ getEvents().length }})</span>
+                        <div style="display: flex; gap: 10px;">
+                            <button @click.stop="expandAllEvents" class="action-button" style="padding: 2px 8px;"><b>+</b></button>
+                            <button @click.stop="collapseAllEvents" class="action-button" style="padding: 2px 8px;"><b>−</b></button>
+                        </div>
+                    </div>
+                    <ul v-show="isEventsExpanded" class="event-list">
+                        <event-view
+                            v-for="event in getEvents()"
+                            :key="event.timestamp"
+                            :event="event"
+                            :settings="settings"
+                            :context-id="context.id"
+                            :search-query="searchQuery"
+                        ></event-view>
+                    </ul>
+                </div>
+
                 <!-- Output section -->
                 <div v-if="context.output" class="context-section" :class="{ highlight: isMatch }">
                     <div class="section-header" @click="isOutputExpanded = !isOutputExpanded" style="cursor: pointer;">
@@ -281,15 +314,13 @@ export const ContextView = {
                     <pre v-show="isOutputExpanded" v-html="formatOutput(context.output)"></pre>
                 </div>
 
-
                 <!-- Error section -->
-                <div v-if="context.error" class="context-section error-section">
+                <div v-if="context.error" class="context-section error-section" :class="{ highlight: isErrorMatch() }">
                     <div class="section-header">
                         <span>Error</span>
                     </div>
                     <pre class="error-content">{{ context.error }}</pre>
                 </div>
-                
             </div>
         </div>
     `
