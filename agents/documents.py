@@ -6,7 +6,7 @@ import numpy as np
 import ollama
 
 
-def generate_embedding(text: str):
+def generate_embedding(text: str) -> List[float]:
     embedding = ollama.embeddings(
         model="avr/sfr-embedding-mistral:q4_k_m", prompt=text
     )
