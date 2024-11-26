@@ -35,8 +35,6 @@ class Agent(Tool, ABC):
         super().__init__(name, description, args, None, examples)
         self.llm = llm
         self.process_answer = process_answer
-        self._called_event = AgentCalled
-        self._return_event = AgentReturn
 
     @property
     def id(self) -> str:
@@ -76,8 +74,6 @@ class ToolAgent(Tool, ABC):
     ):
         super().__init__(name, description, args, None, examples)
         self.backend = backend
-        self._called_event = AgentCalled
-        self._return_event = AgentReturn
 
     @abstractmethod
     def prepare_for_backend(self, **kwargs) -> Dict[str, Any]:
