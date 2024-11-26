@@ -119,11 +119,23 @@ const app = Vue.createApp({
                 context.events = [];
             }
 
+            // We don't show update events, we just adopt its change
+            if (eventData.type === 'context_update') {
+                if (eventData.data.tool_id) {
+                    context.tool_id = eventData.data.tool_id;
+                }
+                if (eventData.data.tool_name) {
+                    context.tool_name = eventData.data.tool_name;
+                }
+                this.contextsAll.set(contextId, { ...context });
+                return;
+            }
+
             // Add the event
             context.events.push(eventData);
 
             // Update context based on event type
-            if (eventData.type === 'tool_return' || eventData.type === 'agent_return') {
+            if (eventData.type === 'tool_return') {
                 context.output = eventData.data;
                 context.status = 'complete';
             } else if (eventData.type === 'tool_exception') {
@@ -133,9 +145,6 @@ const app = Vue.createApp({
 
             // Force reactivity by updating both maps
             this.contextsAll.set(contextId, { ...context });
-            // if (!context.parent_id) {
-            //     this.contexts.set(contextId, { ...context });
-            // }
         },
         setupWebSocket() {
             try {
@@ -148,7 +157,6 @@ const app = Vue.createApp({
                 this.ws = ws;
 
                 ws.onopen = () => {
-                    console.log('WebSocket connected');
                     this.wsStatus = 'connected';
                     this.retryCount = 0;
                 };

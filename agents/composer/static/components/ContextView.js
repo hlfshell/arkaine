@@ -102,28 +102,6 @@ export const ContextView = {
             }
             return null;
         },
-        handleContextEvent(event) {
-            switch (event.type) {
-                case 'context_update':
-                    // Handle context updates (e.g., name changes)
-                    if (event.data.name) {
-                        this.context.name = event.data.name;
-                    }
-                    break;
-
-                case 'context_exception':
-                    // Handle context exceptions
-                    this.context.status = 'error';
-                    this.context.error = event.data;
-                    break;
-
-                case 'context_output':
-                    // Handle context output updates
-                    this.context.output = event.data;
-                    this.context.status = 'success';
-                    break;
-            }
-        },
         expandAllEvents() {
             this.isEventsExpanded = true;
             // Set all events in this context to expanded
