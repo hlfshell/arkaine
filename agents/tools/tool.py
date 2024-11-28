@@ -48,11 +48,28 @@ class Argument:
 
         return out
 
+    def __type_str__(self) -> str:
+        """
+        Since some might pass in the literal type instead of the str of the
+        class, we should ensure we convert the type correctly to a string for
+        parsing.
+
+        It is not simply str(self.type) as that tends to add "<class 'type'>"
+        to the string.
+        """
+        if isinstance(self.type, str):
+            return self.type
+        else:
+            try:
+                return str(self.type).split("'")[1] 
+            except Exception:
+                return str(self.type)
+
     def to_json(self) -> dict:
         return {
             "name": self.name,
             "description": self.description,
-            "type": self.type,
+            "type": self.__type_str__(),
             "required": self.required,
             "default": self.default,
         }
