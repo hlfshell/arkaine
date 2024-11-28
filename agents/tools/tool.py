@@ -48,6 +48,15 @@ class Argument:
 
         return out
 
+    def to_json(self) -> dict:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "type": self.type,
+            "required": self.required,
+            "default": self.default,
+        }
+
 
 class Example:
     def __init__(
@@ -84,6 +93,13 @@ class Example:
 
         return out
 
+    def to_json(self) -> dict:
+        return {
+            "name": self.name,
+            "args": self.args,
+            "output": self.output,
+        }
+
 
 class Context:
     """
@@ -106,6 +122,12 @@ class Context:
     4. history - a temporally ordered list of events that occurred during the
        execution of that specific tool/agent
     5. name - a human readable name for the tool/agent
+
+    Contexts also have a controlled set of data features, ie ctx["key"] =
+    value. This is thread safe. This is allowed on any context for debugging
+    purposes for composer and logger and the like. It is not advised to expect
+    this for in-between tool state passing unless you are building the entire
+    chain of execution.
 
     Updates to the context's attributes are broadcasted under the event type
     ContextUpdate ("context_update" for the listeners). The output is
@@ -156,6 +178,8 @@ class Context:
         self.__output: Any = None
         self.__created_at = time()
 
+        self.__data: Dict[str, Any] = {}
+
         self.__children: List[Context] = []
 
         self.__event_listeners_all: Dict[
@@ -200,6 +224,18 @@ class Context:
         self.__event_listeners_all.clear()
         self.__event_listeners_filtered.clear()
         self.__children.clear()
+
+    def __getattribute__(self, name: str) -> Any:
+        with self.__lock:
+            return self.__data.get(name)
+
+    def __setattribute__(self, name: str, value: Any):
+        with self.__lock:
+            self.__data[name] = value
+
+    def __delattribute__(self, name: str):
+        with self.__lock:
+            del self.__data[name]
 
     @property
     def root(self) -> Context:
@@ -677,6 +713,15 @@ class Tool:
 
     def add_on_call_listener(self, listener: Callable[[Tool, Context], None]):
         self._on_call_listeners.append(listener)
+
+    def to_json(self) -> dict:
+        return {
+            "id": self.__id,
+            "name": self.name,
+            "description": self.description,
+            "args": [arg.to_json() for arg in self.args],
+            "examples": [example.to_json() for example in self.examples],
+        }
 
 
 class InvalidArgumentException(Exception):
