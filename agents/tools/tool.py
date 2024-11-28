@@ -225,15 +225,15 @@ class Context:
         self.__event_listeners_filtered.clear()
         self.__children.clear()
 
-    def __getattribute__(self, name: str) -> Any:
+    def __getitem__(self, name: str) -> Any:
         with self.__lock:
             return self.__data.get(name)
 
-    def __setattribute__(self, name: str, value: Any):
+    def __setitem__(self, name: str, value: Any):
         with self.__lock:
             self.__data[name] = value
 
-    def __delattribute__(self, name: str):
+    def __delitem__(self, name: str):
         with self.__lock:
             del self.__data[name]
 
