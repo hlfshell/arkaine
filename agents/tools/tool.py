@@ -519,6 +519,19 @@ class Context:
                     except Exception:
                         output = "Unable to serialize output"
 
+            data = {}
+            for key, value in self.__data.items():
+                if hasattr(value, "to_json"):
+                    data[key] = value.to_json()
+                else:
+                    try:
+                        data[key] = json.dumps(value)
+                    except Exception:
+                        try:
+                            data[key] = str(value)
+                        except Exception:
+                            data[key] = "Unable to serialize data"
+
         return {
             "id": self.__id,
             "parent_id": self.__parent.id if self.__parent else None,
@@ -531,6 +544,7 @@ class Context:
             "created_at": self.__created_at,
             "children": [child.to_json() for child in self.__children],
             "error": exception,
+            "data": data,
         }
 
 
