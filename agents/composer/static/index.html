@@ -29,7 +29,12 @@
                 <button class="close-button" @click="showTools = false">&#10060;</button>
             </div>
             <div class="tools-content">
-                <!-- Content to come later -->
+                <div class="tools-list">
+                    <button v-for="tool in sortedTools" :key="tool.id" class="tool-button"
+                        :class="{ active: selectedTool?.id === tool.id }" @click="selectTool(tool)">
+                        {{ tool.name }}
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -103,11 +108,18 @@
                 <input type="text" v-model="searchQuery" placeholder="Search events..." class="search-input">
             </div>
 
-            <div class="contexts">
-                <context-view v-for="context in contexts.values()" :key="context.id" :context="context"
-                    :contexts="contexts" :settings="settings" :depth="0" :search-query="searchQuery">
-                </context-view>
-            </div>
+            <!-- Show either contexts or tool view -->
+            <template v-if="selectedTool">
+                <tool-view :tool="selectedTool" :contexts="contextsAll" :search-query="searchQuery"
+                    @back="clearSelectedTool"></tool-view>
+            </template>
+            <template v-else>
+                <div class="contexts">
+                    <context-view v-for="context in contexts.values()" :key="context.id" :context="context"
+                        :contexts="contexts" :settings="settings" :depth="0" :search-query="searchQuery">
+                    </context-view>
+                </div>
+            </template>
         </div>
     </div>
 

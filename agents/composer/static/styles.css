@@ -975,13 +975,15 @@ pre {
     left: 0;
     bottom: 0;
     width: 300px;
-    background: var(--bg-content);
+    background: var(--bg-color);
     padding: 20px;
-    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 2px 0 8px var(--shadow-color);
     transform: translateX(-100%);
     transition: transform 0.3s;
     z-index: 1000;
     overflow-y: auto;
+    display: flex;
+    flex-direction: column;
 }
 
 .tools-panel.active {
@@ -1003,7 +1005,8 @@ pre {
 }
 
 .tools-content {
-    /* Styles for future content */
+    flex: 1;
+    overflow-y: auto;
 }
 
 /* Update main content transitions */
@@ -1212,4 +1215,272 @@ pre {
 
 .dark-mode .context-section.highlight pre {
     background-color: rgba(255, 193, 7, 0.08) !important;
+}
+
+/* Add these styles at the end of the file */
+
+.tool-view {
+    padding: 20px;
+    margin: 0 20px;
+}
+
+.tool-title {
+    font-size: 2em;
+    margin-bottom: 20px;
+    color: var(--text-color);
+}
+
+.tool-section {
+    background: var(--bg-content);
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px var(--shadow-color);
+}
+
+.section-header {
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.section-header h3,
+.section-header h4 {
+    margin: 0;
+    color: var(--text-color);
+}
+
+.expand-icon {
+    font-size: 1.2em;
+    color: var(--text-color);
+}
+
+.section-content {
+    padding: 20px;
+}
+
+.tool-description {
+    font-size: 1.1em;
+    line-height: 1.5;
+    margin-bottom: 20px;
+    color: var(--text-color);
+}
+
+.arguments-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+    margin-top: 15px;
+}
+
+.argument-card {
+    background: var(--section-bg);
+    padding: 15px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+}
+
+.argument-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.argument-name {
+    font-weight: bold;
+    color: var(--text-color);
+}
+
+.argument-badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    font-weight: 500;
+}
+
+.argument-badge.required {
+    background-color: #dc3545;
+    color: white;
+}
+
+.argument-badge.optional {
+    background-color: #6c757d;
+    color: white;
+}
+
+.argument-type {
+    color: #0d6efd;
+    font-family: monospace;
+    margin-bottom: 8px;
+}
+
+.argument-description {
+    color: var(--text-color);
+    margin-bottom: 8px;
+}
+
+.argument-default {
+    font-family: monospace;
+    color: #198754;
+    font-size: 0.9em;
+}
+
+.examples-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.example-card {
+    background: var(--section-bg);
+    padding: 15px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+}
+
+.example-description {
+    margin-bottom: 10px;
+    color: var(--text-color);
+}
+
+.example-code {
+    background: var(--code-bg);
+    padding: 10px;
+    border-radius: 4px;
+    font-family: monospace;
+    margin-bottom: 10px;
+}
+
+.example-output {
+    margin-top: 10px;
+}
+
+.example-output pre {
+    margin-top: 5px;
+    background: var(--code-bg);
+    padding: 10px;
+    border-radius: 4px;
+}
+
+.example-explanation {
+    margin-top: 10px;
+    font-style: italic;
+    color: var(--text-color);
+}
+
+.triggers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.trigger-card {
+    background: var(--section-bg);
+    padding: 15px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+}
+
+.trigger-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.trigger-id {
+    font-family: monospace;
+    color: var(--text-color);
+}
+
+.trigger-timestamp {
+    color: #6c757d;
+    font-size: 0.9em;
+    margin-bottom: 10px;
+}
+
+.trigger-output pre,
+.trigger-error pre {
+    margin: 0;
+    background: var(--code-bg);
+    padding: 10px;
+    border-radius: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.trigger-error pre {
+    color: #dc3545;
+}
+
+.no-triggers {
+    text-align: center;
+    padding: 20px;
+    color: #6c757d;
+    font-style: italic;
+}
+
+.tools-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+}
+
+.tool-button {
+    text-align: left;
+    padding: 10px 15px;
+    background: var(--bg-content);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-color);
+    font-size: 0.95em;
+    transition: all 0.2s;
+}
+
+.tool-button:hover {
+    background: var(--hover-bg);
+}
+
+.tool-button.active {
+    background: #0d6efd;
+    color: white;
+    border-color: #0d6efd;
+}
+
+.dark-mode .tool-button.active {
+    background: #0d6efd;
+    color: white;
+    border-color: #0d6efd;
+}
+
+.tool-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.back-button {
+    padding: 8px 16px;
+    background: var(--bg-content);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-color);
+    font-size: 1em;
+    transition: all 0.2s;
+}
+
+.back-button:hover {
+    background: var(--hover-bg);
+}
+
+.dark-mode .back-button:hover {
+    background: var(--hover-bg);
 }

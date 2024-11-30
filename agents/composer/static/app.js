@@ -1,13 +1,16 @@
 import { ContextView } from './components/ContextView.js';
 import { EventView } from './components/EventView.js';
+import { ToolView } from './components/ToolView.js';
 
 const app = Vue.createApp({
     components: {
         ContextView,
-        EventView
+        EventView,
+        ToolView
     },
     data() {
         return {
+            tools: new Map(),
             contextsAll: new Map(),
             ws: null,
             retryCount: 0,
@@ -37,6 +40,7 @@ const app = Vue.createApp({
             ],
             currentToolEmoji: '&#128296;',
             isDarkMode: localStorage.getItem('darkMode') === 'true' || false,
+            selectedTool: null,
         }
     },
     watch: {
@@ -107,6 +111,11 @@ const app = Vue.createApp({
 
             return contextMap;
         },
+        // Sort tools alphabetically by name
+        sortedTools() {
+            return Array.from(this.tools.values())
+                .sort((a, b) => a.name.localeCompare(b.name));
+        }
     },
     methods: {
         formatTimestamp(timestamp) {
@@ -114,9 +123,11 @@ const app = Vue.createApp({
             const date = new Date(timestamp * 1000);
             return date.toLocaleTimeString();
         },
-        handleContext(data) {
-            let contextData = data.data || data;
-
+        handleTool(data) {
+            let toolData = data.data || data;
+            this.tools.set(toolData.id, toolData);
+        },
+        handleContext(contextData) {
             const context = {
                 id: contextData.id,
                 parent_id: contextData.parent_id,
@@ -124,6 +135,7 @@ const app = Vue.createApp({
                 tool_id: contextData.tool_id,
                 tool_name: contextData.tool_name,
                 status: contextData.status,
+                args: contextData.args,
                 output: contextData.output,
                 error: contextData.error,
                 created_at: contextData.created_at,
@@ -200,12 +212,13 @@ const app = Vue.createApp({
 
                 ws.onmessage = (event) => {
                     const data = JSON.parse(event.data);
+                    console.log("MSG", data);
                     if (data.type === 'context') {
-                        this.handleContext(data);
+                        this.handleContext(data.data);
                     } else if (data.type === 'event') {
                         this.handleEvent(data);
                     } else if (data.type === 'tool') {
-                        console.log('Tool registered:', data.data);
+                        this.handleTool(data);
                     }
                 };
 
@@ -254,6 +267,12 @@ const app = Vue.createApp({
         toggleTheme() {
             this.isDarkMode = !this.isDarkMode;
             document.documentElement.classList.toggle('dark-mode', this.isDarkMode);
+        },
+        selectTool(tool) {
+            this.selectedTool = tool;
+        },
+        clearSelectedTool() {
+            this.selectedTool = null;
         }
     },
     mounted() {

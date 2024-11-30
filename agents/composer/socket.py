@@ -39,12 +39,13 @@ class ComposerSocket:
 
         Registrar.enable()
         Registrar.add_tool_call_listener(self._on_tool_call)
+
+        Registrar.add_on_tool_register(self._on_tool_register)
+
         with self._lock:
             tools = Registrar.get_tools()
             for tool in tools:
                 self._tools[tool.id] = tool
-
-        Registrar.add_on_tool_register(self._on_tool_register)
 
     def _on_tool_call(self, tool: Tool, context: Context):
         # Subscribe to all the context's events for this tool from
@@ -65,6 +66,7 @@ class ComposerSocket:
     def _on_tool_register(self, tool: Tool):
         with self._lock:
             self._tools[tool.id] = tool
+        self._broadcast_tool(tool)
 
     def _handle_context_creation(self, context: Context):
         """
@@ -109,6 +111,15 @@ class ComposerSocket:
                 self.active_connections.add(websocket)
                 # Send initial context states and their events immediately
 
+                for tool in self._tools.values():
+                    try:
+                        websocket.send(
+                            json.dumps(self.__build_tool_message(tool))
+                        )
+                    except Exception as e:
+                        print(f"Failed to send initial tool state: {e}")
+                        return
+
                 for context in self._contexts.values():
                     try:
                         websocket.send(
@@ -137,9 +148,12 @@ class ComposerSocket:
                 self.active_connections.discard(websocket)
             print(f"Client disconnected from {remote_addr}")
 
+    def __build_tool_message(self, tool: Tool):
+        return {"type": "tool", "data": tool.to_json()}
+
     def _broadcast_tool(self, tool: Tool):
         """Broadcast a tool to all active clients"""
-        self._broadcast_to_clients({"type": "tool", "data": tool.to_json()})
+        self._broadcast_to_clients(self.__build_tool_message(tool))
 
     def __build_context_message(self, context: Context):
         return {"type": "context", "data": context.to_json()}
