@@ -6,13 +6,6 @@ import numpy as np
 import ollama
 
 
-def generate_embedding(text: str) -> List[float]:
-    embedding = ollama.embeddings(
-        model="avr/sfr-embedding-mistral:q4_k_m", prompt=text
-    )
-    return embedding["embedding"]
-
-
 def isolate_sentences(text: str) -> List[str]:
     sentences = []
     current_sentence = ""
@@ -72,7 +65,10 @@ class InMemoryEmbeddingStore:
     where another more permanent store would be too
     """
 
-    def __init__(self, embedding_model):
+    def __init__(self, embedding_model: Optional[str] = None):
+        if embedding_model is None:
+            embedding_model = "all-minilm:latest"
+
         self.__embedding_model__ = embedding_model
         self.__memory__: List[Tuple[str, List[float]]] = []
 
@@ -87,7 +83,7 @@ class InMemoryEmbeddingStore:
         return cosine_distance(a, b)
 
     def __get_embedding(self, text: str) -> List[float]:
-        return ollama.embeddings(model="all-minilm:latest", prompt=text)[
+        return ollama.embeddings(model=self.__embedding_model__, prompt=text)[
             "embedding"
         ]
 
