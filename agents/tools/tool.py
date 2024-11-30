@@ -61,7 +61,7 @@ class Argument:
             return self.type
         else:
             try:
-                return str(self.type).split("'")[1] 
+                return str(self.type).split("'")[1]
             except Exception:
                 return str(self.type)
 
@@ -139,6 +139,7 @@ class Context:
     4. history - a temporally ordered list of events that occurred during the
        execution of that specific tool/agent
     5. name - a human readable name for the tool/agent
+    6. args - the arguments passed to the tool/agent for this execution
 
     Contexts also have a controlled set of data features, ie ctx["key"] =
     value. This is thread safe. This is allowed on any context for debugging
@@ -192,6 +193,7 @@ class Context:
         self.__root
 
         self.__exception: Exception = None
+        self.__args: Dict[str, Any] = {}
         self.__output: Any = None
         self.__created_at = time()
 
@@ -485,6 +487,18 @@ class Context:
             self.__executor.submit(listener, self)
 
     @property
+    def args(self) -> Dict[str, Any]:
+        with self.__lock:
+            return self.__args
+
+    @args.setter
+    def args(self, args: Dict[str, Any]):
+        with self.__lock:
+            if self.__args:
+                raise ValueError("args already set")
+            self.__args = args
+
+    @property
     def output(self) -> Any:
         with self.__lock:
             return self.__output
@@ -493,7 +507,7 @@ class Context:
     def output(self, value: Any):
         with self.__lock:
             if self.__output:
-                raise ValueError("Output already set")
+                raise ValueError("output already set")
             self.__output = value
         self.__completion_event.set()
 
@@ -556,6 +570,7 @@ class Context:
             "tool_id": self.__tool.id,
             "tool_name": self.__tool.name,
             "status": status,
+            "args": self.args,
             "output": output,
             "history": history,
             "created_at": self.__created_at,
@@ -613,6 +628,7 @@ class Tool:
                 ctx.tool = self
             ctx.executing = True
 
+        ctx.args = kwargs
         ctx.broadcast(ToolCalled(kwargs))
         for listener in self._on_call_listeners:
             self._executor.submit(listener, self, ctx)
