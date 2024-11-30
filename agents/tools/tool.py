@@ -48,7 +48,7 @@ class Argument:
 
         return out
 
-    def __type_str__(self) -> str:
+    def type_str(self) -> str:
         """
         Since some might pass in the literal type instead of the str of the
         class, we should ensure we convert the type correctly to a string for
@@ -69,7 +69,7 @@ class Argument:
         return {
             "name": self.name,
             "description": self.description,
-            "type": self.__type_str__(),
+            "type": self.type_str(),
             "required": self.required,
             "default": self.default,
         }

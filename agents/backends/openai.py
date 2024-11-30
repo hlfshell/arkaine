@@ -84,8 +84,12 @@ class OpenAI(BaseBackend):
         required_args = []
 
         for arg in tool.args:
+            arg_type = arg.type_str()
+            if arg_type == "str":
+                arg_type = "string"
+
             properties[arg.name] = {
-                "type": arg.type,
+                "type": arg_type,
                 "description": arg.description,
             }
             if arg.required:
