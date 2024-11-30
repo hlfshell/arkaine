@@ -8,6 +8,7 @@ from agents.backends.react import ReActBackend
 from agents.documents import InMemoryEmbeddingStore, chunk_text_by_sentences
 from agents.llms.llm import LLM
 from agents.templater import PromptTemplate
+from agents.tools.wrappers.top_n import TopN
 from agents.tools.tool import Argument, Tool
 
 TOPIC_QUERY_TOOL_NAME = "wikipedia_search_pages"
@@ -49,7 +50,11 @@ class WikipediaPage(Tool):
     def __init__(self):
         super().__init__(
             PAGE_CONTENT_TOOL_NAME,
-            f"Get the most relevant content of a Wikipedia page based on its title and a query. If you do not know the title, it is better to first perform a {TOPIC_QUERY_TOOL_NAME} to find the exact title from a given topic. Utilize the query argument to narrow your search to specific facts.",
+            (
+                "Get the content of a Wikipedia page based on its title. "
+                + "Content is returned as a dictionary with section titles as "
+                + "keys and the content of that section as values."
+            ),
             [
                 Argument(
                     name="title",
@@ -57,65 +62,96 @@ class WikipediaPage(Tool):
                     description="The title of the Wikipedia page - "
                     + "returns 'None' if the page does not exist",
                     required=True,
-                ),
-                Argument(
-                    name="query",
-                    type="string",
-                    description="The query to search that specified Wikipedia to narrow results to related history."
-                    + " page for",
-                    required=True,
-                ),
+                )
             ],
-            self.page,
+            self.get_page,
         )
 
-    def __break_down_content(self, content: str) -> List[str]:
-        # Wikipedia content is separated by content
-        # headers with =, and then paragraphs. We're
-        # going to isolate individual sentences from
-        # each section
+    def __break_down_content(self, content: str) -> Dict[str, str]:
+        """
+        Break down Wikipedia content into sections and their corresponding
+        chunks.
 
-        # For cleanliness we're adding a fake title
+        Wikipedia content is separated by section headers marked with '='
+        characters. This method splits the content into sections and chunks
+        each section's text into smaller, sentence-based segments.
 
+        Args:
+            content (str): Raw Wikipedia page content
+
+        Returns:
+            Dict[str, str]: Dictionary where keys are section titles and
+                values the text from that section. Note we do not have nesting
+                (subsections) - it's all one level deep.
+        """
+        # For cleanliness we're adding a fake title if none exists
         content = "= Title =\n\n" + content
 
-        sections: List[str] = []
+        sections: Dict[str, str] = {}
         current_section = []
+        current_title = ""
+
         for line in content.split("\n"):
             if line.strip() == "":
                 continue
 
             if line[0] == "=" and line[-1] == "=":
                 if len(current_section) > 0:
-                    sections.append(" ".join(current_section))
+                    sections[current_title] = " ".join(current_section)
                     current_section = []
+                current_title = line.strip(" =")
             else:
                 current_section.append(line)
 
-        # return [chunk_text_by_sentences(section, 3) for section in sections]
-        chunks = []
-        for section in sections:
-            chunks += chunk_text_by_sentences(section, 3)
+        # Don't forget the last section
+        if len(current_section) > 0:
+            sections[current_title] = " ".join(current_section)
 
-        return chunks
+        return sections
 
-    def page(self, title: str, query: str) -> str:
+    def get_page(self, title: str, query: str) -> Dict[str, str]:
         content = wikipedia.page(title).content
 
-        chunks = self.__break_down_content(content)
+        sections = self.__break_down_content(content)
 
-        store = InMemoryEmbeddingStore(embedding_model="")
-        for chunk in chunks:
-            store.add_text(chunk)
+        return sections
 
-        results = store.query(query, top_n=5)
 
-        out = "Here are the top 5 most relevant sections of the specified article:\n"
+class WikipediaPageTopN(TopN):
+    def __init__(
+        self,
+        name: Optional[str] = None,
+        wp: Optional[WikipediaPage] = None,
+        embedder: Optional[InMemoryEmbeddingStore] = None,
+        n: int = 5,
+    ):
+        if wp is None:
+            wp = WikipediaPage()
 
-        for index, result in enumerate(results):
-            out += f"{index + 1} - {result}\n"
+        if name is None:
+            name = "wikipedia_page"
 
-        return out
+        if embedder is None:
+            embedder = InMemoryEmbeddingStore()
+
+        description = (
+            "Get the content of a Wikipedia page based on its title. "
+            + "Content is returned as a dictionary with section titles as "
+            + "keys and the content of that section as values."
+        )
+        query_description = (
+            "The query to search that specified Wikipedia to narrow results "
+            + "to related history."
+        )
+
+        super().__init__(
+            wp,
+            embedder,
+            n=5,
+            name=name,
+            description=description,
+            query_description=query_description,
+        )
 
 
 class WikipediaSearch(ToolAgent):
@@ -124,6 +160,7 @@ class WikipediaSearch(ToolAgent):
         llm: LLM,
         name: str = "wikipedia_search",
         backend: Optional[BaseBackend] = None,
+        embedder: Optional[InMemoryEmbeddingStore] = None,
     ):
         description = (
             "Searches for an answer to the question by utilizing Wikipedia"
@@ -132,11 +169,11 @@ class WikipediaSearch(ToolAgent):
         if not backend:
             backend = ReActBackend(
                 llm,
-                [WikipediaPage(), WikipediaTopicQuery()],
+                [WikipediaPageTopN(embedder=embedder), WikipediaTopicQuery()],
                 description,
             )
         else:
-            backend.add_tool(WikipediaPage())
+            backend.add_tool(WikipediaPageTopN(embedder=embedder))
             backend.add_tool(WikipediaTopicQuery())
 
         super().__init__(
