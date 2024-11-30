@@ -27,9 +27,6 @@ const app = Vue.createApp({
             autoReconnect: localStorage.getItem('autoReconnect') !== 'false',
             showTools: false,
             toolEmojis: [
-                '&#129818;', // Carpentry Saw
-                '&#129819;', // Screwdriver
-                '&#128295;', // Clamp
                 '&#9986;',   // Scissors
                 '&#128295;', // Wrench
                 '&#128301;', // Telescope
