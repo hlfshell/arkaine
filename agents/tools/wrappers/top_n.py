@@ -12,7 +12,8 @@ class TopN(Tool):
 
     If the tool being wrapped returns a string, it is simply chunked into
     sentences. If, however, the tool returns a list of strings, each item is
-    individually chunked, maintaining separation of sections.
+    individually chunked, maintaining separation of sections. If the output is
+    a dictionary of [str, str], the .values() are utilized.
 
     Args:
         tool (Tool): The base tool to wrap and filter results from the wrapped
