@@ -204,13 +204,3 @@ class WikipediaSearch(ToolAgent):
         question = f"Answer the following question: {kwargs['question']}\n"
 
         return {"task": question}
-
-
-PROMPT_TEXT = """
-You are an AI agent that is tasked to perform certain tasks
-with the help of additional tools. Utilizing these tools, perform
-the following task:
-
-{task}
-"""
-PROMPT = PromptTemplate(PROMPT_TEXT)
