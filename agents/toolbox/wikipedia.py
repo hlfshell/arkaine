@@ -160,9 +160,34 @@ class WikipediaPageTopN(TopN):
 
 
 class WikipediaSearch(ToolAgent):
+    """
+    A tool agent that searches Wikipedia to answer questions using either
+    direct page content or semantically relevant sections.
+
+    This agent combines Wikipedia search and content retrieval capabilities. It
+    can either return full Wikipedia articles or use semantic search to return
+    the most relevant sections based on the query.
+
+    Args:
+        llm (Optional[LLM]): Language model to use for processing. Required if
+            no backend is specified.
+        name (str): Name of the agent. Defaults to "wikipedia_search". backend
+        (Optional[BaseBackend]): Custom backend to use. If not provided,
+            creates a ReActBackend with the specified LLM.
+        compress_article (bool): If True, uses semantic search to return
+            relevant sections. If False, returns full articles. Defaults to
+            True.
+        embedder (Optional[InMemoryEmbeddingStore]): Embedding store for
+            semantic search when compress_article is True. If not provided and
+            needed, creates a new store default InMemoryEmbeddingStore.
+
+    Raises:
+        ValueError: If no LLM is provided when backend is not specified.
+    """
+
     def __init__(
         self,
-        llm: LLM,
+        llm: Optional[LLM] = None,
         name: str = "wikipedia_search",
         backend: Optional[BaseBackend] = None,
         compress_article: bool = True,
@@ -173,6 +198,8 @@ class WikipediaSearch(ToolAgent):
         )
 
         if not backend:
+            if llm is None:
+                raise ValueError("LLM is required if not specifying a backend")
             backend = ReActBackend(
                 llm,
                 [WikipediaPageTopN(embedder=embedder), WikipediaTopicQuery()],
