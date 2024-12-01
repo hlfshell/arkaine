@@ -5,9 +5,12 @@ import wikipedia
 from agents.agent import ToolAgent
 from agents.backends.base import BaseBackend
 from agents.backends.react import ReActBackend
-from agents.documents import InMemoryEmbeddingStore, chunk_text_by_sentences
+from agents.utils.documents import (
+    InMemoryEmbeddingStore,
+    chunk_text_by_sentences,
+)
 from agents.llms.llm import LLM
-from agents.templater import PromptTemplate
+from agents.utils.templater import PromptTemplate
 from agents.tools.wrappers.top_n import TopN
 from agents.tools.tool import Argument, Tool
 

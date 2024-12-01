@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from agents.backends.base import BaseBackend
 from agents.llms.llm import LLM, Prompt
-from agents.templater import PromptTemplate
+from agents.utils.templater import PromptTemplate
 from agents.tools.tool import Tool
 from agents.tools.types import ToolArguments, ToolResults
 

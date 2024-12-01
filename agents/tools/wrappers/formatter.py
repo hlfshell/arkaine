@@ -4,7 +4,7 @@ from typing import Any, Callable, List, Optional
 
 from agents.agent import Agent
 from agents.llms.llm import LLM, Prompt
-from agents.templater import PromptTemplate
+from agents.utils.templater import PromptTemplate
 from agents.tools.tool import Argument, Context, Example, Tool
 
 

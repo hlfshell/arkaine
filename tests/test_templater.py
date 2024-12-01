@@ -1,6 +1,6 @@
 import pytest
 
-from agents.templater import PromptTemplate
+from agents.utils.templater import PromptTemplate
 
 
 @pytest.fixture

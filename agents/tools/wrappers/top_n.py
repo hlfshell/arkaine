@@ -1,5 +1,8 @@
 from agents.tools.tool import Tool, Context, Argument
-from agents.documents import InMemoryEmbeddingStore, chunk_text_by_sentences
+from agents.utils.documents import (
+    InMemoryEmbeddingStore,
+    chunk_text_by_sentences,
+)
 from typing import Callable, List, Optional, Union
 
 
