@@ -85,10 +85,10 @@ class TopN(Tool):
         )
 
         super().__init__(
-            name=name, args=args, description=description, func=None
+            name=name, args=args, description=description, func=self.top_n
         )
 
-    def invoke(self, context: Context, **kwargs):
+    def top_n(self, context: Context, **kwargs):
         """
         Execute the wrapped tool and filter its output using semantic search.
 
