@@ -21,12 +21,17 @@ class WikipediaTopicQuery(Tool):
         super().__init__(
             TOPIC_QUERY_TOOL_NAME,
             "Search Wikipedia for articles that match a given query topic -"
-            + f" returns a list of titles of Wiki pages that possibly match. Follow this function call with a {PAGE_CONTENT_TOOL_NAME} function to get the content of the chosen title",
+            + " returns a list of titles of Wiki pages that possibly match. "
+            + f"Follow this function call with a {PAGE_CONTENT_TOOL_NAME} "
+            + "function to get the content of the chosen title",
             [
                 Argument(
                     name="query",
                     type="string",
-                    description="A simple query to search associated Wikipedia pages for",
+                    description=(
+                        "A simple query to search associated Wikipedia pages "
+                        + "for"
+                    ),
                     required=True,
                 ),
             ],
@@ -160,6 +165,7 @@ class WikipediaSearch(ToolAgent):
         llm: LLM,
         name: str = "wikipedia_search",
         backend: Optional[BaseBackend] = None,
+        compress_article: bool = True,
         embedder: Optional[InMemoryEmbeddingStore] = None,
     ):
         description = (
@@ -173,9 +179,13 @@ class WikipediaSearch(ToolAgent):
                 description,
             )
         else:
-            backend.add_tool(WikipediaPageTopN(embedder=embedder))
             backend.add_tool(WikipediaTopicQuery())
-
+            if compress_article:
+                if embedder is None:
+                    embedder = InMemoryEmbeddingStore()
+                backend.add_tool(WikipediaPageTopN(embedder=embedder))
+            else:
+                backend.add_tool(WikipediaPage())
         super().__init__(
             name,
             description,
