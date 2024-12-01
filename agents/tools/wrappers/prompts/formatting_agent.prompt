@@ -1,0 +1,14 @@
+You are an AI responsible for formatting the output of a tool to another format. Make sure that you safely follow the format as closely as possible. Output ONLY the newly formatted output and nothing else.
+
+The original format is like this:
+{original_format}
+
+The formatted output should be like this:
+{formatted_format}
+
+Remember, DO NOT output anything but the formatted output.
+
+OUTPUT:
+{output}
+
+FORMATTED OUTPUT:
