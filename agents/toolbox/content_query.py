@@ -54,8 +54,8 @@ class ContentQuery(Agent):
     and collected notes.
 
     Args:
-        llm (LLM): The language model to use for processing word_limit
-        (Optional[int]): Maximum words per chunk. If None, uses
+        llm (LLM): The language model to use for processing
+        word_limit (Optional[int]): Maximum words per chunk. If None, uses
             llm.context_length / 10
         notes_delimiter (str): Delimiter used to identify notes sections.
             Defaults to "NOTES:"
