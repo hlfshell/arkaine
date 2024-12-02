@@ -5,7 +5,7 @@ from typing import List, Optional
 from agents.agent import Agent
 from agents.llms.llm import LLM, Prompt
 from agents.utils.templater import PromptTemplate
-from agents.tools.tool import Argument
+from agents.tools.tool import Argument, Context
 
 
 class Summarizer(Agent):
@@ -61,31 +61,32 @@ class Summarizer(Agent):
     def prepare_prompt(self, **kwargs) -> Prompt:
         pass
 
-    def __call__(self, **kwargs) -> str:
-        kwargs = self.fulfill_defaults(kwargs)
-        self.check_arguments(kwargs)
+    def __call__(self, context: Optional[Context] = None, **kwargs) -> str:
+        with self._init_context_(context, **kwargs) as ctx:
+            kwargs = self.fulfill_defaults(kwargs)
+            self.check_arguments(kwargs)
 
-        text = kwargs["text"]
-        length = kwargs["length"]
+            text = kwargs["text"]
+            length = kwargs["length"]
 
-        chunks = self.__chunk_text(text)
+            chunks = self.__chunk_text(text)
 
-        # Summarize each chunk
-        summary = ""
-        initial_summary = True
-        for chunk in chunks:
-            prompt = self.__templater.render(
-                {
-                    "current_summary": summary,
-                    "length": length,
-                    "text": chunk,
-                }
-            )
+            # Summarize each chunk
+            summary = ""
+            initial_summary = True
+            for chunk in chunks:
+                prompt = self.__templater.render(
+                    {
+                        "current_summary": summary,
+                        "length": length,
+                        "text": chunk,
+                    }
+                )
 
-            summary = self.llm.completion(prompt)
+                summary = self.llm.completion(prompt)
 
-            if initial_summary:
-                summary = f"Your summary so far:\n{summary}\n"
-                initial_summary = False
+                if initial_summary:
+                    summary = f"Your summary so far:\n{summary}\n"
+                    initial_summary = False
 
-        return summary
+            return summary
