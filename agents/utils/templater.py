@@ -16,13 +16,17 @@ class PromptTemplate:
         self,
         template: str | Dict[str, str],
         template_delimiters: Tuple[str, str] = ("{", "}"),
+        defaults: Optional[Dict[str, Any]] = None,
     ):
         self.template = template
         self.template_delimiters = template_delimiters
         self.variables = self.__get_all_variables()
+        self.defaults = defaults or {}
 
     @classmethod
-    def from_file(self, path: str) -> PromptTemplate:
+    def from_file(
+        cls, path: str, defaults: Optional[Dict[str, Any]] = None
+    ) -> PromptTemplate:
         """Load a template from a given filepath."""
         if path.endswith(".json"):
             with open(path, "r") as f:
@@ -33,7 +37,7 @@ class PromptTemplate:
         else:
             with open(path, "r") as f:
                 template = f.read()
-        return PromptTemplate(template)
+        return cls(template, defaults=defaults)
 
     def __get_all_variables(self) -> Dict[str, Optional[Any]]:
         """
@@ -82,6 +86,10 @@ class PromptTemplate:
         if variables is None:
             variables = self.variables
 
+        # Merge defaults with provided variables, prioritizing provided variables
+        merged_variables = self.defaults.copy()
+        merged_variables.update(variables)
+
         template_text = (
             self.template
             if isinstance(self.template, str)
@@ -95,7 +103,7 @@ class PromptTemplate:
         )
 
         text = template_text
-        for var, value in variables.items():
+        for var, value in merged_variables.items():
             pattern = delimiter_pattern.replace("(.*?)", re.escape(var))
             text = re.sub(pattern, str(value), text)
 
