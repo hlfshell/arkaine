@@ -34,10 +34,6 @@ class Agent(Tool, ABC):
         self.llm = llm
         self.process_answer = process_answer
 
-    @property
-    def id(self) -> str:
-        return self.__id
-
     @abstractmethod
     def prepare_prompt(self, **kwargs) -> Prompt:
         """
