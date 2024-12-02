@@ -252,6 +252,10 @@ class Context:
         with self.__lock:
             self.__data[name] = value
 
+    def __contains__(self, name: str) -> bool:
+        with self.__lock:
+            return name in self.__data
+
     def __delitem__(self, name: str):
         with self.__lock:
             del self.__data[name]
@@ -614,7 +618,7 @@ class Tool:
         """
         return Context(self)
 
-    def __init_context_(self, context: Optional[Context], **kwargs) -> Context:
+    def _init_context_(self, context: Optional[Context], **kwargs) -> Context:
         if context is None:
             ctx = Context(self)
         else:
@@ -641,7 +645,7 @@ class Tool:
         return self.func(**kwargs)
 
     def __call__(self, context: Optional[Context] = None, **kwargs) -> Any:
-        with self.__init_context_(context, **kwargs) as ctx:
+        with self._init_context_(context, **kwargs) as ctx:
 
             kwargs = self.fulfill_defaults(kwargs)
 
