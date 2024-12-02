@@ -8,9 +8,9 @@ from agents.utils.templater import PromptTemplate
 from agents.tools.tool import Argument, Context
 
 
-class DocumentResponse:
+class ContentResponse:
     """
-    Structured response from the DocumentReader containing the answer,
+    Structured response from the ContentQuery containing the answer,
     whether an answer was found, and any notes collected during processing.
     """
 
@@ -40,7 +40,7 @@ class DocumentResponse:
         return result
 
 
-class DocumentReader(Agent):
+class ContentQuery(Agent):
     """An agent that processes documents chunk by chunk to answer queries.
 
     This agent takes a document and a query, breaks the document into
@@ -50,7 +50,7 @@ class DocumentReader(Agent):
 
     The agent uses delimiters to identify notes and answers in the LLM's
     responses, allowing for structured information gathering. It can return
-    either just the answer string or a full DocumentResponse with both answer
+    either just the answer string or a full ContextResponse with both answer
     and collected notes.
 
     Args:
@@ -64,7 +64,7 @@ class DocumentReader(Agent):
         words_overlap (int): Number of words to overlap between chunks.
             Defaults to 10
         return_string (bool): If True, returns just the answer string. If
-            False, returns DocumentResponse. Defaults to True
+            False, returns ContentResponse. Defaults to True
         read_full_doc (bool): If True, processes entire document even after
             finding an answer. Defaults to False
         default_answer (Optional[str]): Default answer to return if none
@@ -83,7 +83,7 @@ class DocumentReader(Agent):
         default_answer: Optional[str] = None,
     ):
         super().__init__(
-            name="DocumentReader",
+            name="content_query",
             description=(
                 "Reads through a document to answer specific queries, "
                 + "maintaining context across chunks"
@@ -91,7 +91,7 @@ class DocumentReader(Agent):
             args=[
                 Argument(
                     "text",
-                    "The document text to be analyzed",
+                    "The content to be read and analyzed",
                     "string",
                     required=True,
                 ),
@@ -108,7 +108,7 @@ class DocumentReader(Agent):
         if word_limit is None:
             if self.llm.context_length is None:
                 raise ValueError(
-                    "LLM context length and Document Agent context length is "
+                    "LLM context length and ContentQuery context length is "
                     "not set - we need to know approximal words per chunk to "
                     "process the content."
                 )
@@ -125,7 +125,7 @@ class DocumentReader(Agent):
             path.join(
                 pathlib.Path(__file__).parent,
                 "prompts",
-                "document_reader.prompt",
+                "content_query.prompt",
             ),
             defaults={
                 "notes_delimiter": notes_delimiter,
@@ -137,17 +137,6 @@ class DocumentReader(Agent):
                     "accurate answer possible based solely on the document's "
                     "content."
                 ),
-            },
-        )
-
-        self.__final_templater = PromptTemplate.from_file(
-            path.join(
-                pathlib.Path(__file__).parent,
-                "prompts",
-                "document_reader_final.prompt",
-            ),
-            defaults={
-                "answer_delimiter": answer_delimiter,
             },
         )
 
@@ -300,7 +289,7 @@ class DocumentReader(Agent):
 
     def __call__(
         self, context: Optional[Context] = None, **kwargs
-    ) -> DocumentResponse:
+    ) -> ContentResponse:
         """Process document to answer query.
 
         Args:
@@ -308,7 +297,7 @@ class DocumentReader(Agent):
             **kwargs: Must include 'text' and 'query' arguments
 
         Returns:
-            DocumentResponse: Contains answer and collected notes. If
+            ContentResponse: Contains answer and collected notes. If
                 return_string is True, returns just the answer string.
 
         Note:
@@ -358,7 +347,7 @@ class DocumentReader(Agent):
             if self.return_string:
                 return final_answer
             else:
-                return DocumentResponse(
+                return ContentResponse(
                     answer=final_answer,
                     notes=notes,
                 )
