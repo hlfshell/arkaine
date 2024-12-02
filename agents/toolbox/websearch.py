@@ -44,9 +44,29 @@ class Website:
         return domain
 
     def load_content(self):
-        response = requests.get(self.url)
+        # response = requests.get(self.url)
+        # response.raise_for_status()
+        # self.raw_content = response.text
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip",
+            "Connection": "keep-alive",
+        }
+
+        session = requests.Session()
+        session.headers.update(headers)
+        response = session.get(self.url)
         response.raise_for_status()
-        self.raw_content = response.text
+
+        if "Content-Encoding" in response.headers:
+            if response.headers["Content-Encoding"] == "gzip":
+                self.raw_content = response.content.decode(
+                    "utf-8", errors="replace"
+                )
+        else:
+            self.raw_content = response.text
 
     def get_body(self):
         if not self.raw_content:
@@ -58,7 +78,12 @@ class Website:
         if not self.raw_content:
             self.load_content()
         soup = BeautifulSoup(self.raw_content, "html.parser")
-        return md(soup.body.get_text())
+        markdown = md(soup.body.get_text())
+
+        # Remove extraneous blank lines - no more than one in
+        # a row
+        markdown = re.sub(r"\n+", "\n", markdown)
+        return markdown
 
     def format(self, template: str) -> str:
         return template.format(
