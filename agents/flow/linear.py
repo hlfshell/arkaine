@@ -49,6 +49,14 @@ class Linear(Tool):
         self.steps = steps
         self.formatters = formatters
 
+        super().__init__(
+            name=name,
+            args=arguments,
+            description=description,
+            func=self.invoke,
+            examples=examples,
+        )
+
     def invoke(self, context: Context, **kwargs) -> Any:
         output = kwargs
         for step, formatter in zip(self.steps, self.formatters):
