@@ -27,7 +27,7 @@ class Wrapper(Tool, ABC):
         func (Callable[..., Any]): The function to be executed
 
         examples (List[Example], optional): Examples of using the wrapper.
-        Defaults to [].
+            Defaults to [].
     """
 
     def __init__(
