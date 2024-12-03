@@ -24,8 +24,6 @@ class Wrapper(Tool, ABC):
         args (List[Argument]): Additional arguments specific to the wrapper;
             these will be added to the original tool's arguments
 
-        func (Callable[..., Any]): The function to be executed
-
         examples (List[Example], optional): Examples of using the wrapper.
             Defaults to [].
     """
