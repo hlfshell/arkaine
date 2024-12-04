@@ -117,7 +117,7 @@ class WikipediaPage(Tool):
 
         return sections
 
-    def get_page(self, title: str, query: str) -> Dict[str, str]:
+    def get_page(self, title: str) -> Dict[str, str]:
         content = wikipedia.page(title).content
 
         sections = self.__break_down_content(content)
