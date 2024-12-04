@@ -10,25 +10,51 @@ from agents.tools.tool import Argument, Context
 
 class Summarizer(Agent):
 
-    def __init__(self, llm: LLM, word_limit: Optional[int] = None):
-        super().__init__(
-            name="Summarizer",
-            description="Summarizes a given body of text to a more succinct form",
-            args=[
+    def __init__(
+        self,
+        llm: LLM,
+        word_limit: Optional[int] = None,
+        focus_query: bool = True,
+    ):
+
+        args = [
+            Argument(
+                "text",
+                "The body of text to be summarized",
+                "string",
+                required=True,
+            ),
+            Argument(
+                "length",
+                "The desired length of the summary, in human readable format "
+                + "(ie a 'few sentences')",
+                "string",
+                required=False,
+                default="a few sentences",
+            ),
+        ]
+
+        defaults = {"query_instruction": ""}
+
+        if focus_query:
+            args.append(
                 Argument(
-                    "text",
-                    "The body of text to be summarized",
-                    "string",
-                    required=True,
-                ),
-                Argument(
-                    "length",
-                    "The desired length of the summary, in human readable format (ie a 'few sentences')",
+                    "query",
+                    "An optional query to The query that the summary is being "
+                    + "generated for",
                     "string",
                     required=False,
-                    default="a few sentences",
                 ),
-            ],
+            )
+            defaults["query_instruction"] = "Provided is an additional query"
+            +" that you should take into account and focus on when summarizing"
+            self.focus_query = True
+
+        super().__init__(
+            name="Summarizer",
+            description="Summarizes a given body of text to a more succinct "
+            + "form",
+            args=args,
             llm=llm,
         )
 
@@ -41,7 +67,8 @@ class Summarizer(Agent):
                 pathlib.Path(__file__).parent,
                 "prompts",
                 "summarizer.prompt",
-            )
+            ),
+            defaults,
         )
 
     def __chunk_text(self, text: str) -> List[str]:
@@ -68,6 +95,8 @@ class Summarizer(Agent):
 
             text = kwargs["text"]
             length = kwargs["length"]
+            if self.focus_query:
+                query = kwargs["query"]
 
             chunks = self.__chunk_text(text)
 
@@ -75,13 +104,15 @@ class Summarizer(Agent):
             summary = ""
             initial_summary = True
             for chunk in chunks:
-                prompt = self.__templater.render(
-                    {
-                        "current_summary": summary,
-                        "length": length,
-                        "text": chunk,
-                    }
-                )
+                vars = {
+                    "current_summary": summary,
+                    "length": length,
+                    "text": chunk,
+                }
+                if self.focus_query:
+                    vars["query"] = query
+
+                prompt = self.__templater.render(vars)
 
                 summary = self.llm.completion(prompt)
 
