@@ -2,6 +2,9 @@ You are an AI assistant that specializes in creating succinct summaries of long 
 
 Aim for your summary to be {length}
 
+{query_text}
+{query}
+
 ONLY output your summary, as I am directly feeding that back to you below.
 
 {current_summary}
