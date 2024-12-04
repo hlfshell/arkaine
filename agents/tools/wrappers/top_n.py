@@ -1,12 +1,13 @@
-from agents.tools.tool import Tool, Context, Argument
+from agents.tools.wrapper import Wrapper
+from agents.tools.tool import Argument, Context, Tool
 from agents.utils.documents import (
     InMemoryEmbeddingStore,
     chunk_text_by_sentences,
 )
-from typing import Callable, List, Optional, Union
+from typing import Callable, List, Optional, Union, Dict, Any, Tuple
 
 
-class TopN(Tool):
+class TopN(Wrapper):
     """A wrapper tool that filters another tool's output using semantic search.
 
     This tool takes the output from another tool, chunks it into sentences, and
@@ -21,10 +22,17 @@ class TopN(Tool):
     Args:
         tool (Tool): The base tool to wrap and filter results from the wrapped
             tool
-        embedder (InMemoryEmbeddingStore): An in memory embedding store for
-            semantic search
-        n (int): Number of closest results to return sentences_per (int,
-        optional): Number of sentences per chunk. Defaults
+        n (int): Number of closest results to return
+        embedder (Optional[InMemoryEmbeddingStore]): Custom embedding store to
+            use. If None, a fresh InMemoryEmbeddingStore is created for each
+            call. If a class is provided, it will be instantiated with
+            embedder_kwargs for each call. If an object instance is provided,
+            it will be reused for all calls (embedder_kwargs ignored).
+        embedder_kwargs (Optional[Dict[str, Any]]): Arguments to initialize the
+            embedder class. Required when embedder is a class. Ignored when
+            embedder is None or an instance. Example: {"model":
+            "text-embedding-3-small"}
+        sentences_per (int, optional): Number of sentences per chunk. Defaults
             to 3.
         tool_formatter (Callable[[str], Union[str, List[str]]], optional):
             Custom formatter for the tool's output. This modifies the output to
@@ -48,8 +56,9 @@ class TopN(Tool):
     def __init__(
         self,
         tool: Tool,
-        embedder: InMemoryEmbeddingStore,
         n: int,
+        embedder: Optional[InMemoryEmbeddingStore] = None,
+        embedder_kwargs: Optional[Dict[str, Any]] = None,
         sentences_per: int = 3,
         tool_formatter: Optional[Callable[[str], Union[str, List[str]]]] = None,
         output_formatter: Optional[Callable[[str], str]] = None,
@@ -58,9 +67,27 @@ class TopN(Tool):
         query_attribute: str = "query",
         query_description: Optional[str] = None,
     ):
-        self._tool = tool
+        # Validate embedder and embedder_kwargs combination
+        if embedder is None:
+            self._embedder = InMemoryEmbeddingStore
+            self._embedder_kwargs = {}
+        elif isinstance(embedder, type):
+            if embedder_kwargs is None:
+                raise ValueError(
+                    "embedder_kwargs required when embedder is a class"
+                )
+            self._embedder = embedder
+            self._embedder_kwargs = embedder_kwargs
+        else:
+            if embedder_kwargs:
+                raise ValueError(
+                    "embedder_kwargs should be None when embedder is an "
+                    + "instance"
+                )
+            self._embedder = embedder
+            self._embedder_kwargs = None
+
         self._n = n
-        self._embedder = embedder
         self._sentences_per = sentences_per
         self._tool_formatter = tool_formatter
         self._output_formatter = output_formatter
@@ -73,76 +100,74 @@ class TopN(Tool):
             description = tool.description
 
         if not query_description:
-            query_description = query_description
-        else:
             query_description = "The query to search for in the content"
 
-        args = tool.args
-        args.append(
+        args = [
             Argument(
                 name=query_attribute,
                 description=query_description,
                 type="str",
                 required=True,
             )
-        )
+        ]
 
         super().__init__(
-            name=name, args=args, description=description, func=self.top_n
+            name=name, description=description, tool=tool, args=args
         )
 
-    def top_n(self, context: Context, **kwargs):
-        """
-        Execute the wrapped tool and filter its output using semantic search.
-
-        Args:
-            context (Context): The execution context
-
-            **kwargs: Arguments to pass to the wrapped tool, must include
-                query_attribute
-
-        Returns:
-            str: Formatted string containing the top N most relevant sections
-
-        Raises:
-            ValueError: If the required query attribute is missing from kwargs
-        """
+    def preprocess(self, ctx: Context, **kwargs) -> Tuple[Dict[str, Any], Any]:
+        """Extract query and prepare arguments for the wrapped tool."""
         if self._query_attribute not in kwargs:
             raise ValueError(
                 f"The {self._query_attribute} argument is required for this "
                 + "tool"
             )
 
-        query = kwargs[self._query_attribute]
+        # Extract query and pass it through to postprocess
+        query = kwargs.pop(self._query_attribute)
 
-        out = self._tool.invoke(context, **kwargs)
+        # Return processed args and the query as pass-through data
+        return kwargs, query
+
+    def postprocess(
+        self, ctx: Context, passed: Optional[Any] = None, results: Any = None
+    ) -> str:
+        """Process the tool results using semantic search."""
+        query = passed
 
         if self._tool_formatter:
-            out = self._tool_formatter(out)
+            results = self._tool_formatter(results)
 
-        if isinstance(out, str):
-            out = [out]
-        elif isinstance(out, dict):
-            out = list(out.values())
+        if isinstance(results, str):
+            results = [results]
+        elif isinstance(results, dict):
+            results = list(results.values())
 
         chunks = [
-            chunk_text_by_sentences(item, self._sentences_per) for item in out
+            chunk_text_by_sentences(item, self._sentences_per)
+            for item in results
         ]
 
-        for chunk in chunks:
-            self._embedder.add_text(chunk)
+        # Initialize embedder based on configuration
+        if self._embedder_kwargs is not None:
+            embedder = self._embedder(**self._embedder_kwargs)
+        else:
+            embedder = self._embedder
 
-        results = self._embedder.query(query, top_n=self._n)
+        for chunk in chunks:
+            embedder.add_text(chunk)
+
+        search_results = embedder.query(query, top_n=self._n)
 
         if self._output_formatter:
-            return self._output_formatter(results)
-        else:
-            out = (
-                f"Here are the top {self._n} most relevant sections "
-                + "to the query:\n"
-            )
+            return self._output_formatter(search_results)
 
-            for index, result in enumerate(results):
-                out += f"{index + 1} - {result}\n"
+        out = (
+            f"Here are the top {self._n} most relevant sections "
+            + "to the query:\n"
+        )
 
-            return out
+        for index, result in enumerate(search_results):
+            out += f"{index + 1} - {result}\n"
+
+        return out
