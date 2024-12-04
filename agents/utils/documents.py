@@ -72,17 +72,23 @@ class InMemoryEmbeddingStore:
         self.__embedding_model__ = embedding_model
         self.__memory__: List[Tuple[str, List[float]]] = []
 
-    def add_text(self, content: Union[str, List[str]]):
+    def add_text(self, content: Union[str, List[str]]) -> List[List[float]]:
         if isinstance(content, str):
             content = [content]
 
+        embeddings = []
+
         for text in content:
-            self.__memory__.append((text, self.__get_embedding(text)))
+            embedding = self.get_embedding(text)
+            embeddings.append(embedding)
+            self.__memory__.append((text, embedding))
+
+        return embeddings
 
     def __measure_distance(self, a: List[float], b: List[float]) -> float:
         return cosine_distance(a, b)
 
-    def __get_embedding(self, text: str) -> List[float]:
+    def get_embedding(self, text: str) -> List[float]:
         return ollama.embeddings(model=self.__embedding_model__, prompt=text)[
             "embedding"
         ]
@@ -92,7 +98,7 @@ class InMemoryEmbeddingStore:
         query: str,
         top_n: Optional[int] = 10,
     ) -> List[str]:
-        query_embedding = self.__get_embedding(query)
+        query_embedding = self.get_embedding(query)
 
         # TODO - make more efficient
         results: List[Tuple[str, float]] = []
