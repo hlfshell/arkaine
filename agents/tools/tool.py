@@ -441,19 +441,21 @@ class Context:
                 if self.__output is not None or self.__exception is not None:
                     return
 
-            raise TimeoutError(
+            e = TimeoutError(
                 "Context did not complete within the specified timeout"
             )
+            self.__exception = e
+            raise e
 
     def future(self) -> Future:
         """Return a concurrent.futures.Future object for the context."""
         future = Future()
 
-        def on_output(context: Context, value: Any):
+        def on_end(context: Context):
             if self.exception:
                 future.set_exception(self.exception)
             else:
-                future.set_result(value)
+                future.set_result(self.output)
 
         # Due to timing issues, we have to manually create the listeners within
         # the lock instead of our usual methods to avoid race conditions.
@@ -465,7 +467,7 @@ class Context:
                 future.set_exception(self.__exception)
                 return future
 
-            self.__on_output_listeners.append(on_output)
+            self.__on_end_listeners.append(on_end)
 
         return future
 
@@ -606,7 +608,8 @@ class Tool:
         Registrar.register(self)
 
     def __del__(self):
-        self._executor.shutdown(wait=False)
+        if self._executor:
+            self._executor.shutdown(wait=False)
 
     @property
     def id(self) -> str:
