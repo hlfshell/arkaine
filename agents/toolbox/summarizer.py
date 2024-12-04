@@ -46,8 +46,10 @@ class Summarizer(Agent):
                     required=False,
                 ),
             )
-            defaults["query_instruction"] = "Provided is an additional query"
-            +" that you should take into account and focus on when summarizing:"
+            defaults["query_instruction"] = (
+                "Provided is an additional query that you should take into "
+                + "account and focus on when summarizing:"
+            )
             self.focus_query = True
 
         super().__init__(
