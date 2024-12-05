@@ -1,18 +1,18 @@
 from agents.tools.tool import Context, Tool, Argument, Example
-from typing import Any, List, Optional, Callable
+from typing import Any, List, Optional, Callable, Union
 from concurrent.futures import as_completed
 import threading
 
 
 class Branch(Tool):
     """
-    A tool that executes multiple tools in parallel and aggregates their
-    results.
+    A tool that executes multiple tools or functions in parallel and aggregates
+    their results.
 
-    This tool takes an input and runs it through multiple tools concurrently.
-    It provides options for handling failures and different completion
-    strategies, as well as methods to transform the input for each tool and the
-    combination of the tool's output.
+    This tool takes an input and runs it through multiple tools or functions
+    concurrently. It provides options for handling failures and different
+    completion strategies, as well as methods to transform the input for each
+    tool and the combination of the tool's output.
 
     Args:
         name (str): The name of the branch tool
@@ -23,7 +23,8 @@ class Branch(Tool):
 
         examples (List[Example]): Example usage scenarios
 
-        tools (List[Tool]): List of tools to execute in parallel
+        tools (List[Union[Tool, Callable[[Context, Any], Any]]]): List of tools
+            or functions to execute in parallel
 
         formatters (List[Optional[Callable[[Context, Any], Any]]]): Optional
             formatters to transform input for each branch. The index of the
@@ -38,13 +39,17 @@ class Branch(Tool):
             - "ignore": Continue execution (default)
             - "fail": Fail entire branch if any tool fails
 
-        result_formatter (Optional[Callable[[List[Any],
-            List[Exception]], Any]]): Optional function to format the combined
-            results of all branches. The formatter will receive a list of
-            results from each branch, with the index of the result matching the
-            index of the tool that produced it. It will also be passed the
-            exception if any was raised (which, depending on your error
-            strategy, may be ignored).
+        result_formatter (Optional[Callable[[List[Any], List[Exception]],
+        Any]]): Optional
+            function to format the combined results of all branches. The
+            formatter will receive a list of results from each branch, with the
+            index of the result matching the index of the tool that produced
+            it. It will also be passed the exception if any was raised (which,
+            depending on your error strategy, may be ignored).
+
+    Note:
+        If using functions instead of tools, ensure the context is passed and
+        utilized correctly.
     """
 
     def __init__(
@@ -53,7 +58,7 @@ class Branch(Tool):
         description: str,
         arguments: List[Argument],
         examples: List[Example],
-        tools: List[Tool],
+        tools: List[Union[Tool, Callable[[Context, Any], Any]]],
         formatters: Optional[
             List[Optional[Callable[[Context, Any], Any]]]
         ] = None,
