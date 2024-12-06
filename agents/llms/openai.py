@@ -11,6 +11,17 @@ from agents.tools.tool import Tool
 
 class OpenAI(LLM):
 
+    CONTEXT_LENGTHS = {
+        "gpt-4o": 128000,
+        "gpt-4o-mini": 8192,
+        "gpt-3.5-turbo": 4096,
+        "gpt-4": 8192,
+        "gpt-4-32k": 32768,
+        "gpt-3": 2048,
+        "text-davinci-003": 4096,
+        "code-davinci-002": 8001,
+    }
+
     def __init__(
         self,
         model: str,

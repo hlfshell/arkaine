@@ -5,6 +5,11 @@ from agents.llms.llm import LLM
 
 
 class Ollama(LLM):
+
+    CONTEXT_LENGTHS = {
+        "llama3.1": 8192,
+    }
+
     def __init__(
         self,
         model: str,
