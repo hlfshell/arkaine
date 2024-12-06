@@ -108,6 +108,9 @@ class BaseBackend(ABC):
     def query_model(self, prompt: Prompt) -> str:
         return self.llm.completion(prompt)
 
+    def estimate_tokens(self, prompt: Prompt) -> int:
+        return self.llm.estimate_tokens(prompt)
+
     def invoke(
         self,
         context: Context,
