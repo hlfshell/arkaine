@@ -2,11 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, List, Optional
 
 from agents.backends.base import BaseBackend
-from agents.events import (
-    AgentLLMCalled,
-    AgentLLMResponse,
-    AgentPrompt,
-)
+from agents.events import AgentLLMCalled, AgentLLMResponse, AgentPrompt
 from agents.llms.llm import LLM, Prompt
 from agents.tools.tool import Argument, Context, Example, Tool
 
@@ -56,7 +52,56 @@ class Agent(Tool, ABC):
         return final_result
 
 
-class ToolAgent(Tool, ABC):
+class MetaAgent(Agent):
+
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        args: List[Argument],
+        llm: LLM,
+        initial_state: Dict[str, Any] = {},
+        max_steps: Optional[int] = None,
+    ):
+        super().__init__(name, description, args, llm, None)
+        self.__initial_state = initial_state
+        self.max_steps = max_steps
+
+    @abstractmethod
+    def prepare_prompt(self, context: Context, **kwargs) -> Prompt:
+        pass
+
+    @abstractmethod
+    def extract_result(self, context: Context, output: str) -> Optional[Any]:
+        pass
+
+    def __initialize_state(self, context: Context):
+        if self.__initial_state:
+            state = self.__initial_state.copy()
+            for arg in state:
+                context[arg] = state[arg]
+
+    def invoke(self, context: Context, **kwargs) -> Any:
+        self.__initialize_state(context)
+        step = 0
+
+        while True:
+            step += 1
+            if self.max_steps and step > self.max_steps:
+                raise Exception("Max steps reached")
+
+            prompt = self.prepare_prompt(context, **kwargs)
+            context.broadcast(AgentPrompt(prompt))
+            context.broadcast(AgentLLMCalled())
+            result = self.llm.completion(prompt)
+            context.broadcast(AgentLLMResponse(result))
+
+            result = self.extract_result(context, result)
+            if result is not None:
+                return result
+
+
+class BackendAgent(Tool, ABC):
 
     def __init__(
         self,
