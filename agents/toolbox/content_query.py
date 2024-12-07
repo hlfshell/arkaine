@@ -1,11 +1,11 @@
-from os import path
 import pathlib
-from typing import List, Optional, Dict, Any
+from os import path
+from typing import Any, Dict, List, Optional, Tuple
 
-from agents.agent import Agent
+from agents.agent import MetaAgent
 from agents.llms.llm import LLM, Prompt
-from agents.utils.templater import PromptTemplate
 from agents.tools.tool import Argument, Context
+from agents.utils.templater import PromptTemplate
 
 
 class ContentResponse:
@@ -40,7 +40,7 @@ class ContentResponse:
         return result
 
 
-class ContentQuery(Agent):
+class ContentQuery(MetaAgent):
     """An agent that processes documents chunk by chunk to answer queries.
 
     This agent takes a document and a query, breaks the document into
@@ -103,6 +103,12 @@ class ContentQuery(Agent):
                 ),
             ],
             llm=llm,
+            initial_state={
+                "chunks": [],
+                "current_chunk": 0,
+                "notes": [],
+                "final_answer": None,
+            },
         )
 
         if word_limit is None:
@@ -153,8 +159,8 @@ class ContentQuery(Agent):
             Chunks are created based on word boundaries and include overlap
             specified by self.words_overlap. All whitespace is normalized.
         """
-        # Normalize whitespace: convert all whitespace sequences to single spaces
-        # and handle various newline formats
+        # Normalize whitespace: convert all whitespace sequences to single
+        # spaces and handle various newline formats
         normalized_text = " ".join(text.split())
 
         # Split into words
@@ -169,16 +175,13 @@ class ContentQuery(Agent):
 
         return chunks
 
-    def prepare_prompt(
-        self, query: str, notes: str, text: str, final: bool
-    ) -> Prompt:
+    def prepare_prompt(self, context: Context, **kwargs) -> Prompt:
         """Prepare the prompt for the language model.
 
         Args:
-            query (str): The question to be answered
-            notes (str): Previously collected notes
-            text (str): Current text chunk to analyze
-            final (bool): Whether this is the final chunk
+            context (Context): The execution context
+            state (Dict[str, Any]): The current state of the agent
+            **kwargs: Must include 'text' and 'query' arguments
 
         Returns:
             Prompt: Formatted prompt for the language model
@@ -187,88 +190,51 @@ class ContentQuery(Agent):
             If final is True, includes additional instructions to make a
             final decision based on all gathered information.
         """
-        notes_text = "\n".join(notes)
+        # First time through, initialize chunks
+        if not context["chunks"]:
+            text = kwargs["text"]
+            context["chunks"] = self.__chunk_text(text)
+
+        chunk = context["chunks"][context["current_chunk"]]
+        is_final = context["current_chunk"] == len(context["chunks"]) - 1
+
+        notes_text = "\n".join(context["notes"])
         vars = {
             "current_notes": notes_text,
-            "query": query,
-            "text": text,
+            "query": kwargs["query"],
+            "text": chunk,
         }
-        if final:
+
+        if is_final:
             vars["remember"] = (
                 "This is the final text segment. You must make a "
                 "decision based on all the information you've gathered. "
                 "Do not request more information or indicate that you're "
                 "waiting for more text. Provide either a complete answer "
                 "from all available information or {answer_delimiter} NONE."
-            )
-            vars["remember"] = vars["remember"].replace(
-                "{answer_delimiter}", self.answer_delimiter
-            )
+            ).replace("{answer_delimiter}", self.answer_delimiter)
 
         return self.__templater.render(vars)
 
-    def __notes(self, context: Context, text: str) -> Optional[List[str]]:
-        """Extract notes from model response and update context.
-
-        Args:
-            context (Context): The execution context
-            text (str): Model response text to process
-
-        Returns:
-            Optional[List[str]]: List of extracted notes or None if no notes found
-
-        Note:
-            Notes are expected to be prefixed with '-' and appear after
-            notes_delimiter. Updates context['notes'] with found notes.
-        """
+    def __extract(self, text: str) -> Tuple[Optional[List[str]], Optional[str]]:
+        ret_notes = None
+        ret_answer = None
         notes_parts = text.split(self.notes_delimiter)
 
         if len(notes_parts) > 1:
-            # Take the last notes section if multiple exist
             notes = notes_parts[-1].strip()
-            # Remove any answer delimiter and content that follows
             if self.answer_delimiter in notes:
                 notes = notes.split(self.answer_delimiter)[0].strip()
-
-            # Our model is told to preface the notes with -
-            # so we need to remove those and create an array of notes
-            notes = [
+            ret_notes = [
                 n.strip("-").strip() for n in notes.splitlines() if n.strip()
             ]
 
-            # Record notes to ctx
-            if "notes" not in context:
-                context["notes"] = []
-            context["notes"].extend(notes)
-
-            return notes
-        else:
-            return None
-
-    def __answer(self, text: str) -> Optional[str]:
-        """Extract answer from model response.
-
-        Args:
-            text (str): Model response text to process
-
-        Returns:
-            Optional[str]: Extracted answer or None if no valid answer found
-
-        Note:
-            Answers must appear after answer_delimiter. Handles edge cases like
-            'NONE' responses and formatting issues.
-        """
         answer_parts = text.split(self.answer_delimiter)
         if len(answer_parts) > 1:
             answer = answer_parts[-1].strip()
-
-            # Sometimes a smaller model will output weird formatting. If the
-            # first line of the answer is just "none" or empty, ignore it.
-            # Remove all symbols in case of formatting issues with first line.
-            # Similarly, we safely abort if the whole answer starts with all
-            # caps NONE as well.
             if answer.strip().startswith("NONE"):
-                return None
+                ret_answer = None
+                return ret_notes, ret_answer
 
             cleaned_answer = "".join(
                 c
@@ -277,27 +243,26 @@ class ContentQuery(Agent):
             ).strip()
 
             if cleaned_answer in ["none", ""]:
-                return None
+                ret_answer = None
+                return ret_notes, ret_answer
 
-            # Remove any notes delimiter and content that follows
             if self.notes_delimiter in answer:
                 answer = answer.split(self.notes_delimiter)[0].strip()
 
-            return answer
-        else:
-            return None
+            ret_answer = answer
 
-    def __call__(
-        self, context: Optional[Context] = None, **kwargs
-    ) -> ContentResponse:
+        return ret_notes, ret_answer
+
+    def extract_result(self, context: Context, output: str) -> Optional[Any]:
         """Process document to answer query.
 
         Args:
-            context (Optional[Context]): Execution context
-            **kwargs: Must include 'text' and 'query' arguments
+            context (Context): The execution context
+            state (Dict[str, Any]): The current state of the agent
+            output (str): Model response text to process
 
         Returns:
-            ContentResponse: Contains answer and collected notes. If
+            Optional[Any]: Contains answer and collected notes. If
                 return_string is True, returns just the answer string.
 
         Note:
@@ -305,49 +270,34 @@ class ContentQuery(Agent):
             answers. Can process entire document if read_full_doc is True.
             Uses default_answer if no answer found and default_answer is set.
         """
-        with self._init_context_(context, **kwargs) as ctx:
-            kwargs = self.fulfill_defaults(kwargs)
-            self.check_arguments(kwargs)
+        # Extract notes and answer and add to state
+        notes, answer = self.__extract(output)
+        if notes:
+            context.concat("notes", notes)
+        if answer:
+            context["final_answer"] = answer
+            # If we don't need to read the full doc and found an answer, return
+            if not self.read_full_doc:
+                return self._format_response(context)
 
-            text = kwargs["text"]
-            query = kwargs["query"]
+        # Move to next chunk
+        context.increment("current_chunk")
 
-            chunks = self.__chunk_text(text)
+        # If we've processed all chunks or found our answer, return result
+        if context["current_chunk"] >= len(context["chunks"]):
+            if (
+                context["final_answer"] is None
+                and self.default_answer is not None
+            ):
+                context["final_answer"] = self.default_answer
+            return self._format_response(context)
 
-            # Process each chunk while maintaining relevant notes
-            notes = []
-            final_answer: Optional[str] = None
+        return None
 
-            for index, chunk in enumerate(chunks):
-                prompt = self.prepare_prompt(
-                    query, notes, chunk, index == len(chunks) - 1
-                )
-
-                response = self.llm.completion(prompt)
-
-                # Extract notes and answer independently, regardless of order
-                current_notes = self.__notes(ctx, response)
-                if current_notes:
-                    notes.extend(current_notes)
-
-                # Check for answer separately
-                answer = self.__answer(response)
-
-                # If we found an answer and don't need to read full doc, we can stop
-                if answer and not self.read_full_doc:
-                    final_answer = answer
-                    break
-                elif answer:
-                    final_answer = answer
-
-            # If no answer was found and default_answer is set, use it
-            if final_answer is None and self.default_answer is not None:
-                final_answer = self.default_answer
-
-            if self.return_string:
-                return final_answer
-            else:
-                return ContentResponse(
-                    answer=final_answer,
-                    notes=notes,
-                )
+    def _format_response(self, context: Context) -> Any:
+        if self.return_string:
+            return context["final_answer"]
+        return ContentResponse(
+            answer=context["final_answer"],
+            notes=context["notes"],
+        )

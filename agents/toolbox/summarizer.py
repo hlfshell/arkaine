@@ -1,20 +1,20 @@
 import pathlib
 from os import path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
-from agents.agent import Agent
+from agents.agent import MetaAgent
 from agents.llms.llm import LLM, Prompt
-from agents.utils.templater import PromptTemplate
 from agents.tools.tool import Argument, Context
+from agents.utils.templater import PromptTemplate
 
 
-class Summarizer(Agent):
+class Summarizer(MetaAgent):
 
     def __init__(
         self,
         llm: LLM,
-        word_limit: Optional[int] = None,
-        focus_query: bool = True,
+        chunk_size: Optional[int] = None,
+        focus_query: bool = False,
     ):
 
         args = [
@@ -36,12 +36,13 @@ class Summarizer(Agent):
 
         defaults = {"query_instruction": ""}
 
+        self.focus_query = focus_query
         if focus_query:
             args.append(
                 Argument(
                     "query",
-                    "An optional query to The query that the summary is being "
-                    + "generated for",
+                    "An optional query to try and focus the summary towards "
+                    + "answering",
                     "string",
                     required=False,
                 ),
@@ -50,7 +51,6 @@ class Summarizer(Agent):
                 "Provided is an additional query that you should take into "
                 + "account and focus on when summarizing:"
             )
-            self.focus_query = True
 
         super().__init__(
             name="Summarizer",
@@ -58,11 +58,13 @@ class Summarizer(Agent):
             + "form",
             args=args,
             llm=llm,
+            initial_state={
+                "chunks": [],
+                "current_chunk": 0,
+                "summary": "",
+                "initial_summary": True,
+            },
         )
-
-        if word_limit is None:
-            word_limit = int(self.llm.context_length / 10)
-        self.token_limit = word_limit
 
         self.__templater = PromptTemplate.from_file(
             path.join(
@@ -73,53 +75,59 @@ class Summarizer(Agent):
             defaults,
         )
 
+        self._chunk_size = chunk_size
+
     def __chunk_text(self, text: str) -> List[str]:
         """
         Given a chunk of text, divide it into smaller chunks
         broken down by words
         """
+        # Use 50% of the context length as a default, or a user specified chunk
+        # size.
+        token_limit = self._chunk_size or (self.llm.context_length * 0.5)
+
         chunks: List[str] = []
         words = text.split(" ")
+        # Rule of thumb: 0.75 words per token, so...
+        words_per_chunk = int(token_limit * 0.75)
         while words:
-            chunk = words[: self.token_limit]
+            chunk = words[:words_per_chunk]
             chunks.append(" ".join(chunk))
-            words = words[self.token_limit :]
+            words = words[words_per_chunk:]
 
         return chunks
 
-    def prepare_prompt(self, **kwargs) -> Prompt:
-        pass
-
-    def __call__(self, context: Optional[Context] = None, **kwargs) -> str:
-        with self._init_context_(context, **kwargs) as ctx:
-            kwargs = self.fulfill_defaults(kwargs)
-            self.check_arguments(kwargs)
-
+    def prepare_prompt(self, context: Context, **kwargs) -> Prompt:
+        # First time through, initialize state vars for repeated use.
+        if not context["chunks"]:
             text = kwargs["text"]
-            length = kwargs["length"]
-            if self.focus_query:
-                query = kwargs["query"]
+            context["chunks"] = self.__chunk_text(text)
 
-            chunks = self.__chunk_text(text)
+        chunk = context["chunks"][context["current_chunk"]]
+        vars = {
+            "current_summary": context["summary"],
+            "length": kwargs["length"],
+            "text": chunk,
+        }
 
-            # Summarize each chunk
-            summary = ""
-            initial_summary = True
-            for chunk in chunks:
-                vars = {
-                    "current_summary": summary,
-                    "length": length,
-                    "text": chunk,
-                }
-                if self.focus_query:
-                    vars["query"] = query
+        if self.focus_query:
+            vars["query"] = kwargs["query"]
 
-                prompt = self.__templater.render(vars)
+        return self.__templater.render(vars)
 
-                summary = self.llm.completion(prompt)
+    def extract_result(self, context: Context, output: str) -> Optional[str]:
+        # Update summary
+        if context["initial_summary"]:
+            context["summary"] = f"Your summary so far:\n{output}\n"
+            context["initial_summary"] = False
+        else:
+            context["summary"] = output
 
-                if initial_summary:
-                    summary = f"Your summary so far:\n{summary}\n"
-                    initial_summary = False
+        # Move to next chunk
+        context.increment("current_chunk")
 
-            return summary
+        # If we've processed all chunks, return the final summary
+        if context["current_chunk"] >= len(context["chunks"]):
+            return context["summary"]
+
+        return None
