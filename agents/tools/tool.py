@@ -2,26 +2,24 @@ from __future__ import annotations
 
 import json
 import threading
-from concurrent.futures import ThreadPoolExecutor
+import traceback
+from concurrent.futures import Future, ThreadPoolExecutor
+from threading import Event as ThreadEvent
 from time import time
 from types import TracebackType
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Union
 from uuid import uuid4
-from threading import Event as ThreadEvent
 
 from agents.registrar.registrar import Registrar
 from agents.tools.events import (
     ChildContextCreated,
+    ContextUpdate,
     Event,
     ToolCalled,
     ToolException,
     ToolReturn,
-    ContextUpdate,
 )
-from concurrent.futures import Future
 from agents.tools.types import ToolArguments
-
-import traceback
 
 
 class Argument:
@@ -246,6 +244,8 @@ class Context:
 
     def __getitem__(self, name: str) -> Any:
         with self.__lock:
+            if name not in self.__data:
+                return None
             return self.__data.get(name)
 
     def __setitem__(self, name: str, value: Any):
@@ -259,6 +259,51 @@ class Context:
     def __delitem__(self, name: str):
         with self.__lock:
             del self.__data[name]
+
+    def operate(
+        self, keys: Union[str, List[str]], operation: Callable[[Any], Any]
+    ) -> None:
+        if isinstance(keys, str):
+            keys = [keys]
+
+        key_paths = []
+        with self.__lock:
+            current = self.__data
+            for key in keys[:-1]:
+                key_paths.append(key)
+                if key not in current or not isinstance(current[key], dict):
+                    raise ValueError(
+                        f"{''.join(f'[{k}]' for k in key_paths)} is not a "
+                        "dictionary"
+                    )
+                current = current[key]
+
+            final_key = keys[-1]
+            key_paths.append(final_key)
+            if final_key not in current:
+                raise KeyError(
+                    f"Key {''.join(f'[{k}]' for k in key_paths)} does not exist"
+                )
+
+            current[final_key] = operation(current[final_key])
+
+    def update(self, key: str, operation: Callable) -> Any:
+        with self.__lock:
+            value = operation(self.__data[key])
+            self.__data[key] = value
+            return value
+
+    def increment(self, key: str, amount: int = 1):
+        return self.update(key, lambda x: x + amount)
+
+    def decrement(self, key: str, amount: int = 1):
+        return self.update(key, lambda x: x - amount)
+
+    def append(self, keys: Union[str, List[str]], value: Any) -> None:
+        self.operate(keys, lambda x: x.append(value))
+
+    def concat(self, keys: Union[str, List[str]], value: Any) -> None:
+        self.operate(keys, lambda x: x + value)
 
     @property
     def root(self) -> Context:
