@@ -2,17 +2,17 @@ from typing import Any, Dict, List, Optional
 
 import wikipedia
 
-from agents.agent import ToolAgent
+from agents.agent import BackendAgent
 from agents.backends.base import BaseBackend
 from agents.backends.react import ReActBackend
+from agents.llms.llm import LLM
+from agents.tools.tool import Argument, Tool
+from agents.tools.wrappers.top_n import TopN
 from agents.utils.documents import (
     InMemoryEmbeddingStore,
     chunk_text_by_sentences,
 )
-from agents.llms.llm import LLM
 from agents.utils.templater import PromptTemplate
-from agents.tools.wrappers.top_n import TopN
-from agents.tools.tool import Argument, Tool
 
 TOPIC_QUERY_TOOL_NAME = "wikipedia_search_pages"
 PAGE_CONTENT_TOOL_NAME = "wikipedia_get_page"
@@ -154,15 +154,15 @@ class WikipediaPageTopN(TopN):
 
         super().__init__(
             wp,
+            5,
             embedder,
-            n=5,
             name=name,
             description=description,
             query_description=query_description,
         )
 
 
-class WikipediaSearch(ToolAgent):
+class WikipediaSearch(BackendAgent):
     """
     A tool agent that searches Wikipedia to answer questions using either
     direct page content or semantically relevant sections.
