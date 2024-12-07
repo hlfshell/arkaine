@@ -10,3 +10,9 @@ ToolArguments = Dict[str, Any]
 # the name of the tool, a ToolArguments, and finally the return result of that
 # tool.
 ToolResults = List[Tuple[str, ToolArguments, Any]]
+
+
+# ToolCalls are a list of tuples, where the first item in each tuple is the
+# name of the function, and the second is a ToolArguments parameter (a dict of
+# str keys and Any values).
+ToolCalls = List[Tuple[str, ToolArguments]]
