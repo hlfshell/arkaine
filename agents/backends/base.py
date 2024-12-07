@@ -159,7 +159,9 @@ class BaseBackend(ABC):
             elif len(tool_calls) > 0:
                 context.broadcast(AgentToolCalls(tool_calls))
                 tool_results = self.call_tools(context, tool_calls)
-                prompt = self.tool_results_to_prompts(prompt, tool_results)
+                prompt = self.tool_results_to_prompts(
+                    context, prompt, tool_results
+                )
 
 
 class ToolNotFoundException(Exception):

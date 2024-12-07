@@ -36,7 +36,9 @@ class OpenAI(BaseBackend):
         api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.__client = oaiapi.Client(api_key=api_key)
 
-    def parse_for_result(self, response: ChatCompletion) -> str:
+    def parse_for_result(
+        self, context: Context, response: ChatCompletion
+    ) -> str:
         return response.choices[0].message.content
 
     def parse_for_tool_calls(
@@ -64,12 +66,13 @@ class OpenAI(BaseBackend):
 
     def tool_results_to_prompts(
         self,
+        context: Context,
         prompt: Prompt,
         results: ToolResults,
     ) -> List[Prompt]:
         return simple_tool_results_to_prompts(prompt, results)
 
-    def prepare_prompt(self, **kwargs) -> Prompt:
+    def prepare_prompt(self, context: Context, **kwargs) -> Prompt:
         return self.template.render(kwargs)
 
     def query_model(self, prompt: Prompt) -> ChatCompletion:
