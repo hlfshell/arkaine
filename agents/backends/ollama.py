@@ -5,7 +5,7 @@ from ollama import Client
 from agents.agent import Any, Callable, Prompt
 from agents.backends.base import BaseBackend
 from agents.backends.common import simple_tool_results_to_prompts
-from agents.tools.tool import Tool
+from agents.tools.tool import Context, Tool
 from agents.tools.types import ToolArguments, ToolResults
 
 
@@ -20,8 +20,11 @@ class Ollama(BaseBackend):
         default_temperature: float = 0.7,
         request_timeout: float = 120.0,
         verbose: bool = False,
+        initial_state: Dict[str, Any] = {},
     ):
-        super().__init__(None, tools, max_simultaneous_tools=1)
+        super().__init__(
+            None, tools, max_simultaneous_tools=1, initial_state=initial_state
+        )
 
         self.model = model
         self.get_prompt = get_prompt
@@ -65,11 +68,16 @@ class Ollama(BaseBackend):
             ],
         )
 
-    def parse_for_result(self, response: Dict[str, Any]) -> str:
+    def parse_for_result(
+        self, context: Context, response: Dict[str, Any]
+    ) -> str:
         return response["message"]["content"]
 
     def parse_for_tool_calls(
-        self, response: Dict[str, Any], stop_at_first_tool: bool = False
+        self,
+        context: Context,
+        response: Dict[str, Any],
+        stop_at_first_tool: bool = False,
     ) -> List[Tuple[str, ToolArguments]]:
         tool_calls_raw = response["message"].get("tool_calls")
 
@@ -90,10 +98,11 @@ class Ollama(BaseBackend):
 
     def tool_results_to_prompts(
         self,
+        context: Context,
         prompt: Prompt,
         results: ToolResults,
     ) -> List[Prompt]:
         return simple_tool_results_to_prompts(prompt, results, "assistant")
 
-    def prepare_prompt(self, **kwargs) -> Prompt:
+    def prepare_prompt(self, context: Context, **kwargs) -> Prompt:
         return self.get_prompt(kwargs)

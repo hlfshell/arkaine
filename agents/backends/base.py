@@ -11,13 +11,17 @@ from agents.events import (
 )
 from agents.llms.llm import LLM, Prompt
 from agents.tools.tool import Context, Tool
-from agents.tools.types import ToolArguments, ToolResults
+from agents.tools.types import ToolArguments, ToolCalls, ToolResults
 
 
 class BaseBackend(ABC):
 
     def __init__(
-        self, llm: LLM, tools: List[Tool], max_simultaneous_tools: int = 1
+        self,
+        llm: LLM,
+        tools: List[Tool],
+        max_simultaneous_tools: int = 1,
+        initial_state: Dict[str, Any] = {},
     ):
         super().__init__()
         self.llm = llm
@@ -26,11 +30,12 @@ class BaseBackend(ABC):
             self.tools[tool.name] = tool
 
         self.max_simultaneous_tool_calls = max_simultaneous_tools
+        self.initial_state = initial_state
 
     @abstractmethod
     def parse_for_tool_calls(
-        self, text: str, stop_at_first_tool: bool = False
-    ) -> List[Tuple[str, ToolArguments]]:
+        self, context: Context, text: str, stop_at_first_tool: bool = False
+    ) -> ToolCalls:
         """
         parse_for_tool_calls is called after each model iteration if any tools
         are provided to the backend. The goal of parse_for_tool_calls is to
@@ -41,13 +46,13 @@ class BaseBackend(ABC):
         each tuple is the name of the function, and the second is a
         ToolArguments parameter (a dict of str keys and Any values). The list
         is utilized because it is possible that A) ordering of the tools
-        matters for a given application abd B) a given tool may be called
-        multiple times for by the model.
+        matters for a given application and B) a given tool may be called
+        multiple times by the model.
         """
         pass
 
     @abstractmethod
-    def parse_for_result(self, text: str) -> Optional[Any]:
+    def parse_for_result(self, context: Context, text: str) -> Optional[Any]:
         """
         parse_for_result is called after the model produces an output that
         contains no tool calls to operate on. If no output is necessary, merely
@@ -61,7 +66,7 @@ class BaseBackend(ABC):
 
     @abstractmethod
     def tool_results_to_prompts(
-        self, prompt: Prompt, results: ToolResults
+        self, context: Context, prompt: Prompt, results: ToolResults
     ) -> List[Prompt]:
         """
         tool_results_to_prompts is called upon the return of each invoked tool
@@ -77,7 +82,7 @@ class BaseBackend(ABC):
         pass
 
     @abstractmethod
-    def prepare_prompt(self, **kwargs) -> Prompt:
+    def prepare_prompt(self, context: Context, **kwargs) -> Prompt:
         """
         prepare_prompt prepares the initial prompt to tell it what to do. This
         is often the explanation of what the agent is and what its current task
@@ -111,6 +116,11 @@ class BaseBackend(ABC):
     def estimate_tokens(self, prompt: Prompt) -> int:
         return self.llm.estimate_tokens(prompt)
 
+    def __initialize_state(self, context: Context):
+        state = self.initial_state.copy()
+        for key, value in state.items():
+            context[key] = value
+
     def invoke(
         self,
         context: Context,
@@ -118,8 +128,10 @@ class BaseBackend(ABC):
         max_steps: Optional[int] = None,
         stop_at_first_tool: bool = False,
     ) -> str:
+        self.__initialize_state(context)
+
         # Build prompt
-        prompt = self.prepare_prompt(**args)
+        prompt = self.prepare_prompt(context, **args)
         context.broadcast(AgentPrompt(prompt))
 
         steps = 0
@@ -135,19 +147,19 @@ class BaseBackend(ABC):
             context.broadcast(AgentLLMResponse(response))
 
             tool_calls = self.parse_for_tool_calls(
+                context,
                 response,
                 stop_at_first_tool,
             )
 
-            if len(tool_calls) > 0:
+            result = self.parse_for_result(context, response)
+
+            if result:
+                return self.parse_for_result(context, response)
+            elif len(tool_calls) > 0:
                 context.broadcast(AgentToolCalls(tool_calls))
                 tool_results = self.call_tools(context, tool_calls)
                 prompt = self.tool_results_to_prompts(prompt, tool_results)
-            else:
-                # No tool calls means we should have a result
-                # TODO - handle a failure to produce
-                # tool calls
-                return self.parse_for_result(response)
 
 
 class ToolNotFoundException(Exception):

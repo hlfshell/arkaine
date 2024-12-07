@@ -9,9 +9,9 @@ from pydantic import BaseModel
 
 from agents.backends.base import BaseBackend
 from agents.llms.llm import LLM, Prompt
-from agents.utils.templater import PromptTemplate
-from agents.tools.tool import Tool
+from agents.tools.tool import Context, Tool
 from agents.tools.types import ToolArguments, ToolResults
+from agents.utils.templater import PromptTemplate
 
 
 class ReActResponse(BaseModel):
@@ -28,8 +28,11 @@ class ReActBackend(BaseBackend):
         llm: LLM,
         tools: List[Tool],
         agent_explanation: str,
+        initial_state: Dict[str, Any] = {},
     ):
-        super().__init__(llm, tools, max_simultaneous_tools=1)
+        super().__init__(
+            llm, tools, max_simultaneous_tools=1, initial_state=initial_state
+        )
 
         self.agent_explanation = agent_explanation
         self.__templater = PromptTemplate.from_file(
@@ -94,11 +97,11 @@ class ReActBackend(BaseBackend):
         # Use Pydantic for final validation and parsing
         return ReActResponse(**results)
 
-    def parse_for_result(self, text: str) -> str:
+    def parse_for_result(self, context: Context, text: str) -> str:
         return self.__parse(text).Answer
 
     def parse_for_tool_calls(
-        self, text: str, stop_at_first_tool: bool = False
+        self, context: Context, text: str, stop_at_first_tool: bool = False
     ) -> List[Tuple[str, ToolArguments]]:
         response = self.__parse(text)
 
@@ -114,7 +117,7 @@ class ReActBackend(BaseBackend):
         )
 
     def tool_results_to_prompts(
-        self, prompt: Prompt, results: ToolResults
+        self, context: Context, prompt: Prompt, results: ToolResults
     ) -> List[Prompt]:
         for name, args, result in results:
             out = f"---\n{name}("
@@ -139,7 +142,7 @@ class ReActBackend(BaseBackend):
             )
         return prompt
 
-    def prepare_prompt(self, **kwargs) -> Prompt:
+    def prepare_prompt(self, context: Context, **kwargs) -> Prompt:
         # Create the tools block
         tools_block = ""
         for _, tool in self.tools.items():

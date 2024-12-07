@@ -10,9 +10,9 @@ from openai.types.chat.chat_completion import ChatCompletion
 from agents.agent import Prompt
 from agents.backends.base import BaseBackend
 from agents.backends.common import simple_tool_results_to_prompts
-from agents.utils.templater import PromptTemplate
-from agents.tools.tool import Tool
+from agents.tools.tool import Context, Tool
 from agents.tools.types import ToolArguments, ToolResults
+from agents.utils.templater import PromptTemplate
 
 
 class OpenAI(BaseBackend):
@@ -26,8 +26,9 @@ class OpenAI(BaseBackend):
         model: str = "gpt-3.5-turbo",
         temperature: float = 0.7,
         max_tokens: int = 1024,
+        initial_state: Dict[str, Any] = {},
     ):
-        super().__init__(None, tools, max_simultaneous_tools)
+        super().__init__(None, tools, max_simultaneous_tools, initial_state)
         self.template = template
         self.model = model
         self.temperature = temperature
@@ -39,7 +40,10 @@ class OpenAI(BaseBackend):
         return response.choices[0].message.content
 
     def parse_for_tool_calls(
-        self, response: ChatCompletion, stop_at_first_tool: bool = False
+        self,
+        context: Context,
+        response: ChatCompletion,
+        stop_at_first_tool: bool = False,
     ) -> List[Tuple[str, ToolArguments]]:
         """
         parse_for_tool_calls accepts a chatgpt response, extract all tool

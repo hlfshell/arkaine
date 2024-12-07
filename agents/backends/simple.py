@@ -3,14 +3,14 @@ from __future__ import annotations
 import pathlib
 import re
 from os import path
-from typing import Any, Callable, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 from agents.backends.base import BaseBackend
 from agents.backends.common import simple_tool_results_to_prompts
 from agents.llms.llm import LLM, Prompt
-from agents.utils.templater import PromptTemplate
-from agents.tools.tool import Tool
+from agents.tools.tool import Context, Tool
 from agents.tools.types import ToolArguments, ToolResults
+from agents.utils.templater import PromptTemplate
 
 
 class SimpleBackend(BaseBackend):
@@ -21,6 +21,7 @@ class SimpleBackend(BaseBackend):
         tools: List[Tool],
         agent_explanation: str,
         max_simultaneous_tools: int = 1,
+        initial_state: Dict[str, Any] = {},
     ):
         """
         Creates a simple backend, which simply scans for single line function
@@ -35,7 +36,7 @@ class SimpleBackend(BaseBackend):
         agent_explanation is a string that explains the agent its purpose when
         solving the task.
         """
-        super().__init__(llm, tools, max_simultaneous_tools)
+        super().__init__(llm, tools, max_simultaneous_tools, initial_state)
 
         self.agent_explanation = agent_explanation
 
@@ -47,7 +48,7 @@ class SimpleBackend(BaseBackend):
             )
         )
 
-    def parse_for_result(self, text: str) -> str:
+    def parse_for_result(self, context: Context, text: str) -> str:
         """
         Check to see if the model outputs an answer prepended with Answer: or
         equivalent, strip it.
@@ -61,7 +62,7 @@ class SimpleBackend(BaseBackend):
             return text.strip()
 
     def parse_for_tool_calls(
-        self, text: str, stop_at_first_tool: bool = False
+        self, context: Context, text: str, stop_at_first_tool: bool = False
     ) -> List[Tuple[str, ToolArguments]]:
         """
         By default we will assume that functions follow the form
@@ -96,11 +97,11 @@ class SimpleBackend(BaseBackend):
         return tool_calls
 
     def tool_results_to_prompts(
-        self, prompt: Prompt, results: ToolResults
+        self, context: Context, prompt: Prompt, results: ToolResults
     ) -> List[Prompt]:
         return simple_tool_results_to_prompts(prompt, results)
 
-    def prepare_prompt(self, **kwargs) -> Prompt:
+    def prepare_prompt(self, context: Context, **kwargs) -> Prompt:
         # Create the tools block
         tools_block = ""
         for _, tool in self.tools.items():
