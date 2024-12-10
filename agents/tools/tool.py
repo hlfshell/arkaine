@@ -660,6 +660,14 @@ class Tool:
     def id(self) -> str:
         return self.__id
 
+    @property
+    def tname(self) -> str:
+        """
+        Short for tool name, it removes wrapper and modifying monikers
+        by only grabbing the name prior to any "::"
+        """
+        return self.name.split("::")[0]
+
     def get_context(self) -> Context:
         """
         get_context returns a blank context for use with this tool.
