@@ -116,6 +116,92 @@ class Example:
         }
 
 
+class ThreadSafeDataStore:
+
+    def __init__(self, lock: Optional[threading.Lock] = None):
+        self.__lock = lock or threading.Lock()
+        self.__data: Dict[str, Any] = {}
+
+    def __getitem__(self, name: str) -> Any:
+        with self.__lock:
+            return self.__data[name]
+
+    def __setitem__(self, name: str, value: Any):
+        with self.__lock:
+            self.__data[name] = value
+
+    def __contains__(self, name: str) -> bool:
+        with self.__lock:
+            return name in self.__data
+
+    def __delitem__(self, name: str):
+        with self.__lock:
+            del self.__data[name]
+
+    def __iter__(self):
+        with self.__lock:
+            return iter(self.__data)
+
+    def __str__(self) -> str:
+        with self.__lock:
+            if not self.__data:
+                return "{}"
+
+            items = []
+            for key, value in self.__data.items():
+                items.append(f"\t{key}: {value}")
+
+            return "{\n" + ",\n".join(items) + "\n}"
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
+    def operate(
+        self, keys: Union[str, List[str]], operation: Callable[[Any], Any]
+    ) -> None:
+        if isinstance(keys, str):
+            keys = [keys]
+
+        key_paths = []
+        with self.__lock:
+            current = self.__data
+            for key in keys[:-1]:
+                key_paths.append(key)
+                if key not in current or not isinstance(current[key], dict):
+                    raise ValueError(
+                        f"{''.join(f'[{k}]' for k in key_paths)} is not a "
+                        "dictionary"
+                    )
+                current = current[key]
+
+            final_key = keys[-1]
+            key_paths.append(final_key)
+            if final_key not in current:
+                raise KeyError(
+                    f"Key {''.join(f'[{k}]' for k in key_paths)} does not exist"
+                )
+
+            current[final_key] = operation(current[final_key])
+
+    def update(self, key: str, operation: Callable) -> Any:
+        with self.__lock:
+            value = operation(self.__data[key])
+            self.__data[key] = value
+            return value
+
+    def increment(self, key: str, amount=1):
+        return self.update(key, lambda x: x + amount)
+
+    def decrement(self, key: str, amount=1):
+        return self.update(key, lambda x: x - amount)
+
+    def append(self, keys: Union[str, List[str]], value: Any) -> None:
+        self.operate(keys, lambda x: x.append(value))
+
+    def concat(self, keys: Union[str, List[str]], value: Any) -> None:
+        self.operate(keys, lambda x: x + value)
+
+
 class Context:
     """
     Context is a thread safe class that tracks what each execution of a tool
@@ -195,8 +281,6 @@ class Context:
         self.__output: Any = None
         self.__created_at = time()
 
-        self.__data: Dict[str, Any] = {}
-
         self.__children: List[Context] = []
 
         self.__event_listeners_all: Dict[
@@ -215,6 +299,11 @@ class Context:
         self.__history: List[Event] = []
 
         self.__lock = threading.Lock()
+
+        self.__data: ThreadSafeDataStore = ThreadSafeDataStore(lock=self.__lock)
+        self.__head_data: ThreadSafeDataStore = ThreadSafeDataStore(
+            lock=self.__lock
+        )
 
         # No max workers due to possible lock synchronization issues
         self.__executor = ThreadPoolExecutor(
@@ -243,67 +332,43 @@ class Context:
         self.__children.clear()
 
     def __getitem__(self, name: str) -> Any:
-        with self.__lock:
-            if name not in self.__data:
-                return None
-            return self.__data.get(name)
+        return self.__data[name]
 
     def __setitem__(self, name: str, value: Any):
-        with self.__lock:
-            self.__data[name] = value
+        self.__data[name] = value
 
     def __contains__(self, name: str) -> bool:
-        with self.__lock:
-            return name in self.__data
+        return name in self.__data
 
     def __delitem__(self, name: str):
-        with self.__lock:
-            del self.__data[name]
+        del self.__data[name]
+
+    @property
+    def head(self) -> ThreadSafeDataStore:
+        if self.is_root:
+            return self.__head_data
+        else:
+            return self.root.head
 
     def operate(
         self, keys: Union[str, List[str]], operation: Callable[[Any], Any]
     ) -> None:
-        if isinstance(keys, str):
-            keys = [keys]
-
-        key_paths = []
-        with self.__lock:
-            current = self.__data
-            for key in keys[:-1]:
-                key_paths.append(key)
-                if key not in current or not isinstance(current[key], dict):
-                    raise ValueError(
-                        f"{''.join(f'[{k}]' for k in key_paths)} is not a "
-                        "dictionary"
-                    )
-                current = current[key]
-
-            final_key = keys[-1]
-            key_paths.append(final_key)
-            if final_key not in current:
-                raise KeyError(
-                    f"Key {''.join(f'[{k}]' for k in key_paths)} does not exist"
-                )
-
-            current[final_key] = operation(current[final_key])
+        self.__data.operate(keys, operation)
 
     def update(self, key: str, operation: Callable) -> Any:
-        with self.__lock:
-            value = operation(self.__data[key])
-            self.__data[key] = value
-            return value
+        return self.__data.update(key, operation)
 
-    def increment(self, key: str, amount: int = 1):
-        return self.update(key, lambda x: x + amount)
+    def increment(self, key: str, amount=1):
+        return self.__data.increment(key, amount)
 
-    def decrement(self, key: str, amount: int = 1):
-        return self.update(key, lambda x: x - amount)
+    def decrement(self, key: str, amount=1):
+        return self.__data.decrement(key, amount)
 
     def append(self, keys: Union[str, List[str]], value: Any) -> None:
-        self.operate(keys, lambda x: x.append(value))
+        self.__data.append(keys, value)
 
     def concat(self, keys: Union[str, List[str]], value: Any) -> None:
-        self.operate(keys, lambda x: x + value)
+        self.__data.concat(keys, value)
 
     @property
     def root(self) -> Context:
