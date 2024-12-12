@@ -11,6 +11,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 from uuid import uuid4
 
 from agents.registrar.registrar import Registrar
+from agents.tools.datastore import ThreadSafeDataStore
 from agents.tools.events import (
     ChildContextCreated,
     ContextUpdate,
@@ -116,92 +117,6 @@ class Example:
         }
 
 
-class ThreadSafeDataStore:
-
-    def __init__(self, lock: Optional[threading.Lock] = None):
-        self.__lock = lock or threading.Lock()
-        self.__data: Dict[str, Any] = {}
-
-    def __getitem__(self, name: str) -> Any:
-        with self.__lock:
-            return self.__data[name]
-
-    def __setitem__(self, name: str, value: Any):
-        with self.__lock:
-            self.__data[name] = value
-
-    def __contains__(self, name: str) -> bool:
-        with self.__lock:
-            return name in self.__data
-
-    def __delitem__(self, name: str):
-        with self.__lock:
-            del self.__data[name]
-
-    def __iter__(self):
-        with self.__lock:
-            return iter(self.__data)
-
-    def __str__(self) -> str:
-        with self.__lock:
-            if not self.__data:
-                return "{}"
-
-            items = []
-            for key, value in self.__data.items():
-                items.append(f"\t{key}: {value}")
-
-            return "{\n" + ",\n".join(items) + "\n}"
-
-    def __repr__(self) -> str:
-        return self.__str__()
-
-    def operate(
-        self, keys: Union[str, List[str]], operation: Callable[[Any], Any]
-    ) -> None:
-        if isinstance(keys, str):
-            keys = [keys]
-
-        key_paths = []
-        with self.__lock:
-            current = self.__data
-            for key in keys[:-1]:
-                key_paths.append(key)
-                if key not in current or not isinstance(current[key], dict):
-                    raise ValueError(
-                        f"{''.join(f'[{k}]' for k in key_paths)} is not a "
-                        "dictionary"
-                    )
-                current = current[key]
-
-            final_key = keys[-1]
-            key_paths.append(final_key)
-            if final_key not in current:
-                raise KeyError(
-                    f"Key {''.join(f'[{k}]' for k in key_paths)} does not exist"
-                )
-
-            current[final_key] = operation(current[final_key])
-
-    def update(self, key: str, operation: Callable) -> Any:
-        with self.__lock:
-            value = operation(self.__data[key])
-            self.__data[key] = value
-            return value
-
-    def increment(self, key: str, amount=1):
-        return self.update(key, lambda x: x + amount)
-
-    def decrement(self, key: str, amount=1):
-        return self.update(key, lambda x: x - amount)
-
-    def append(self, keys: Union[str, List[str]], value: Any) -> None:
-        self.operate(keys, lambda x: x.append(value))
-
-    def concat(self, keys: Union[str, List[str]], value: Any) -> None:
-        self.operate(keys, lambda x: x + value)
-
-
 class Context:
     """
     Context is a thread safe class that tracks what each execution of a tool
@@ -225,11 +140,17 @@ class Context:
     5. name - a human readable name for the tool/agent
     6. args - the arguments passed to the tool/agent for this execution
 
-    Contexts also have a controlled set of data features, ie ctx["key"] =
-    value. This is thread safe. This is allowed on any context for debugging
-    purposes for composer and logger and the like. It is not advised to expect
-    this for in-between tool state passing unless you are building the entire
-    chain of execution.
+    Contexts also have a controlled set of data features meant for potential
+    debugging or passing of state information throughout a tool's lifetime. To
+    access this data, you can use ctx["key"] = value and similar notation - it
+    implements a ThreadSafeDataStore in the background, adding additional
+    thread safe nested attribute operations. Data stored and used in this
+    manner is for a single level of context, for this tool alone. If you wish
+    to have inter tool state sharing, utilize the x attribute, which is a
+    ThreadSafeDataStore that is shared across all contexts in the chain by
+    attaching to the root context. This data store is unique to the individual
+    execution of the entire tool chain (hence x, for execution), and allows a
+    thread safe shared data store for multiple tools simultaneously.
 
     Updates to the context's attributes are broadcasted under the event type
     ContextUpdate ("context_update" for the listeners). The output is
@@ -300,10 +221,8 @@ class Context:
 
         self.__lock = threading.Lock()
 
-        self.__data: ThreadSafeDataStore = ThreadSafeDataStore(lock=self.__lock)
-        self.__head_data: ThreadSafeDataStore = ThreadSafeDataStore(
-            lock=self.__lock
-        )
+        self.__data: ThreadSafeDataStore = ThreadSafeDataStore()
+        self.__x: ThreadSafeDataStore = ThreadSafeDataStore()
 
         # No max workers due to possible lock synchronization issues
         self.__executor = ThreadPoolExecutor(
@@ -344,11 +263,11 @@ class Context:
         del self.__data[name]
 
     @property
-    def head(self) -> ThreadSafeDataStore:
+    def x(self) -> ThreadSafeDataStore:
         if self.is_root:
-            return self.__head_data
+            return self.__x
         else:
-            return self.root.head
+            return self.root.x
 
     def operate(
         self, keys: Union[str, List[str]], operation: Callable[[Any], Any]
