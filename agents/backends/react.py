@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import pathlib
 from os import path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from pydantic import BaseModel
 
@@ -29,9 +29,15 @@ class ReActBackend(BaseBackend):
         tools: List[Tool],
         agent_explanation: str,
         initial_state: Dict[str, Any] = {},
+        process_answer: Optional[Callable[[Any], Any]] = None,
+        ignore_actions_without_input: bool = True,
     ):
         super().__init__(
-            llm, tools, max_simultaneous_tools=1, initial_state=initial_state
+            llm,
+            tools,
+            max_simultaneous_tools=1,
+            initial_state=initial_state,
+            process_answer=process_answer,
         )
 
         self.agent_explanation = agent_explanation
@@ -42,6 +48,7 @@ class ReActBackend(BaseBackend):
                 "react.prompt",
             )
         )
+        self.ignore_actions_without_input = ignore_actions_without_input
 
     def __parse(self, text: str) -> ReActResponse:
         lines = text.strip().split("\n")
@@ -56,7 +63,8 @@ class ReActBackend(BaseBackend):
         if lines and lines[0].startswith("Thought:"):
             results["Thought"] = lines.pop(0).split("Thought:", 1)[1].strip()
         else:
-            raise FormatException
+            # raise FormatException
+            results["Thought"] = ""
 
         # Extract Action and Action Input
         while lines:
@@ -83,7 +91,11 @@ class ReActBackend(BaseBackend):
 
         # Validation
         if results["Action"] is not None and results["Action Input"] is None:
-            raise ValueError("Action specified without Action Input")
+            if not self.ignore_actions_without_input:
+                raise ValueError("Action specified without Action Input")
+            else:
+                results["Action"] = None
+                results["Action Input"] = None
 
         # Handle missing Answer if Action is present - necessary for
         # pydantic
@@ -93,6 +105,16 @@ class ReActBackend(BaseBackend):
         # Convert Action Input to ActionInput for pydantic
         results["ActionInput"] = results["Action Input"]
         del results["Action Input"]
+
+        # If everything is blank, usually the model has output
+        # the answer without the thought or Answer label
+        if (
+            not results["Thought"]
+            and not results["Action"]
+            and not results["ActionInput"]
+            and not results["Answer"]
+        ):
+            results["Answer"] = text.strip()
 
         # Use Pydantic for final validation and parsing
         return ReActResponse(**results)
@@ -148,10 +170,16 @@ class ReActBackend(BaseBackend):
         for _, tool in self.tools.items():
             tools_block += f"{tool}\n"
 
+        if len(self.tools) > 1:
+            tool_names = f"One of {', '.join(self.tools.keys())}"
+        else:
+            tool_names = f"The tool {list(self.tools.keys())[0]}"
+
         return self.__templater.render(
             {
                 # "agent_explanation": self.agent_explanation,
                 "tools_block": tools_block,
+                "tool_names": tool_names,
                 "task": kwargs["task"],
             }
         )
