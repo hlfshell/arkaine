@@ -1,36 +1,135 @@
 from __future__ import annotations
 
 import inspect
+import random
 import re
+import string
 from functools import wraps
-from typing import Callable, List, Optional, get_type_hints, _GenericAlias, Any
+from typing import Any, Callable, List, Optional, _GenericAlias, get_type_hints
 
-from agents.tools.tool import Tool, Argument
+from agents.tools.tool import Argument, Tool
 
 
-def _get_full_type_str(type_hint: Any) -> str:
+def toolify(
+    tool_name: Optional[str] = None, tool_description: Optional[str] = None
+):
     """
-    Get a string representation of a type hint, including generic parameters.
+    Decorator that converts a function into a Tool object.
     """
-    if isinstance(type_hint, _GenericAlias):
-        return str(type_hint).replace("typing.", "")
-    return getattr(type_hint, "__name__", str(type_hint))
+
+    def decorator(func: Callable) -> Tool:
+        # Get function signature
+        sig = inspect.signature(func)
+
+        # Get type hints
+        type_hints = get_type_hints(func)
+
+        # Parse docstring
+        doc_description, arg_descriptions, return_desc, doc_name = (
+            _parse_docstring(func.__doc__)
+        )
+
+        # Determine name priority: explicit tool_name > docstring name > function name > random lambda name
+        if func.__name__ == "<lambda>":
+            name = tool_name or doc_name or f"lambda_{_generate_random_id()}"
+        else:
+            name = tool_name or doc_name or func.__name__
+
+        # Use provided name/description or defaults
+        description = tool_description or doc_description
+
+        # Add return description to tool description if available
+        if return_desc:
+            description = (
+                f"{description}\n\nReturns: {return_desc}"
+                if description
+                else f"Returns: {return_desc}"
+            )
+        elif not description:
+            description = f"Tool for {func.__name__}"
+
+        # Create Arguments list
+        arguments: List[Argument] = []
+
+        for param_name, param in sig.parameters.items():
+            # Skip self/cls for methods
+            if param_name in ("self", "cls"):
+                continue
+
+            # Determine if argument is required
+            required = param.default == inspect.Parameter.empty
+
+            # Get default value if exists
+            default = None if required else str(param.default)
+
+            # Get type as string
+            param_type = type_hints.get(param_name, "Any")
+            type_str = _get_full_type_str(param_type)
+
+            # Get description from docstring if available
+            param_desc = arg_descriptions.get(
+                param_name, f"Parameter {param_name}"
+            )
+
+            # Create Argument object
+            arg = Argument(
+                name=param_name,
+                description=param_desc,
+                type=type_str,
+                required=required,
+                default=default,
+            )
+            arguments.append(arg)
+
+        # Create and return Tool
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            return func(*args, **kwargs)
+
+        tool = Tool(
+            name=name,
+            description=description,
+            args=arguments,
+            func=wrapper,
+        )
+
+        return tool
+
+    # Handle case where decorator is used without parentheses
+    if callable(tool_name):
+        func = tool_name
+        tool_name = None
+        return decorator(func)
+
+    return decorator
 
 
 def _parse_docstring(
     docstring: Optional[str],
-) -> tuple[str, dict[str, str], Optional[str]]:
+) -> tuple[str, dict[str, str], Optional[str], Optional[str]]:
     """
-    Parse a docstring to extract the description, argument descriptions,
+    Parse a docstring to extract the name, description, argument descriptions,
     and return description.
     """
     if not docstring:
-        return "", {}, None
+        return "", {}, None, None
 
     # Clean and split the docstring
     lines = [line.strip() for line in docstring.split("\n")]
     if not lines:
-        return "", {}, None
+        return "", {}, None, None
+
+    # Look for Name: tag
+    name = None
+    cleaned_lines = []
+    for line in lines:
+        if line.lower().startswith("name:"):
+            name = line[5:].strip()
+        else:
+            cleaned_lines.append(line)
+
+    # Process the rest of the docstring with cleaned lines
+    lines = cleaned_lines
 
     description = []
     arg_descriptions: dict[str, str] = {}
@@ -168,93 +267,18 @@ def _parse_docstring(
     if return_description:
         return_description = return_description.strip()
 
-    return description, arg_descriptions, return_description
+    return description, arg_descriptions, return_description, name
 
 
-def toolify(
-    tool_name: Optional[str] = None, tool_description: Optional[str] = None
-):
+def _get_full_type_str(type_hint: Any) -> str:
     """
-    Decorator that converts a function into a Tool object.
+    Get a string representation of a type hint, including generic parameters.
     """
+    if isinstance(type_hint, _GenericAlias):
+        return str(type_hint).replace("typing.", "")
+    return getattr(type_hint, "__name__", str(type_hint))
 
-    def decorator(func: Callable) -> Tool:
-        # Get function signature
-        sig = inspect.signature(func)
 
-        # Get type hints
-        type_hints = get_type_hints(func)
-
-        # Parse docstring
-        doc_description, arg_descriptions, return_desc = _parse_docstring(
-            func.__doc__
-        )
-
-        # Use provided name/description or defaults
-        name = tool_name or func.__name__
-        description = tool_description or doc_description
-
-        # Add return description to tool description if available
-        if return_desc:
-            description = (
-                f"{description}\n\nReturns: {return_desc}"
-                if description
-                else f"Returns: {return_desc}"
-            )
-        elif not description:
-            description = f"Tool for {func.__name__}"
-
-        # Create Arguments list
-        arguments: List[Argument] = []
-
-        for param_name, param in sig.parameters.items():
-            # Skip self/cls for methods
-            if param_name in ("self", "cls"):
-                continue
-
-            # Determine if argument is required
-            required = param.default == inspect.Parameter.empty
-
-            # Get default value if exists
-            default = None if required else str(param.default)
-
-            # Get type as string
-            param_type = type_hints.get(param_name, "Any")
-            type_str = _get_full_type_str(param_type)
-
-            # Get description from docstring if available
-            param_desc = arg_descriptions.get(
-                param_name, f"Parameter {param_name}"
-            )
-
-            # Create Argument object
-            arg = Argument(
-                name=param_name,
-                description=param_desc,
-                type=type_str,
-                required=required,
-                default=default,
-            )
-            arguments.append(arg)
-
-        # Create and return Tool
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            return func(*args, **kwargs)
-
-        tool = Tool(
-            name=name,
-            description=description,
-            args=arguments,
-            func=wrapper,
-        )
-
-        return tool
-
-    # Handle case where decorator is used without parentheses
-    if callable(tool_name):
-        func = tool_name
-        tool_name = None
-        return decorator(func)
-
-    return decorator
+def _generate_random_id(n: int = 6) -> str:
+    """Generate a random n-character alphanumeric string (lowercase)."""
+    return "".join(random.choices(string.ascii_lowercase + string.digits, k=n))
