@@ -130,7 +130,9 @@ class ParallelList(Tool):
             examples=tool.examples,
         )
 
-    def parallelize(self, context: Context, input: Iterable) -> List[Any]:
+    def parallelize(self, context: Context, **kwargs) -> List[Any]:
+        input = kwargs[self.args[0].name]
+
         if not isinstance(input, Iterable):
             raise ValueError(
                 f"The input argument must be an iterable, got {type(input)}"
@@ -141,7 +143,8 @@ class ParallelList(Tool):
 
         # Fire off the tool in parallel with the executor for each input
         futures = {
-            self._threadpool.submit(self.tool.invoke, context, **kwargs): idx
+            # self._threadpool.submit(self.tool.invoke, context, **kwargs): idx
+            self._threadpool.submit(self.tool, context, **kwargs): idx
             for idx, kwargs in enumerate(input)
         }
 
