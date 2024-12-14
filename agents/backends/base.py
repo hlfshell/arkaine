@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from agents.events import (
     AgentBackendStep,
@@ -22,6 +22,7 @@ class BaseBackend(ABC):
         tools: List[Tool],
         max_simultaneous_tools: int = 1,
         initial_state: Dict[str, Any] = {},
+        process_answer: Optional[Callable[[Any], Any]] = None,
     ):
         super().__init__()
         self.llm = llm
@@ -31,6 +32,7 @@ class BaseBackend(ABC):
 
         self.max_simultaneous_tool_calls = max_simultaneous_tools
         self.initial_state = initial_state
+        self.process_answer = process_answer
 
     @abstractmethod
     def parse_for_tool_calls(
@@ -155,7 +157,10 @@ class BaseBackend(ABC):
             result = self.parse_for_result(context, response)
 
             if result:
-                return self.parse_for_result(context, response)
+                if self.process_answer:
+                    return self.process_answer(result)
+                else:
+                    return result
             elif len(tool_calls) > 0:
                 context.broadcast(AgentToolCalls(tool_calls))
                 tool_results = self.call_tools(context, tool_calls)
