@@ -1,100 +1,16 @@
 import os
-import re
-from enum import Enum
-from typing import Dict, List, Optional
-from urllib.parse import quote_plus, urlparse
+from typing import List, Optional, Union
+from urllib.parse import quote_plus
 
 import requests
 from bs4 import BeautifulSoup
-from markdownify import markdownify as md
 
 from agents.tools.tool import Argument, Tool
+from agents.utils.website import Website
 
 DUCK_DUCK_GO = "duckduckgo"
 BING = "bing"
 GOOGLE = "google"
-
-
-class Website:
-    def __init__(
-        self,
-        url: str,
-        title: str = "",
-        snippet: str = "",
-        load_content: bool = False,
-    ):
-        self.url = url
-        self.title = title
-        self.snippet = snippet
-        self.domain = Website.extract_domain(url)
-        self.raw_content: Optional[str] = None
-
-        if load_content:
-            self.load_content()
-
-    @classmethod
-    def extract_domain(self, url: str) -> str:
-        parsed_url = urlparse(url)
-        domain = parsed_url.netloc
-        domain = domain.split(":")[0]
-        domain = re.sub(r"^www\.", "", domain)
-        parts = domain.split(".")
-        if len(parts) > 2:
-            domain = ".".join(parts[-2:])
-        return domain
-
-    def load_content(self):
-        # response = requests.get(self.url)
-        # response.raise_for_status()
-        # self.raw_content = response.text
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
-            "Accept-Encoding": "gzip",
-            "Connection": "keep-alive",
-        }
-
-        session = requests.Session()
-        session.headers.update(headers)
-        response = session.get(self.url)
-        response.raise_for_status()
-
-        if "Content-Encoding" in response.headers:
-            if response.headers["Content-Encoding"] == "gzip":
-                self.raw_content = response.content.decode(
-                    "utf-8", errors="replace"
-                )
-        else:
-            self.raw_content = response.text
-
-    def get_body(self):
-        if not self.raw_content:
-            self.load_content()
-        soup = BeautifulSoup(self.raw_content, "html.parser")
-        return soup.body
-
-    def get_markdown(self):
-        if not self.raw_content:
-            self.load_content()
-        soup = BeautifulSoup(self.raw_content, "html.parser")
-        markdown = md(soup.body.get_text())
-
-        # Remove extraneous blank lines - no more than one in
-        # a row
-        markdown = re.sub(r"\n+", "\n", markdown)
-        return markdown
-
-    def format(self, template: str) -> str:
-        return template.format(
-            url=self.url,
-            domain=self.domain,
-            title=self.title,
-            snippet=self.snippet,
-        )
-
-    def __str__(self):
-        return f"{self.title}\n{self.url}\n\t{self.snippet}"
 
 
 class Websearch(Tool):
@@ -102,9 +18,28 @@ class Websearch(Tool):
         self,
         provider: str = DUCK_DUCK_GO,
         api_key: Optional[str] = None,
+        limit: Optional[Union[int, bool]] = False,
+        offset: Optional[bool] = False,
+        domains: Optional[Union[List[str], bool]] = False,
     ):
         self.provider = provider.lower()
         self.api_key = api_key
+
+        if limit and isinstance(limit, int):
+            self.forced_limit = limit
+        elif limit:
+            self.allow_limit = True
+        else:
+            self.allow_limit = False
+
+        if domains and isinstance(domains, list):
+            self.forced_domains = domains
+        elif domains:
+            self.allow_domains = True
+        else:
+            self.allow_domains = False
+
+        self.__allow_offset = offset
 
         # Validate API key requirements
         if self.provider == BING:
@@ -118,39 +53,53 @@ class Websearch(Tool):
                 if not self.api_key:
                     raise ValueError("Google search requires an API key")
 
-        super().__init__(
-            name="websearch",
-            description=(
-                "Searches the web for a given query using multiple providers"
+        args = [
+            Argument(
+                "query",
+                "The query to search for",
+                "string",
+                required=True,
             ),
-            args=[
-                Argument(
-                    "query",
-                    "The query to search for",
-                    "string",
-                    required=True,
-                ),
+        ]
+
+        if self.allow_domains:
+            args.append(
                 Argument(
                     "domains",
                     "A list of domains to restrict the search to",
                     "list[str]",
                     required=False,
-                ),
+                )
+            )
+
+        if self.allow_limit:
+            args.append(
                 Argument(
                     "limit",
                     "The number of results to return",
                     "int",
                     required=False,
                     default=10,
-                ),
+                )
+            )
+
+        if self.__allow_offset:
+            args.append(
                 Argument(
                     "offset",
                     "The offset to start the search from - optional",
                     "int",
                     required=False,
                     default=0,
-                ),
-            ],
+                )
+            )
+
+        super().__init__(
+            name="websearch",
+            description=(
+                "Searches the web for a given query using multiple providers"
+            ),
+            args=args,
             func=self.search,
         )
 
@@ -268,11 +217,23 @@ class Websearch(Tool):
         offset: int = 0,
     ) -> List[Website]:
         # Handle string domains input
-        if isinstance(domains, str):
+        if self.forced_domains:
+            domains = self.forced_domains
+        elif self.allow_domains and isinstance(domains, str):
             if domains.startswith("[") and domains.endswith("]"):
                 domains = domains[1:-1].split(", ")
             else:
                 domains = [domains]
+
+        if self.forced_limit:
+            limit = self.forced_limit
+        elif self.allow_limit and isinstance(limit, int):
+            limit = limit
+
+        if self.__allow_offset:
+            offset = offset
+        else:
+            offset = 0
 
         # Map providers to their search methods
         search_methods = {
