@@ -658,7 +658,7 @@ class Tool:
         """
         return Context(self)
 
-    def _init_context_(self, context: Optional[Context], **kwargs) -> Context:
+    def _init_context_(self, context: Optional[Context], kwargs) -> Context:
         if context is None:
             ctx = Context(self)
         else:
@@ -685,8 +685,7 @@ class Tool:
         return self.func(**kwargs)
 
     def __call__(self, context: Optional[Context] = None, **kwargs) -> Any:
-        with self._init_context_(context, **kwargs) as ctx:
-
+        with self._init_context_(context, kwargs) as ctx:
             kwargs = self.fulfill_defaults(kwargs)
 
             self.check_arguments(kwargs)
