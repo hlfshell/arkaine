@@ -35,7 +35,7 @@ The framework uses the following key concepts:
 - **Agent**: A type of tool that utilizes an LLM and possibly other tools to perform a function. The default agent is merely a singular LLM call performing the function for the agent.
     - **MetaAgent** - A meta agent is an agent that can repeatedly call an LLM to try and perform its task.
     - **BackendAgent** - A backend agent is an agent that utilizes a **backend** to perform its task.
-- **Backend**: A backend is a system that empowers an LLM to utilize tools and detect when it is finished with its task.
+- **Backend**: A backend is a system that empowers an LLM to utilize tools and detect when it is finished with its task.S
 
 ## Installation
 
