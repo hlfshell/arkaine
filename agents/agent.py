@@ -60,10 +60,11 @@ class MetaAgent(Agent):
         description: str,
         args: List[Argument],
         llm: LLM,
+        examples: List[Example] = [],
         initial_state: Dict[str, Any] = {},
         max_steps: Optional[int] = None,
     ):
-        super().__init__(name, description, args, llm, None)
+        super().__init__(name, description, args, llm, examples)
         self.__initial_state = initial_state
         self.max_steps = max_steps
 
