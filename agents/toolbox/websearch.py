@@ -25,19 +25,19 @@ class Websearch(Tool):
         self.provider = provider.lower()
         self.api_key = api_key
 
+        self.forced_limit = 0
+        self.allow_limit = False
         if limit and isinstance(limit, int):
             self.forced_limit = limit
         elif limit:
             self.allow_limit = True
-        else:
-            self.allow_limit = False
 
+        self.forced_domains = []
+        self.allow_domains = False
         if domains and isinstance(domains, list):
             self.forced_domains = domains
         elif domains:
             self.allow_domains = True
-        else:
-            self.allow_domains = False
 
         self.__allow_offset = offset
 
