@@ -10,6 +10,7 @@ from types import TracebackType
 from typing import Any, Callable, Dict, List, Optional, Union
 from uuid import uuid4
 
+from agents.options.context import ContextOptions
 from agents.registrar.registrar import Registrar
 from agents.tools.datastore import ThreadSafeDataStore
 from agents.tools.events import (
@@ -242,6 +243,12 @@ class Context:
     ) -> bool:
         if exc_type is not None:
             self.exception = exc_value
+
+        if self.exception and ContextOptions.save_on_exception():
+            pass
+        elif ContextOptions.save_on_success():
+            pass
+
         return False
 
     def __del__(self):
@@ -551,7 +558,7 @@ class Context:
         for listener in self.__on_end_listeners:
             self.__executor.submit(listener, self)
 
-    def to_json(self) -> dict:
+    def to_json(self, children: bool = True, debug: bool = True) -> dict:
         """Convert Context to a JSON-serializable dictionary."""
         # We have to grab certain things prior to the lock to avoid
         # competing locks. This introduces a possible race condition
@@ -598,6 +605,16 @@ class Context:
                         except Exception:
                             data[key] = "Unable to serialize data"
 
+        if hasattr(self.args, "to_json"):
+            args = self.args.to_json()
+        else:
+            args = self.args
+
+        if children:
+            children = [child.to_json() for child in self.__children]
+        else:
+            children = []
+
         return {
             "id": self.__id,
             "parent_id": self.__parent.id if self.__parent else None,
@@ -605,14 +622,54 @@ class Context:
             "tool_id": self.__tool.id,
             "tool_name": self.__tool.name,
             "status": status,
-            "args": self.args,
+            "args": args,
             "output": output,
             "history": history,
             "created_at": self.__created_at,
-            "children": [child.to_json() for child in self.__children],
+            "children": children,
             "error": exception,
             "data": data,
         }
+
+    def save(
+        self,
+        filepath: Optional[str] = None,
+        children: bool = True,
+        debug: bool = True,
+    ):
+        """
+        Save the context and (by default, but toggleable) all children context
+        to the given filepath. Note that outputs or attached data are not
+        necessarily saved if they can't be converted to JSON. All of the
+        arguments, data, and outputs are first checked for a to_json method,
+        then via json.dumps, and finally just an attempted str() conversion.
+        Finally, if all of this fails, it is saved as "Unable to serialize" and
+        that data is lost.
+
+        All x data is recorded only if it is the root context.
+
+        Args:
+            filepath: The path to save the context to. If None, the context
+                will be saved to the default folder per ContextOptions
+            children: Whether to expand children contexts
+            debug: Whether to save debug information if present
+        """
+        if filepath is None:
+            dir = ContextOptions.save_folder()
+            if self.status == "success":
+                dir = dir / ContextOptions.success_folder()
+            elif self.status == "exception":
+                dir = dir / ContextOptions.exception_folder()
+            else:
+                dir = dir / ContextOptions.running_folder()
+            dir = dir / self.id
+            filepath = dir / f"{self.id}.json"
+
+        json_data = self.to_json(children=children, debug=debug)
+
+        # Save the context
+        with open(filepath, "w") as f:
+            json.dump(json_data, f)
 
 
 class Tool:
@@ -687,6 +744,8 @@ class Tool:
     def __call__(self, context: Optional[Context] = None, **kwargs) -> Any:
         with self._init_context_(context, kwargs) as ctx:
             kwargs = self.fulfill_defaults(kwargs)
+
+            ctx.args = kwargs
 
             self.check_arguments(kwargs)
 
