@@ -224,6 +224,7 @@ class Context:
 
         self.__data: ThreadSafeDataStore = ThreadSafeDataStore()
         self.__x: ThreadSafeDataStore = ThreadSafeDataStore()
+        self.__debug: ThreadSafeDataStore = ThreadSafeDataStore()
 
         # No max workers due to possible lock synchronization issues
         self.__executor = ThreadPoolExecutor(
@@ -592,18 +593,17 @@ class Context:
                     except Exception:
                         output = "Unable to serialize output"
 
-            data = {}
-            for key, value in self.__data.items():
-                if hasattr(value, "to_json"):
-                    data[key] = value.to_json()
-                else:
-                    try:
-                        data[key] = json.dumps(value)
-                    except Exception:
-                        try:
-                            data[key] = str(value)
-                        except Exception:
-                            data[key] = "Unable to serialize data"
+            data = self.__data.to_json()
+
+            if self.__parent is None:
+                x = self.__x.to_json()
+            else:
+                x = None
+
+            if debug:
+                debug = self.__debug.to_json()
+            else:
+                debug = None
 
         if hasattr(self.args, "to_json"):
             args = self.args.to_json()
@@ -629,6 +629,8 @@ class Context:
             "children": children,
             "error": exception,
             "data": data,
+            "x": x,
+            "debug": debug,
         }
 
     def save(
@@ -671,6 +673,125 @@ class Context:
         with open(filepath, "w") as f:
             json.dump(json_data, f)
 
+    @classmethod
+    def load(cls, filepath: str) -> Context:
+        """
+        Load a context and its children from a JSON file.
+
+        Args:
+            filepath: Path to the JSON file containing the context data
+
+        Returns:
+            Context: The reconstructed context object
+
+        Note:
+            Tool references are resolved in the following order:
+            1. By tool ID from the Registrar
+            2. By tool name from the Registrar
+            3. Set to None if no matching tool is found
+        """
+        with open(filepath, "r") as f:
+            data = json.load(f)
+
+        return cls.__load_from_json(data)
+
+    @classmethod
+    def __load_from_json(cls, data: dict) -> Context:
+        """Create a context object from JSON data."""
+        # Find the associated tool
+        tool = cls._find_tool(data.get("tool_id"), data.get("tool_name"))
+
+        # Create the base context
+        context = cls(tool=tool)
+
+        # Load the basic properties
+        context.__id = data["id"]
+        context.__created_at = data["created_at"]
+
+        # Load args
+        if data.get("args"):
+            context.__args = data["args"]
+
+        # Load output if present
+        if data.get("output") is not None:
+            context.__output = data["output"]
+
+        # Load error if present
+        if data.get("error"):
+            context.__exception = Exception(data["error"])
+
+        # Load data stores
+        if data.get("data"):
+            context.__data = ThreadSafeDataStore.from_json(data["data"])
+        if (
+            data.get("x") and data.get("parent_id") is None
+        ):  # Only load x data for root
+            context.__x = ThreadSafeDataStore.from_json(data["x"])
+        if data.get("debug"):
+            context.__debug = ThreadSafeDataStore.from_json(data["debug"])
+
+        # Load history
+        if data.get("history"):
+            context.__history = cls.__load_history(data["history"])
+
+        # Load children recursively
+        if data.get("children"):
+            for child_data in data["children"]:
+                child = cls.__load_from_json(child_data)
+                child.__parent = context
+                context.__children.append(child)
+
+        return context
+
+    @staticmethod
+    def _find_tool(
+        tool_id: Optional[str], tool_name: Optional[str]
+    ) -> Optional[Tool]:
+        """Find a tool by ID or name from the Registrar."""
+        tools = Registrar.get_tools()
+
+        # Try finding by ID first
+        if tool_id:
+            for tool in tools:
+                if tool.id == tool_id:
+                    return tool
+
+        # Try finding by name if ID search failed
+        if tool_name:
+            for tool in tools:
+                if tool.name == tool_name:
+                    return tool
+
+        return None
+
+    @staticmethod
+    def __load_history(history_data: List[dict]) -> List[Event]:
+        """Convert history data back into Event objects."""
+        events = []
+        for event_data in history_data:
+            event_type = event_data.get("_event_type")
+            if event_type == "tool_called":
+                events.append(ToolCalled(event_data.get("args", {})))
+            elif event_type == "tool_return":
+                events.append(ToolReturn(event_data.get("value")))
+            elif event_type == "tool_exception":
+                events.append(
+                    ToolException(Exception(event_data.get("error", "")))
+                )
+            elif event_type == "context_update":
+                events.append(
+                    ContextUpdate(
+                        event_data.get("tool_id"), event_data.get("tool_name")
+                    )
+                )
+            elif event_type == "child_context_created":
+                events.append(
+                    ChildContextCreated(
+                        event_data.get("parent_id"), event_data.get("child_id")
+                    )
+                )
+        return events
+
 
 class Tool:
     def __init__(
@@ -680,8 +801,9 @@ class Tool:
         args: List[Argument],
         func: Callable,
         examples: List[Example] = [],
+        id: Optional[str] = None,
     ):
-        self.__id = str(uuid4())
+        self.__id = id or str(uuid4())
         self.name = name
         self.description = description
         self.args = args
@@ -744,8 +866,6 @@ class Tool:
     def __call__(self, context: Optional[Context] = None, **kwargs) -> Any:
         with self._init_context_(context, kwargs) as ctx:
             kwargs = self.fulfill_defaults(kwargs)
-
-            ctx.args = kwargs
 
             self.check_arguments(kwargs)
 
