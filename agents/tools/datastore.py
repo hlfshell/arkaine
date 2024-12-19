@@ -1,5 +1,6 @@
+import json
 import threading
-from typing import Any, Callable, Dict, List, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 
 class ThreadSafeDataStore:
@@ -25,10 +26,10 @@ class ThreadSafeDataStore:
         under high contention.
     """
 
-    def __init__(self):
+    def __init__(self, data: Optional[Dict[str, Any]] = None):
         """Initialize an empty thread-safe data store."""
         self.__lock = threading.Lock()
-        self.__data: Dict[str, Any] = {}
+        self.__data: Dict[str, Any] = data or {}
 
     def __getitem__(self, name: str) -> Any:
         with self.__lock:
@@ -149,3 +150,20 @@ class ThreadSafeDataStore:
 
     def concat(self, keys: Union[str, List[str]], value: Any) -> None:
         self.operate(keys, lambda x: x + value)
+
+    def to_json(self) -> Dict[str, Any]:
+        with self.__lock:
+            data = {}
+            for key, value in self.__data.items():
+                if hasattr(value, "to_json"):
+                    data[key] = value.to_json()
+                else:
+                    data[key] = value
+
+        return data
+
+    @classmethod
+    def from_json(cls, data: dict) -> "ThreadSafeDataStore":
+        """Create a ThreadSafeDataStore from JSON data."""
+        store = cls(data)
+        return store
