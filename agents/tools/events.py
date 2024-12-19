@@ -1,9 +1,8 @@
 import json
+import traceback
 from datetime import datetime, timezone
 from time import time
 from typing import Any
-
-import traceback
 
 from agents.tools.types import ToolArguments
 
@@ -20,6 +19,10 @@ class Event:
         self._event_type = event_type
         self.data = data
         self._timestamp = time()
+
+    @property
+    def timestamp(self) -> float:
+        return self._timestamp
 
     def _get_readable_timestamp(self) -> str:
         return datetime.fromtimestamp(
