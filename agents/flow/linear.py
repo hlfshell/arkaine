@@ -68,7 +68,32 @@ class Linear(Tool):
         # can access them for reference.
         context.x["init_input"] = output
 
-        for step in self.steps:
+        if not context["args"]:
+            context["args"] = {}
+
+        # The start index is what tools we're going to call.
+        # We start with 0, unless this context is a retry/resume
+        # at which point we back it up one go and then start
+        # from there.
+        start_index = (
+            0 if "step_index" in context else context["step_index"] - 1
+        )
+        # Similarly, we load up the last input, or use the passed in
+        # if this is a normal call.
+        output = (
+            kwargs
+            if start_index not in context["args"]
+            else context["args"][start_index]
+        )
+
+        for index, step in enumerate(self.steps):
+            # For resumes, we ignore prior steps
+            if index < start_index:
+                continue
+
+            context["step_index"] = index
+            context["args"][index] = output
+
             if isinstance(step, Tool):
                 output = step(context=context, **output)
             else:
@@ -96,3 +121,13 @@ class Linear(Tool):
                     ctx.broadcast(ToolReturn(output))
 
         return output
+
+    def rerun(self, context: Context):
+        """
+        Rerun a context from this point forward. Note that if the context
+        specified is part of a larger tree of contexts,
+        """
+        if not self.can_resume:
+            raise ValueError("This context cannot rerun - clear it first")
+
+        return self.__call__(context, context.kwargs)

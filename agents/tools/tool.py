@@ -193,6 +193,7 @@ class Context:
         self.__tool = tool
         self.__parent = parent
         self.__tool = tool
+        self.created_on = time()
 
         self.__root: Optional[Context] = None
         # Trigger getter to hunt for root
@@ -792,6 +793,306 @@ class Context:
                 )
         return events
 
+    def __events_clear_after(self, timestamp: float):
+        for event in self.__history:
+            if event.timestamp > timestamp:
+                # Technically we should be able to remove everything
+                # after the first index that triggered the timestamp,
+                # but because of threading it's not gauranteeed to
+                # be in time order
+                self.__history.remove(event)
+
+    def __events_clear_by_type(self, event_type: str):
+        for event in self.__history:
+            if event.type == event_type:
+                self.__history.remove(event)
+
+    def _clear(self):
+        """
+        _clear is a protected metod for internal use only. Do not depend
+        upon it.
+
+        It is used to clear the context's output and reset its parents to accept
+        new output.
+        """
+        # First, we need to go through each context (including this one)
+        # through our parents up to and including the root context, removing
+        # the output/exception at each point. We need to also remove all output
+        # and exception events from the history of these contexts.
+        ctx = self
+        while ctx is not None:
+            ctx.output = None
+            ctx.exception = None
+            ctx.__events_clear_by_type("tool_exception")
+            ctx.__events_clear_by_type("tool_return")
+            ctx = ctx.__parent
+
+        # Then we clear out all of our children, to be executed again.
+        self.__children = []
+
+        # Finally, we clear out all of our events, to be executed again.
+        self.__history = []
+
+    def _can_clear(self) -> bool:
+        """
+        _can_clear checks to see if the context's parent tool can support
+        resume, and thus can be properly cleared and restarted.
+        """
+        # Check the entire chain from this context to the root context,
+        # ensuring that each tool supports a resume (outside this one,
+        # which is merely getting reran)
+        if self.parent is None:
+            return False
+        ctx = self.parent
+        while ctx is not None:
+            if not ctx.tool.can_resume:
+                return False
+            ctx = ctx.__parent
+        return True
+
+    def prepare_for_retry(self) -> bool:
+        """
+        prepare_for_resume will clear the output and exceptions of unfinished
+        contexts, To do this, we will clear all exceptions across all contexts.
+
+        These contexts that are the source of the exception will be removed, and
+        the parent prepared to retry.
+        """
+        if not self.is_root:
+            raise ValueError("Can only be called on the root context")
+
+
+        for child in children:
+
+
+    def isolate_root_exceptions(
+        self, clone: bool = False, include_children: bool = True
+    ) -> List[Context]:
+        """
+        isolate_root_exceptions will return a list of all contexts that were
+        the source of an exception thrown.
+
+        To determine the source of the exception, we check to see if the node
+        itself has an exception, and, if so, if any of its children threw the
+        same exception. If so, the current node is not the source of that
+        exception, but a descendant is.
+
+        If you are cloning, you may also specify to axe the children in the
+        return context by setting include_children to False, or include all
+        children nodes as well. Setting include_children to False when clone is
+        set to False does nothing.
+
+        This only explores down the context tree, so it is suggested to utilize
+        this on a root context unless you are specifically isolating a larger
+        context tree.
+
+        Args:
+            clone: Whether to clone the context
+
+            include_children: Whether to include children in the return context
+
+        Returns:
+            List[Context]: Any contexts that created the initial exception
+        """
+        exception_contexts: List[Context] = []
+
+        if self.exception:
+            source = True
+            for child in self.children:
+                if child.exception and child.exception == self.exception:
+                    source = False
+                    break
+
+            if source:
+                exception_contexts.append(
+                    self if not clone
+                    else self.clone(include_children=include_children)
+                )
+
+        for child in self.children:
+            exception_contexts.extend(
+                child.isolate_root_exceptions(
+                    clone=clone, include_children=include_children
+                )
+            )
+
+        return exception_contexts
+
+    def isolate_by_tool(
+        self,
+        tool: Union[Tool, str],
+        include_children: bool = False,
+        clone=False,
+    ) -> List[Context]:
+        """
+        isolate_by_tool creates clones of each context within and below of this
+        context that utilizes the given tool. You may pass a tool by reference,
+        string id, or string name.
+
+        If include_children is True, then all children of the context will also
+        be cloned and isolated by the tool. If not, then only the context for
+        the given tool is returned. Because contexts can have children that are
+        subcalls of the same tool, you may get multiple clones of the same
+        contexts if children are included.
+
+        Args:
+            tool: The tool to isolate
+
+            include_children: Whether to include children of the context
+
+        Returns:
+            Context: The isolated contexts in a list. Order of execution is not
+            guaranteed.
+        """
+        isolated: List[Context] = []
+
+        ctx = self
+        while ctx is not None:
+            if isinstance(tool, Tool):
+                if ctx.tool == tool:
+                    isolated.append(
+                        ctx.clone(include_children=include_children)
+                    )
+            elif ctx.tool.id == tool or ctx.tool.name == tool:
+                isolated.append(ctx.clone(include_children=include_children))
+            for child in self.children:
+                isolated.extend(
+                    child.isolate_by_tool(
+                        tool, include_children=include_children
+                    )
+                )
+
+        return isolated
+
+    def clear_old(self, target: Optional[Union[str, Context]] = None):
+        if isinstance(target, Context):
+            target = target.id
+
+        # First, if we have exceptions, we clear them.
+        if self.__exception:
+            self.__exception = None
+
+        # Then, if the target is a descendant of this context,
+        # we clear all events after the descendant's creation,
+        # and our output if one is set.
+        if self._is_descendant(target):
+            self.output = None
+            self.__events_clear_after(target.created_on)
+
+        # If the target is specified and it is this context, we
+        # need to clear all events, and output, as well as all children
+        if target is self:
+            self.__history = []
+            self.__output = None
+            self.__children = []
+            return
+
+        # If the target is specified and it is one of our children, we need to
+        # clear all events after the child's creation, as well as that child,
+        # and this event's outputs
+        if self.__children:
+            for child in self.__children:
+                if child.id == target.id:
+                    self.__children.remove(child)
+                    self.__output = None
+
+                    return
+
+        # If the target is not specified OR it is not this context or a
+        # direct child of the context,
+
+    def __get_child(self, target: Union[str, Context]) -> Optional[Context]:
+        if isinstance(target, Context):
+            target = target.id
+
+        for child in self.__children:
+            if child.id == target:
+                return child
+        return None
+
+    def _is_descendant(self, target: Union[Context, str]) -> Optional[Context]:
+        """
+        Determine if this context is a child of the target context
+        or a sub child to any degree
+        """
+        id = target.id if isinstance(target, Context) else target
+        if self.__parent is None:
+            return False
+        if self.__root.id == id:
+            return self.__root
+        if self.__parent.id == id:
+            return True
+
+        return self.__parent._is_descendant(target)
+
+    def _is_ancestor(self, target: Union[Context, str]) -> bool:
+        """
+        Determine if this context is an ancestor (parent in some degree) of the
+        target context
+        """
+        id = target.id if isinstance(target, Context) else target
+        for child in self.__children:
+            if child.id == id:
+                return True
+            else:
+                if child._is_ancestor(target):
+                    return True
+        return False
+
+    def clone(self, include_children: bool = True) -> Context:
+        """
+        Clone this context. Note that id's MUST be unique, so ids will
+        change and references will not be preserved to the original copy,
+        but instead expected clones of children will be created.
+
+        If include_children is set to false, we ignore all children of
+        the target node. Note that we expect this to be called by the
+        root node.
+
+        Args:
+            include_children: Whether to include children of the context
+
+        Returns:
+            Context: A new Context instance with copied data but new IDs
+        """
+        # We need to add some protected methods to handle internal state copying
+        new_ctx = Context(tool=self.tool)
+
+        # Use existing public properties where possible
+        if self.args:
+            new_ctx.args = self.args.copy()
+        if self.output is not None:
+            new_ctx.output = self.output
+        if self.exception is not None:
+            new_ctx.exception = self.exception
+
+        # Add protected methods for internal state copying
+        new_ctx._copy_data_from(self)
+
+        # Clone children
+        if include_children:
+            for child in self.children:
+                child_clone = child.clone()
+                new_ctx._add_child(child_clone)
+
+        return new_ctx
+
+    def _copy_data_from(self, other: Context) -> None:
+        """Protected method to copy internal state from another context."""
+        with self.__lock:
+            self.__data = other.__data.clone()
+            self.__x = (
+                other.__x.clone() if other.is_root else ThreadSafeDataStore()
+            )
+            self.__debug = other.__debug.clone()
+            self.__history = other.__history.copy()
+
+    def _add_child(self, child: Context) -> None:
+        """Protected method to properly add a child context."""
+        with self.__lock:
+            self.__children.append(child)
+            child.__parent = self
+
 
 class Tool:
     def __init__(
@@ -822,6 +1123,16 @@ class Tool:
     @property
     def id(self) -> str:
         return self.__id
+
+    @property
+    def can_resume(self) -> bool:
+        """
+        A tool can only execute rerun
+        """
+        return (
+            type(self) == Tool
+            or self.rerun.__qualname__.split(".")[0] != "Tool"
+        )
 
     @property
     def tname(self) -> str:
@@ -903,6 +1214,19 @@ class Tool:
         self._executor.submit(wrapped_call, context, **kwargs)
 
         return context
+
+    def rerun(self, context: Context):
+        """
+        rerun a context that was previously paused.
+        """
+        # If the calling tool is not a Tool (ie a child class)
+        # then we should raise an error, as resume must be created by
+        # the tool that created the context.
+        if not isinstance(context.tool, Tool):
+            raise ValueError("Resume is not implemented on this tool")
+
+        context.executing = False
+        return self.__call__(context, context.kwargs)
 
     def examples_text(
         self, example_format: Optional[Callable[[Example], str]] = None

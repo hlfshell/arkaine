@@ -16,6 +16,7 @@ class Agent(Tool, ABC):
         llm: LLM,
         examples: List[Example] = [],
         process_answer: Optional[Callable[[str], Any]] = None,
+        id: Optional[str] = None,
     ):
         """
         An agent is a tool that utilizes an LLM. Prove an LLM model to generate
@@ -26,7 +27,7 @@ class Agent(Tool, ABC):
         the LLM and converted in whatever manner you wish. If it is not
         provided, the raw output of the LLM is simply returned instead.
         """
-        super().__init__(name, description, args, None, examples)
+        super().__init__(name, description, args, None, examples, id)
         self.llm = llm
         self.process_answer = process_answer
 
@@ -63,8 +64,9 @@ class MetaAgent(Agent):
         examples: List[Example] = [],
         initial_state: Dict[str, Any] = {},
         max_steps: Optional[int] = None,
+        id: Optional[str] = None,
     ):
-        super().__init__(name, description, args, llm, examples)
+        super().__init__(name, description, args, llm, examples, id)
         self.__initial_state = initial_state
         self.max_steps = max_steps
 
@@ -111,8 +113,9 @@ class BackendAgent(Tool, ABC):
         args: List[Argument],
         backend: BaseBackend,
         examples: List[Example] = [],
+        id: Optional[str] = None,
     ):
-        super().__init__(name, description, args, None, examples)
+        super().__init__(name, description, args, None, examples, id)
         self.backend = backend
 
     @abstractmethod
