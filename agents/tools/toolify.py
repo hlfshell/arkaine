@@ -53,7 +53,7 @@ def toolify(
 
         for param_name, param in sig.parameters.items():
             # Skip self/cls for methods
-            if param_name in ("self", "cls"):
+            if param_name in ("self", "cls", "context"):
                 continue
 
             # Determine if argument is required
