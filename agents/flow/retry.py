@@ -1,6 +1,7 @@
-from agents.tools.tool import Tool, Context
-from typing import Optional, Type, Union, List
 import time
+from typing import Any, List, Optional, Type, Union
+
+from agents.tools.tool import Context, Tool
 
 
 class Retry(Tool):
@@ -69,20 +70,23 @@ class Retry(Tool):
 
         Args:
             context (Context): The execution context
+
             **kwargs: Arguments to pass to the wrapped tool
 
         Returns:
             Any: The result from a successful execution
 
         Raises:
-            Exception: The last exception encountered after all retries are exhausted
+            Exception: The last exception encountered after all retries are
+            exhausted
         """
         attempts = 0
         last_exception = None
 
         while attempts <= self._max_retries:
+            context["attempt"] = attempts + 1
             try:
-                return self._tool.invoke(context, **kwargs)
+                return self._tool(context, **kwargs)
             except self._exceptions as e:
                 last_exception = e
                 attempts += 1
@@ -95,3 +99,29 @@ class Retry(Tool):
 
         # If we get here, we've exhausted all retries
         raise last_exception
+
+    def retry(self, context: Context) -> Any:
+        if context.tool is None:
+            raise ValueError("no tool assigned to context")
+
+        if context.tool != self:
+            raise ValueError(
+                f"context is not for {self.name}, is instead for "
+                f"{context.tool.name}"
+            )
+
+        if context.children is None:
+            # In this branch, we never actually succeeded in running the tool
+            # and thus never generated any children; therefore we stop here
+            # and just re-call.
+            original_output = context.output
+            context.clear(executing=True)
+
+            return self(context, original_output)
+        else:
+            # In this branch, we have already generated children and thus
+            # we can just retry the last child tool.
+            child_ctx = context.children[-1]
+            context.children = []
+
+            return self._tool.retry(child_ctx)
