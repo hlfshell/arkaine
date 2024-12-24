@@ -1,6 +1,8 @@
-from agents.tools.tool import Tool, Context, Argument, Example
+from typing import Any, Callable, List, Optional, Union
+from uuid import uuid4
 
-from typing import Any, List, Optional, Callable, Union
+from agents.tools.events import ToolReturn
+from agents.tools.tool import Argument, Context, Example, Tool
 
 
 class Conditional(Tool):
@@ -25,6 +27,8 @@ class Conditional(Tool):
             (optional).
 
         examples: A list of examples demonstrating the tool's usage.
+
+        id: The unique identifier for the tool; defaults to a random UUID.
     """
 
     def __init__(
@@ -36,18 +40,54 @@ class Conditional(Tool):
         then: Union[Tool, Callable[[Context, Any], Any]],
         otherwise: Optional[Union[Tool, Callable[[Context, Any], Any]]],
         examples: List[Example],
+        id: Optional[str] = None,
     ):
+        self.__id = id or str(uuid4())
         self.condition = condition
         self.then = then
         self.otherwise = otherwise
 
-        super().__init__(name, description, args, examples, self.check)
+        super().__init__(
+            name, description, args, self.check, examples, self.__id
+        )
 
     def check(self, context: Context, **kwargs) -> Any:
         if self.condition(context, kwargs):
+            context["branch"] = "then"
             return self.then(context, kwargs)
         else:
+            context["branch"] = "otherwise"
             return self.otherwise(context, kwargs) if self.otherwise else None
+
+    def retry(self, context: Context) -> Any:
+        if context.tool is None:
+            raise ValueError("no tool assigned to context")
+        if context.tool != self:
+            raise ValueError(
+                f"context is not for {self.name}, is instead for "
+                f"{context.tool.name}"
+            )
+
+        original_args = context.args
+        context.clear()
+
+        # If we failed during the conditional check, we would not have a branch
+        # assigned and thus no children. In this case, we can just recall this
+        # tool with the last args
+        if len(context.children) == 0:
+            return self(context, **original_args)
+        else:
+            # If we failed after the conditional check, we need to
+            # trigger the selected branch, which is our lone child.
+            context.executing = True
+            with context:
+                child_ctx = context.children[0]
+                output = child_ctx.tool.retry(child_ctx)
+
+                context.output = output
+                context.broadcast(ToolReturn(output))
+
+                return output
 
 
 class MultiConditional(Tool):
@@ -75,6 +115,8 @@ class MultiConditional(Tool):
             (optional). If not provided, then the tool executes nothing.
 
         examples: A list of examples demonstrating the tool's usage.
+
+        id: The unique identifier for the tool; defaults to a random UUID.
     """
 
     def __init__(
@@ -86,12 +128,16 @@ class MultiConditional(Tool):
         tools: List[Union[Tool, Callable[[Context, Any], Any]]],
         default: Optional[Union[Tool, Callable[[Context, Any], Any]]],
         examples: List[Example],
+        id: Optional[str] = None,
     ):
+        self.__id = id or str(uuid4())
         self.conditions = conditions
         self.tools = tools
         self.default = default
 
-        super().__init__(name, description, args, examples, self.check)
+        super().__init__(
+            name, description, args, self.check, examples, self.__id
+        )
 
     def check(self, context: Context, **kwargs) -> None:
         for condition, tool in zip(self.conditions, self.tools):
@@ -99,3 +145,33 @@ class MultiConditional(Tool):
                 return tool(context, kwargs)
 
         return self.default(context, kwargs) if self.default else None
+
+    def retry(self, context: Context) -> Any:
+        if context.tool is None:
+            raise ValueError("no tool assigned to context")
+        if context.tool != self:
+            raise ValueError(
+                f"context is not for {self.name}, is instead for "
+                f"{context.tool.name}"
+            )
+
+        original_args = context.args
+        context.clear()
+
+        # If we failed during the conditional check, we would not have a branch
+        # assigned and thus no children. In this case, we can just recall this
+        # tool with the last args
+        if len(context.children) == 0:
+            return self(context, **original_args)
+        else:
+            # If we failed after the conditional check, we need to
+            # trigger the selected branch, which is our lone child.
+            context.executing = True
+            with context:
+                child_ctx = context.children[0]
+                output = child_ctx.tool.retry(child_ctx)
+
+                context.output = output
+                context.broadcast(ToolReturn(output))
+
+                return output
