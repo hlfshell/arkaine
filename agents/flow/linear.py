@@ -98,8 +98,7 @@ class Linear(Tool):
                 f"{context.tool.name}"
             )
 
-        context.clear()
-        context.executing = True
+        context.clear(executing=True)
 
         # Find the child context that failed OR failed to generate an output
         # (this would simply be interrupted from somewhere else), and clear it.
