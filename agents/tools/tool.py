@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ast
+import inspect
 import json
 import threading
 import traceback
@@ -31,13 +33,45 @@ class Argument:
         description: str,
         type: str,
         required: bool = False,
-        default: Optional[str] = None,
+        default: Optional[Any] = None,
     ):
         self.name = name
         self.description = description
         self.type = type
         self.required = required
-        self.default = default
+        self.default = (
+            self._convert_value(default, type.lower()) if default else None
+        )
+
+    def _convert_value(self, value: Any, type_str: str) -> Any:
+        """Convert a value to the appropriate type."""
+        if value is None:
+            return None
+
+        if isinstance(value, str):
+            # Handle basic types
+            if type_str == "float":
+                return float(value)
+            elif type_str == "int":
+                return int(value)
+            elif type_str == "bool":
+                return value.lower() == "true"
+            # Handle lists and dicts
+            elif type_str.startswith(("list", "dict")):
+                try:
+                    parsed = json.loads(value)
+                    if type_str.startswith("list") and not isinstance(
+                        parsed, list
+                    ):
+                        raise ValueError(f"Expected list, got {type(parsed)}")
+                    if type_str.startswith("dict") and not isinstance(
+                        parsed, dict
+                    ):
+                        raise ValueError(f"Expected dict, got {type(parsed)}")
+                    return parsed
+                except json.JSONDecodeError:
+                    return value
+        return value
 
     def __str__(self) -> str:
         out = f"{self.name} - {self.type} - Required: "
@@ -47,6 +81,9 @@ class Argument:
         out += f"{self.description}"
 
         return out
+
+    def __repr__(self) -> str:
+        return self.__str__()
 
     def type_str(self) -> str:
         """
@@ -356,6 +393,27 @@ class Context:
         self.broadcast(ChildContextCreated(self.id, ctx.id))
         return ctx
 
+    def clear(
+        self,
+        executing: bool = False,
+        args: Optional[Dict[str, Any]] = None,
+    ):
+        """
+        Clears the context for re-running. This removes the output, the
+        exceptions, and sets __executing to False. The completion event is
+        triggered to clear whatever is waiting on the context to complete
+        first.
+
+        You can opt to maintain the executing state, and/or args; By default
+        they are "cleared" as well.
+        """
+        self.__completion_event.set()
+        with self.__lock:
+            self.__output = None
+            self.__exception = None
+            self.__executing = executing
+            self.__args = args
+
     @property
     def is_root(self) -> bool:
         return self.__parent is None
@@ -518,16 +576,20 @@ class Context:
             return self.__exception
 
     @exception.setter
-    def exception(self, e: Exception):
-        self.broadcast(ToolException(e))
-        with self.__lock:
-            self.__exception = e
-        self.__completion_event.set()
+    def exception(self, e: Optional[Exception]):
+        if e is None:
+            with self.__lock:
+                self.__exception = e
+        else:
+            self.broadcast(ToolException(e))
+            with self.__lock:
+                self.__exception = e
+            self.__completion_event.set()
 
-        for listener in self.__on_exception_listeners:
-            self.__executor.submit(listener, self, e)
-        for listener in self.__on_end_listeners:
-            self.__executor.submit(listener, self)
+            for listener in self.__on_exception_listeners:
+                self.__executor.submit(listener, self, e)
+            for listener in self.__on_end_listeners:
+                self.__executor.submit(listener, self)
 
     @property
     def args(self) -> Dict[str, Any]:
@@ -535,9 +597,9 @@ class Context:
             return self.__args
 
     @args.setter
-    def args(self, args: Dict[str, Any]):
+    def args(self, args: Optional[Dict[str, Any]]):
         with self.__lock:
-            if self.__args:
+            if self.__args and args:
                 raise ValueError("args already set")
             self.__args = args
 
@@ -549,6 +611,10 @@ class Context:
     @output.setter
     def output(self, value: Any):
         with self.__lock:
+            if value is None:
+                self.__output = None
+                self.__completion_event.set()
+                return
             if self.__output:
                 raise ValueError("output already set")
             self.__output = value
@@ -859,24 +925,56 @@ class Tool:
         return ctx
 
     def invoke(self, context: Context, **kwargs) -> Any:
-        if "context" in self.func.__code__.co_varnames:
-            return self.func(context=context, **kwargs)
-        return self.func(**kwargs)
+        params = inspect.signature(self.func).parameters
+        if "context" in params:
+            if params["context"].kind == inspect.Parameter.VAR_POSITIONAL:
+                return self.func(context, **kwargs)
+            else:
+                return self.func(context=context, **kwargs)
+        else:
+            return self.func(**kwargs)
 
-    def __call__(self, context: Optional[Context] = None, **kwargs) -> Any:
+    def extract_arguments(self, args, kwargs):
+        # Extract context if present as first argument
+        context = None
+        if args and isinstance(args[0], Context):
+            context = args[0]
+            args = args[1:]  # Remove context from args
+
+        # Handle single dict argument case
+        if len(args) == 1 and not kwargs and isinstance(args[0], dict):
+            kwargs = args[0]
+            args = ()
+
+        # Map remaining positional args to their parameter names
+        tool_args = [arg.name for arg in self.args]
+        for i, value in enumerate(args):
+            if i < len(tool_args):
+                if tool_args[i] in kwargs:
+                    raise TypeError(
+                        f"Got multiple values for argument '{tool_args[i]}'"
+                    )
+                kwargs[tool_args[i]] = value
+
+        # Check to see if context is in the kwargs
+        if "context" in kwargs:
+            if context is not None:
+                raise ValueError("context passed twice")
+            context = kwargs.pop("context")
+
+        return context, kwargs
+
+    def __call__(self, *args, **kwargs) -> Any:
+        context, kwargs = self.extract_arguments(args, kwargs)
+
         with self._init_context_(context, kwargs) as ctx:
             kwargs = self.fulfill_defaults(kwargs)
-
             self.check_arguments(kwargs)
-
             ctx.broadcast(ToolCalled(self.name))
 
             results = self.invoke(ctx, **kwargs)
-
             ctx.output = results
-
             ctx.broadcast(ToolReturn(results))
-
             return results
 
     def async_call(
@@ -903,6 +1001,29 @@ class Tool:
         self._executor.submit(wrapped_call, context, **kwargs)
 
         return context
+
+    def retry(self, context: Context) -> Any:
+        """
+        Retry the tool call. This function is expected to be overwritten by
+        implementing class tools that have more complicated logic to make
+        retrying more effective.
+        """
+
+        # Ensure that the context passed is in fact a context for this tool
+        if context.tool is None:
+            raise ValueError(f"no tool assigned to context")
+        if context.tool != self:
+            raise ValueError(
+                f"context is not for {self.name}, is instead for "
+                f"{context.tool.name}"
+            )
+
+        # Clear the context for re-running.
+        args = context.args
+        context.clear()
+
+        # Retry the tool call
+        return self.__call__(context, args)
 
     def examples_text(
         self, example_format: Optional[Callable[[Example], str]] = None
