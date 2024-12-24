@@ -2,6 +2,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
+from agents.tools.events import ToolReturn
 from agents.tools.tool import Argument, Context, Tool
 from agents.tools.wrapper import Wrapper
 
@@ -97,30 +98,32 @@ class ParallelList(Tool):
 
         self.tool = tool
 
+        # Build the list of arguments argument based on the tool's
+        # argument's descriptions
+        list_arg_description = (
+            "A list wherein each item consists of the following:"
+        )
         if arguments:
-            args = arguments
+            target_args = arguments
         else:
-            # Build the list of arguments argument based on the tool's
-            # argument's descriptions
-            list_arg_description = (
-                "A list wherein each item consists of the following:"
-            )
-            for arg in tool.args:
-                list_arg_description += f"\n- {arg.name} ({arg.type})"
-                if arg.required:
-                    list_arg_description += f"[required] "
-                list_arg_description += f": {arg.description}"
-                if arg.default:
-                    list_arg_description += f" (default: {arg.default})\n"
+            target_args = tool.args
 
-            args = [
-                Argument(
-                    name="input",
-                    description=list_arg_description,
-                    type="list",
-                    required=True,
-                )
-            ]
+        for arg in target_args:
+            list_arg_description += f"\n- {arg.name} ({arg.type})"
+            if arg.required:
+                list_arg_description += f"[required] "
+            list_arg_description += f": {arg.description}"
+            if arg.default:
+                list_arg_description += f" (default: {arg.default})\n"
+
+        args = [
+            Argument(
+                name="input",
+                description=list_arg_description,
+                type="list",
+                required=True,
+            )
+        ]
 
         super().__init__(
             name=name,
@@ -149,51 +152,132 @@ class ParallelList(Tool):
         }
 
         # Based on the completion strategy, handle the futures
-        results = [None] * len(input)
+        context["results"] = [None] * len(input)
         if self._completion_strategy == "all":
             for future in as_completed(futures):
                 idx = futures[future]
                 try:
-                    results[idx] = future.result()
+                    context["results"][idx] = future.result()
                 except Exception as e:
                     if self._error_strategy == "fail":
                         raise e
                     else:
-                        results[idx] = e
+                        context["results"][idx] = e
         elif self._completion_strategy == "any":
             # Wait for any future to complete
             future = next(as_completed(futures))
             idx = futures[future]
             try:
-                results[idx] = future.result()
+                context["results"][idx] = future.result()
             except Exception as e:
                 if self._error_strategy == "fail":
                     raise e
                 else:
-                    results[idx] = e
+                    context["results"][idx] = e
             # Cancel all other futures
             for future in futures:
                 future.cancel()
         elif self._completion_strategy == "n":
             # Wait for N futures to complete
-            for _ in range(self._completion_count):
-                future = next(as_completed(futures))
+            remaining_futures = set(futures.keys())
+
+            # to_complete is utilized if the context already has a
+            # "to_go_count", which is set within retries. It alerts us to there
+            # being some number of output already complete, and thus we need to
+            # make it to the completion count including these.
+            to_complete = (
+                context["to_go_count"]
+                if "to_go_count" in context
+                else self._completion_count
+            )
+
+            completed = 0
+            while completed < to_complete and remaining_futures:
+                future = next(as_completed(remaining_futures))
                 idx = futures[future]
                 try:
-                    results[idx] = future.result()
+                    context["results"][idx] = future.result()
                 except Exception as e:
                     if self._error_strategy == "fail":
                         raise e
                     else:
-                        results[idx] = e
+                        context["results"][idx] = e
+                completed += 1
+                remaining_futures.remove(future)
+
             # Cancel all other futures
-            for future in futures:
+            for future in remaining_futures:
                 future.cancel()
 
         # Format the results if a formatter is provided
         if self._result_formatter:
-            return self._result_formatter(results)
-        return results
+            return self._result_formatter(context["results"])
+        else:
+            return context["results"].copy()
+
+    def retry(self, context: Context) -> Any:
+        """
+        Retry the parallel list execution. This attempts to retry only the
+        failed items from the previous execution.
+        """
+        # Ensure that the context passed is in fact a context for this tool
+        if context.tool is None:
+            raise ValueError("no tool assigned to context")
+        if context.tool != self:
+            raise ValueError(
+                f"context is not for {self.name}, is instead for "
+                f"{context.tool.name}"
+            )
+
+        # Get the original args and clear the context for re-running
+        args = context.args.copy()
+        input_list = args[self.args[0].name]
+        original_results = context["results"]
+        context.clear(executing=True)
+
+        with context:
+            # Format inputs if needed
+            if self._item_formatter:
+                input_list = [self._item_formatter(item) for item in input_list]
+
+            # Figure out which items failed in context["result"] - we create a
+            # new list of outputs that only includes the failed/incomplete
+            # items.
+            failed_indices = [
+                idx
+                for idx, result in enumerate(context["results"])
+                if result is None or isinstance(result, Exception)
+            ]
+
+            # Create a new list of inputs that only includes the failed items
+            input_list = [input_list[idx] for idx in failed_indices]
+
+            # We need to tell the paralellize function through the context that
+            # *this* particular context already has a set amount complete.
+            # Since we are clearing the results["output"], we can't count it
+            # without setting it as an optional override.
+            if self._completion_count:
+                context["to_go_count"] = self._completion_count - sum(
+                    1
+                    for result in context["results"]
+                    if result is not None and not isinstance(result, Exception)
+                )
+
+            context, kwargs = self.extract_arguments((context, input_list), {})
+            output = self.parallelize(context, **kwargs)
+
+            context["results"] = original_results
+
+            # Now that we have the results for the failed indexes,
+            # we need to now set these results to their corresponding
+            # indexes in the original context["results"] list.
+            for new_idx, old_idx in enumerate(failed_indices):
+                context["results"][old_idx] = output[new_idx]
+
+            context.output = context["results"]
+            context.broadcast(ToolReturn(context["results"]))
+
+            return context["results"]
 
     def __del__(self):
         self._threadpool.shutdown(wait=False)
