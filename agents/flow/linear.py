@@ -3,6 +3,7 @@ from typing import Any, Callable, List, Optional, Union
 
 from agents.tools.events import ToolReturn
 from agents.tools.tool import Argument, Context, Example, Tool
+from agents.tools.toolify import toolify
 
 
 class Linear(Tool):
@@ -21,7 +22,9 @@ class Linear(Tool):
 
         description (str): A description of what the chain accomplishes
 
-        arguments (List[Argument]): List of arguments required by the chain
+        arguments (List[Argument]): List of arguments required by the chain.
+            If not specified, the arguments will be inferred from the first
+            step.
 
         examples (List[Example]): Example usage scenarios for the chain
 
@@ -47,11 +50,16 @@ class Linear(Tool):
         self,
         name: str,
         description: str,
-        arguments: List[Argument],
+        arguments: Optional[List[Argument]],
         steps: List[Union[Tool, Callable[[Context, Any], Any]]],
         examples: List[Example] = [],
     ):
-        self.steps = steps
+        self.steps = [
+            step if isinstance(step, Tool) else toolify(step) for step in steps
+        ]
+
+        if arguments is None:
+            arguments = steps[0].args
 
         super().__init__(
             name=name,
@@ -63,36 +71,51 @@ class Linear(Tool):
 
     def invoke(self, context: Context, **kwargs) -> Any:
         output = kwargs
-        # We save the initial kwargs to the root context
-        # so that tools or functions within the chain
-        # can access them for reference.
-        context.x["init_input"] = output
 
-        for step in self.steps:
-            if isinstance(step, Tool):
-                output = step(context=context, **output)
-            else:
-                with self._init_context_(context, output) as ctx:
-                    # Determine if we should expand the output
-                    expand = False
-                    if isinstance(output, dict):
-                        params = inspect.signature(step).parameters.keys()
-                        if set(params).issubset(set(output.keys())):
-                            expand = True
+        if "step" not in context:
+            context["step"] = 0
 
-                    # Does the step have a context keyword?
-                    if "context" in inspect.signature(step).parameters:
-                        if expand:
-                            output = step(context=ctx, **output)
-                        else:
-                            output = step(ctx, output)
-                    else:
-                        if expand:
-                            output = step(**output)
-                        else:
-                            output = step(output)
+        for index, step in enumerate(self.steps):
+            if index < context["step"]:
+                continue
+            context["step"] = index
 
-                    ctx.output = output
-                    ctx.broadcast(ToolReturn(output))
+            output = step(context, output)
 
         return output
+
+    def retry(self, context: Context) -> Any:
+        """
+        Retry the tool call. This attempts to pick up where the linear flow
+        left off.
+        """
+        if context.tool is None:
+            raise ValueError("no tool assigned to context")
+
+        if context.tool != self:
+            raise ValueError(
+                f"context is not for {self.name}, is instead for "
+                f"{context.tool.name}"
+            )
+
+        context.clear()
+        context.executing = True
+
+        # Find the child context that failed OR failed to generate an output
+        # (this would simply be interrupted from somewhere else), and clear it.
+        # This is where we will launch from.
+        for index, child in enumerate(context.children):
+            if child.exception or not child.output:
+                child.clear(args=child.args)
+
+        with child:
+            context["step"] = index
+            output = self.steps[index].retry(child)
+            context.increment("step")
+            _, output = self.extract_arguments((context, output), {})
+
+        with context:
+            results = self.invoke(context, **output)
+            context.output = results
+            context.broadcast(ToolReturn(results))
+            return results
