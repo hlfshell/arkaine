@@ -1036,6 +1036,9 @@ class Tool:
     def __str__(self) -> str:
         return Tool.stringify(self)
 
+    def __repr__(self) -> str:
+        return Tool.stringify(self)
+
     def fulfill_defaults(self, args: ToolArguments) -> ToolArguments:
         """
         Given a set of arguments, check to see if any argument that is assigned
