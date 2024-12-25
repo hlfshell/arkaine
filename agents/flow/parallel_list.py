@@ -40,6 +40,7 @@ class ParallelList(Tool):
             - "all": Wait for all items (default)
             - "any": Return after first successful completion
             - "n": Return after N successful completions
+            - "majority": Return after majority of items complete
         completion_count (Optional[int]): Required when completion_strategy="n";
             # of successful completions to wait for.
         error_strategy (str): How to handle errors:
@@ -66,8 +67,10 @@ class ParallelList(Tool):
         name: Optional[str] = None,
         description: Optional[str] = None,
     ):
-        if completion_strategy not in ["all", "any", "n"]:
-            raise ValueError("completion_strategy must be one of: all, any, n")
+        if completion_strategy not in ["all", "any", "n", "majority"]:
+            raise ValueError(
+                "completion_strategy must be one of: all, any, n, majority"
+            )
 
         if completion_strategy == "n" and not completion_count:
             raise ValueError(
@@ -177,7 +180,10 @@ class ParallelList(Tool):
             # Cancel all other futures
             for future in futures:
                 future.cancel()
-        elif self._completion_strategy == "n":
+        elif (
+            self._completion_strategy == "n"
+            or self._completion_strategy == "majority"
+        ):
             # Wait for N futures to complete
             remaining_futures = set(futures.keys())
 
@@ -185,11 +191,18 @@ class ParallelList(Tool):
             # "to_go_count", which is set within retries. It alerts us to there
             # being some number of output already complete, and thus we need to
             # make it to the completion count including these.
-            to_complete = (
-                context["to_go_count"]
-                if "to_go_count" in context
-                else self._completion_count
-            )
+            if self._completion_strategy == "n":
+                to_complete = (
+                    context["to_go_count"]
+                    if "to_go_count" in context
+                    else self._completion_count
+                )
+            elif self._completion_strategy == "majority":
+                to_complete = (
+                    context["to_go_count"]
+                    if "to_go_count" in context
+                    else len(remaining_futures) // 2
+                )
 
             completed = 0
             while completed < to_complete and remaining_futures:
@@ -256,8 +269,14 @@ class ParallelList(Tool):
             # *this* particular context already has a set amount complete.
             # Since we are clearing the results["output"], we can't count it
             # without setting it as an optional override.
-            if self._completion_count:
+            if self._completion_strategy == "n":
                 context["to_go_count"] = self._completion_count - sum(
+                    1
+                    for result in context["results"]
+                    if result is not None and not isinstance(result, Exception)
+                )
+            elif self._completion_strategy == "majority":
+                context["to_go_count"] = (len(input_list) // 2) + 1 - sum(
                     1
                     for result in context["results"]
                     if result is not None and not isinstance(result, Exception)
