@@ -1,6 +1,6 @@
 import pytest
 
-from agents.utils.templater import PromptTemplate
+from arkaine.utils.templater import PromptTemplate
 
 
 @pytest.fixture

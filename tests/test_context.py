@@ -6,7 +6,7 @@ from typing import List
 
 import pytest
 
-from agents.tools.tool import Context, Event, Tool
+from arkaine.tools.tool import Context, Event, Tool
 
 
 @pytest.fixture

@@ -1,6 +1,6 @@
 import pytest
 
-from agents.utils.documents import (
+from arkaine.utils.documents import (
     InMemoryEmbeddingStore,
     chunk_text_by_sentences,
     generate_embedding,

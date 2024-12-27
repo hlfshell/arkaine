@@ -3,8 +3,8 @@ from unittest.mock import Mock
 
 import pytest
 
-from agents.registrar.registrar import Registrar
-from agents.tools.tool import Argument, Context, Tool
+from arkaine.registrar.registrar import Registrar
+from arkaine.tools.tool import Argument, Context, Tool
 
 
 def dummy_tool_func(**kwargs):

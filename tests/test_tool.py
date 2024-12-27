@@ -1,7 +1,7 @@
 import pytest
 
-from agents.tools.events import Event
-from agents.tools.tool import (
+from arkaine.tools.events import Event
+from arkaine.tools.tool import (
     Argument,
     Context,
     Example,

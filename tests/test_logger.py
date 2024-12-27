@@ -3,10 +3,10 @@ from typing import TextIO
 
 import pytest
 
-from agents.events import AgentCalled, AgentLLMResponse, AgentPrompt
-from agents.logging.logger import Colors, Logger
-from agents.tools.events import ToolCalled, ToolException, ToolReturn
-from agents.tools.tool import Argument, Context, Tool
+from arkaine.events import AgentCalled, AgentLLMResponse, AgentPrompt
+from arkaine.logging.logger import Colors, Logger
+from arkaine.tools.events import ToolCalled, ToolException, ToolReturn
+from arkaine.tools.tool import Argument, Context, Tool
 
 
 class MockTool(Tool):
