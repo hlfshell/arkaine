@@ -2,10 +2,10 @@ import pathlib
 from os import path
 from typing import Any, Dict, List, Optional, Tuple
 
-from agents.agent import MetaAgent
-from agents.llms.llm import LLM, Prompt
-from agents.tools.tool import Argument, Context
-from agents.utils.templater import PromptTemplate
+from arkaine.agent import MetaAgent
+from arkaine.llms.llm import LLM, Prompt
+from arkaine.tools.tool import Argument, Context
+from arkaine.utils.templater import PromptTemplate
 
 
 class ContentResponse:

@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 import requests
 from pymupdf4llm import to_markdown
 
-from agents.tools.tool import Argument, Context, Example, List, Optional, Tool
+from arkaine.tools.tool import Argument, Context, Example, List, Optional, Tool
 
 
 class PDFReader(Tool):

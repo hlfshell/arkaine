@@ -1,8 +1,8 @@
 from typing import Any, Callable, List, Optional, Union
 from uuid import uuid4
 
-from agents.tools.events import ToolReturn
-from agents.tools.tool import Argument, Context, Example, Tool
+from arkaine.tools.events import ToolReturn
+from arkaine.tools.tool import Argument, Context, Example, Tool
 
 
 class Conditional(Tool):

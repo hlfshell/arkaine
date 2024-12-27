@@ -6,7 +6,7 @@ import sys
 import threading
 from typing import Optional
 
-from agents.composer.server import ComposerServer
+from arkaine.composer.server import ComposerServer
 
 _server: Optional[ComposerServer] = None
 

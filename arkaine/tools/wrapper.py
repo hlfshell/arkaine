@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Any, List, Optional, Tuple, Dict
+from typing import Any, Dict, List, Optional, Tuple
 
-from agents.tools.tool import Argument, Context, Example, Tool
+from arkaine.tools.tool import Argument, Context, Example, Tool
 
 
 class Wrapper(Tool, ABC):

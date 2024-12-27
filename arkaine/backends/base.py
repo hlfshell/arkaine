@@ -3,15 +3,15 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from agents.events import (
+from arkaine.events import (
     AgentBackendStep,
     AgentLLMResponse,
     AgentPrompt,
     AgentToolCalls,
 )
-from agents.llms.llm import LLM, Prompt
-from agents.tools.tool import Context, Tool
-from agents.tools.types import ToolArguments, ToolCalls, ToolResults
+from arkaine.llms.llm import LLM, Prompt
+from arkaine.tools.tool import Context, Tool
+from arkaine.tools.types import ToolArguments, ToolCalls, ToolResults
 
 
 class BaseBackend(ABC):

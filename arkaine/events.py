@@ -1,8 +1,8 @@
 from typing import Any, List, Tuple
 
-from agents.llms.llm import Prompt
-from agents.tools.tool import Event
-from agents.tools.types import ToolArguments
+from arkaine.llms.llm import Prompt
+from arkaine.tools.tool import Event
+from arkaine.tools.types import ToolArguments
 
 
 class AgentPrompt(Event):

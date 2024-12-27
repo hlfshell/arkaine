@@ -2,10 +2,10 @@ import pathlib
 from os import path
 from typing import Any, Callable, List, Optional
 
-from agents.agent import Agent
-from agents.llms.llm import LLM, Prompt
-from agents.utils.templater import PromptTemplate
-from agents.tools.tool import Argument, Context, Example, Tool
+from arkaine.agent import Agent
+from arkaine.llms.llm import LLM, Prompt
+from arkaine.tools.tool import Argument, Context, Example, Tool
+from arkaine.utils.templater import PromptTemplate
 
 
 class ArgsFormatter(Tool):

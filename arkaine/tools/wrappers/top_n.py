@@ -1,10 +1,11 @@
-from agents.tools.wrapper import Wrapper
-from agents.tools.tool import Argument, Context, Tool
-from agents.utils.documents import (
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
+from arkaine.tools.tool import Argument, Context, Tool
+from arkaine.tools.wrapper import Wrapper
+from arkaine.utils.documents import (
     InMemoryEmbeddingStore,
     chunk_text_by_sentences,
 )
-from typing import Callable, List, Optional, Union, Dict, Any, Tuple
 
 
 class TopN(Wrapper):

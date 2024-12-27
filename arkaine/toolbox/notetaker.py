@@ -2,10 +2,10 @@ import pathlib
 from os import path
 from typing import List, Optional
 
-from agents.agent import MetaAgent
-from agents.llms.llm import LLM
-from agents.tools.tool import Argument, Context
-from agents.utils.templater import PromptTemplate
+from arkaine.agent import MetaAgent
+from arkaine.llms.llm import LLM
+from arkaine.tools.tool import Argument, Context
+from arkaine.utils.templater import PromptTemplate
 
 
 class NoteTaker(MetaAgent):

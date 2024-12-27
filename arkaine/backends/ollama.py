@@ -2,11 +2,11 @@ from typing import Dict, List, Tuple
 
 from ollama import Client
 
-from agents.agent import Any, Callable, Prompt
-from agents.backends.base import BaseBackend
-from agents.backends.common import simple_tool_results_to_prompts
-from agents.tools.tool import Context, Tool
-from agents.tools.types import ToolArguments, ToolResults
+from arkaine.agent import Any, Callable, Prompt
+from arkaine.backends.base import BaseBackend
+from arkaine.backends.common import simple_tool_results_to_prompts
+from arkaine.tools.tool import Context, Tool
+from arkaine.tools.types import ToolArguments, ToolResults
 
 
 class Ollama(BaseBackend):

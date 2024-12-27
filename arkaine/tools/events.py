@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from time import time
 from typing import Any
 
-from agents.tools.types import ToolArguments
+from arkaine.tools.types import ToolArguments
 
 
 class Event:

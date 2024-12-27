@@ -5,8 +5,8 @@ import sys
 from threading import Lock
 from typing import Any, Dict, Optional, TextIO
 
-from agents.registrar.registrar import Registrar
-from agents.tools.tool import Context, Event, Tool
+from arkaine.registrar.registrar import Registrar
+from arkaine.tools.tool import Context, Event, Tool
 
 
 class Colors:

@@ -5,8 +5,8 @@ from urllib.parse import quote_plus
 import requests
 from bs4 import BeautifulSoup
 
-from agents.tools.tool import Argument, Tool
-from agents.utils.website import Website
+from arkaine.tools.tool import Argument, Tool
+from arkaine.utils.website import Website
 
 DUCK_DUCK_GO = "duckduckgo"
 BING = "bing"

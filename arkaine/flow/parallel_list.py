@@ -2,9 +2,9 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
-from agents.tools.events import ToolReturn
-from agents.tools.tool import Argument, Context, Tool
-from agents.tools.wrapper import Wrapper
+from arkaine.tools.events import ToolReturn
+from arkaine.tools.tool import Argument, Context, Tool
+from arkaine.tools.wrapper import Wrapper
 
 
 class ParallelList(Tool):
@@ -276,10 +276,15 @@ class ParallelList(Tool):
                     if result is not None and not isinstance(result, Exception)
                 )
             elif self._completion_strategy == "majority":
-                context["to_go_count"] = (len(input_list) // 2) + 1 - sum(
-                    1
-                    for result in context["results"]
-                    if result is not None and not isinstance(result, Exception)
+                context["to_go_count"] = (
+                    (len(input_list) // 2)
+                    + 1
+                    - sum(
+                        1
+                        for result in context["results"]
+                        if result is not None
+                        and not isinstance(result, Exception)
+                    )
                 )
 
             context, kwargs = self.extract_arguments((context, input_list), {})

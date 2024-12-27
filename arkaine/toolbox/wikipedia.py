@@ -2,17 +2,17 @@ from typing import Any, Dict, List, Optional
 
 import wikipedia
 
-from agents.agent import BackendAgent
-from agents.backends.base import BaseBackend
-from agents.backends.react import ReActBackend
-from agents.llms.llm import LLM
-from agents.tools.tool import Argument, Tool
-from agents.tools.wrappers.top_n import TopN
-from agents.utils.documents import (
+from arkaine.agent import BackendAgent
+from arkaine.backends.base import BaseBackend
+from arkaine.backends.react import ReActBackend
+from arkaine.llms.llm import LLM
+from arkaine.tools.tool import Argument, Tool
+from arkaine.tools.wrappers.top_n import TopN
+from arkaine.utils.documents import (
     InMemoryEmbeddingStore,
     chunk_text_by_sentences,
 )
-from agents.utils.templater import PromptTemplate
+from arkaine.utils.templater import PromptTemplate
 
 TOPIC_QUERY_TOOL_NAME = "wikipedia_search_pages"
 PAGE_CONTENT_TOOL_NAME = "wikipedia_get_page"

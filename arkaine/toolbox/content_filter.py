@@ -1,8 +1,8 @@
-from typing import Any, List, Optional, Tuple, Dict
+from typing import Any, Dict, List, Optional, Tuple
 
-from agents.tools.tool import Argument, Context, Tool
-from agents.tools.wrapper import Wrapper
-from agents.utils.documents import InMemoryEmbeddingStore, cosine_distance
+from arkaine.tools.tool import Argument, Context, Tool
+from arkaine.tools.wrapper import Wrapper
+from arkaine.utils.documents import InMemoryEmbeddingStore, cosine_distance
 
 
 class ContentFilter(Tool):

@@ -6,16 +6,16 @@ from typing import Any, Dict, List, Optional
 
 from requests.exceptions import HTTPError
 
-from agents.agent import Agent
-from agents.backends.react import ReActBackend
-from agents.flow.linear import Linear
-from agents.flow.parallel_list import ParallelList
-from agents.llms.llm import LLM
-from agents.toolbox.summarizer import Summarizer
-from agents.toolbox.webqueryer import Webqueryer
-from agents.toolbox.websearch import Websearch, Website
-from agents.tools.tool import Argument
-from agents.utils.templater import PromptTemplate
+from arkaine.agent import Agent
+from arkaine.backends.react import ReActBackend
+from arkaine.flow.linear import Linear
+from arkaine.flow.parallel_list import ParallelList
+from arkaine.llms.llm import LLM
+from arkaine.toolbox.summarizer import Summarizer
+from arkaine.toolbox.webqueryer import Webqueryer
+from arkaine.toolbox.websearch import Websearch, Website
+from arkaine.tools.tool import Argument
+from arkaine.utils.templater import PromptTemplate
 
 
 class WebSearcher(Linear):

@@ -12,10 +12,10 @@ from types import TracebackType
 from typing import Any, Callable, Dict, List, Optional, Union
 from uuid import uuid4
 
-from agents.options.context import ContextOptions
-from agents.registrar.registrar import Registrar
-from agents.tools.datastore import ThreadSafeDataStore
-from agents.tools.events import (
+from arkaine.options.context import ContextOptions
+from arkaine.registrar.registrar import Registrar
+from arkaine.tools.datastore import ThreadSafeDataStore
+from arkaine.tools.events import (
     ChildContextCreated,
     ContextUpdate,
     Event,
@@ -23,7 +23,7 @@ from agents.tools.events import (
     ToolException,
     ToolReturn,
 )
-from agents.tools.types import ToolArguments
+from arkaine.tools.types import ToolArguments
 
 
 class Argument:

@@ -7,11 +7,11 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from pydantic import BaseModel
 
-from agents.backends.base import BaseBackend
-from agents.llms.llm import LLM, Prompt
-from agents.tools.tool import Context, Tool
-from agents.tools.types import ToolArguments, ToolResults
-from agents.utils.templater import PromptTemplate
+from arkaine.backends.base import BaseBackend
+from arkaine.llms.llm import LLM, Prompt
+from arkaine.tools.tool import Context, Tool
+from arkaine.tools.types import ToolArguments, ToolResults
+from arkaine.utils.templater import PromptTemplate
 
 
 class ReActResponse(BaseModel):

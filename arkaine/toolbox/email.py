@@ -1,12 +1,12 @@
-from typing import List, Optional, Union
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-import smtplib
-import ssl
 import os
 import re
+import smtplib
+import ssl
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from typing import List, Optional, Union
 
-from agents.tools.tool import Tool, Argument, Context, Example
+from arkaine.tools.tool import Argument, Context, Example, Tool
 
 
 class EmailSender(Tool):

@@ -7,7 +7,7 @@ import string
 from functools import wraps
 from typing import Any, Callable, List, Optional, _GenericAlias, get_type_hints
 
-from agents.tools.tool import Argument, Tool
+from arkaine.tools.tool import Argument, Tool
 
 
 def toolify(

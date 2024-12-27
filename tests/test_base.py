@@ -2,10 +2,10 @@ from typing import Any, List, Optional, Tuple
 
 import pytest
 
-from agents.backends.base import BaseBackend, ToolNotFoundException
-from agents.llms.llm import LLM, Prompt, RolePrompt
-from agents.tools.tool import Tool
-from agents.tools.types import ToolArguments, ToolResults
+from arkaine.backends.base import BaseBackend, ToolNotFoundException
+from arkaine.llms.llm import LLM, Prompt, RolePrompt
+from arkaine.tools.tool import Tool
+from arkaine.tools.types import ToolArguments, ToolResults
 
 
 # Mock classes for testing

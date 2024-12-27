@@ -1,10 +1,10 @@
 import re
 from typing import List
 
-from agents.agent import Agent
-from agents.llms.llm import LLM, Prompt
-from agents.tools.tool import Argument
-from agents.utils.templater import PromptTemplate
+from arkaine.agent import Agent
+from arkaine.llms.llm import LLM, Prompt
+from arkaine.tools.tool import Argument
+from arkaine.utils.templater import PromptTemplate
 
 
 class Webqueryer(Agent):

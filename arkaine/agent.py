@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, List, Optional
 
-from agents.backends.base import BaseBackend
-from agents.events import AgentLLMCalled, AgentLLMResponse, AgentPrompt
-from agents.llms.llm import LLM, Prompt
-from agents.tools.tool import Argument, Context, Example, Tool
+from arkaine.backends.base import BaseBackend
+from arkaine.events import AgentLLMCalled, AgentLLMResponse, AgentPrompt
+from arkaine.llms.llm import LLM, Prompt
+from arkaine.tools.tool import Argument, Context, Example, Tool
 
 
 class Agent(Tool, ABC):

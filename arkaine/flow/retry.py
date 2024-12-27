@@ -1,7 +1,7 @@
 import time
 from typing import Any, List, Optional, Type, Union
 
-from agents.tools.tool import Context, Tool
+from arkaine.tools.tool import Context, Tool
 
 
 class Retry(Tool):

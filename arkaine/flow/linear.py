@@ -1,9 +1,9 @@
 import inspect
 from typing import Any, Callable, List, Optional, Union
 
-from agents.tools.events import ToolReturn
-from agents.tools.tool import Argument, Context, Example, Tool
-from agents.tools.toolify import toolify
+from arkaine.tools.events import ToolReturn
+from arkaine.tools.tool import Argument, Context, Example, Tool
+from arkaine.tools.toolify import toolify
 
 
 class Linear(Tool):

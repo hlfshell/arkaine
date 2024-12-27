@@ -1,8 +1,8 @@
-from agents.tools.tool import Tool, Context
-from typing import Callable, List, Optional
 from concurrent.futures import ThreadPoolExecutor
+from typing import Callable, List, Optional
 
-from agents.utils.clustering import find_optimal_cluster_representative
+from arkaine.tools.tool import Context, Tool
+from arkaine.utils.clustering import find_optimal_cluster_representative
 
 
 class SelfConsistency(Tool):

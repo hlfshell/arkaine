@@ -7,9 +7,9 @@ from typing import Dict, Set
 from websockets.server import WebSocketServerProtocol
 from websockets.sync.server import serve
 
-from agents.registrar.registrar import Registrar
-from agents.tools.events import ToolException, ToolReturn
-from agents.tools.tool import Context, Event, Tool
+from arkaine.registrar.registrar import Registrar
+from arkaine.tools.events import ToolException, ToolReturn
+from arkaine.tools.tool import Context, Event, Tool
 
 
 class ComposerSocket:

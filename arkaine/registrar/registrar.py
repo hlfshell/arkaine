@@ -3,7 +3,7 @@ from threading import Lock
 from typing import TYPE_CHECKING, Callable, Dict, List
 
 if TYPE_CHECKING:
-    from agents.tools.tool import Context, Tool
+    from arkaine.tools.tool import Context, Tool
 
 
 class Registrar:

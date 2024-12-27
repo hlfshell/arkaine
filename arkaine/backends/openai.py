@@ -7,12 +7,12 @@ from typing import Any, Dict, List, Optional, Tuple
 import openai as oaiapi
 from openai.types.chat.chat_completion import ChatCompletion
 
-from agents.agent import Prompt
-from agents.backends.base import BaseBackend
-from agents.backends.common import simple_tool_results_to_prompts
-from agents.tools.tool import Context, Tool
-from agents.tools.types import ToolArguments, ToolResults
-from agents.utils.templater import PromptTemplate
+from arkaine.agent import Prompt
+from arkaine.backends.base import BaseBackend
+from arkaine.backends.common import simple_tool_results_to_prompts
+from arkaine.tools.tool import Context, Tool
+from arkaine.tools.types import ToolArguments, ToolResults
+from arkaine.utils.templater import PromptTemplate
 
 
 class OpenAI(BaseBackend):

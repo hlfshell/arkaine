@@ -4,9 +4,9 @@ from typing import Dict, List, Optional
 import openai as oaiapi
 from openai.types.chat.chat_completion import ChatCompletion
 
-from agents.agent import Prompt
-from agents.llms.llm import LLM
-from agents.tools.tool import Tool
+from arkaine.agent import Prompt
+from arkaine.llms.llm import LLM
+from arkaine.tools.tool import Tool
 
 
 class OpenAI(LLM):
