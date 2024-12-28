@@ -201,8 +201,6 @@ class ToolAPI(FastAPI):
         self,
         host: str = "127.0.0.1",
         port: int = 8000,
-        http: bool = True,
-        ws: bool = False,
         ssl_keyfile: Optional[str] = None,
         ssl_certfile: Optional[str] = None,
         ssl_keyfile_password: Optional[str] = None,
@@ -220,10 +218,6 @@ class ToolAPI(FastAPI):
             host: Bind socket to this host. Defaults to "127.0.0.1".
 
             port: Bind socket to this port. Defaults to 8000.
-
-            http: Enable HTTP protocol. Defaults to True.
-
-            ws: Enable WebSocket protocol. Defaults to False.
 
             ssl_keyfile: SSL key file path for HTTPS/WSS support.
 
@@ -253,10 +247,10 @@ class ToolAPI(FastAPI):
             - WebSocket endpoints will be available at the same routes as HTTP
               endpoints when ws=True.
         """
-        if not http and not ws:
-            raise ValueError(
-                "At least one protocol (HTTP or WebSocket) must be enabled"
-            )
+        # if not http and not ws:
+        #     raise ValueError(
+        #         "At least one protocol (HTTP or WebSocket) must be enabled"
+        #     )
 
         ssl_config = None
         if ssl_keyfile and ssl_certfile:
@@ -271,8 +265,6 @@ class ToolAPI(FastAPI):
             self,
             host=host,
             port=port,
-            http=http,
-            ws=ws,
             ssl_keyfile=ssl_keyfile,
             ssl_certfile=ssl_certfile,
             ssl_keyfile_password=ssl_keyfile_password,
