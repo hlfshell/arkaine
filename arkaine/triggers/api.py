@@ -47,12 +47,80 @@ class Auth(ABC):
         pass
 
 
-class ToolAPI(FastAPI):
+class API(FastAPI):
     """
-    A FastAPI-based server for arkAIne tools.
+    API provides a FastAPI-based HTTP interface for arkAIne tools. It allows
+    tools to be exposed as REST endpoints with automatic OpenAPI documentation
+    generation, authentication support, and flexible input/output handling.
 
-    This class extends FastAPI to create a server that exposes arkAIne Tools as
-    endpoints, preserving tool metadata and supporting various input methods.
+    Quick Start:
+        Basic usage with a single tool:
+        ```python
+        from arkAIne.triggers.api import ToolAPI
+
+        # Create API with a single tool
+        api = API(my_tool)
+        api.serve()  # Starts server at http://localhost:8000
+        ```
+
+        Multiple tools with custom prefix:
+        ```python
+        # Create API with multiple tools and custom route prefix
+        api = API(
+            tools=[tool1, tool2, tool3],
+            name="MyAPI",
+            prefix="/api/v1"
+        )
+        api.serve(port=8080)
+        ```
+
+        With authentication:
+        ```python
+        from arkaine.triggers.api import API, JWTAuth
+
+        # Create auth handler with secret and API keys
+        auth = JWTAuth.from_file("auth_config.json")
+
+        # Create authenticated API
+        api = API(
+            tools=my_tools,
+            auth=auth
+        )
+
+        # Get auth token
+        token = auth.issue(AuthRequest(tools=["tool1"], key="my-api-key"))
+
+        # Make authenticated request
+        # curl -H "Authorization: Bearer {token}" \
+        #      http://localhost:8000/api/tool1
+        ```
+
+    Input Methods:
+        - Query parameters: /api/tool?arg1=value1&arg2=value2
+        - JSON body: POST with {"arg1": "value1", "arg2": "value2"}
+        - Mixed: Both query params and JSON body (body takes precedence)
+
+    Response Format:
+        Success:
+        ```json
+        {
+            "result": <tool output>,
+            "context": <context data if requested>
+        }
+        ```
+
+        Error:
+        ```json
+        {
+            "detail": "Error message",
+            "context": <context data if requested>
+        }
+        ```
+
+    Headers:
+        - X-Return-Context: Set to "true" to include context in response
+        - X-Context-ID: Returned in response with context identifier
+        - Authorization: Bearer token for authenticated endpoints
     """
 
     def __init__(
@@ -381,7 +449,7 @@ class ToolAPI(FastAPI):
         )
 
 
-class JSONWebTokenAuth(Auth):
+class JWTAuth(Auth):
     """
     JSONWebTokenAuth is an implementation of Auth that uses JSON Web Tokens
     for authentication and authorization.
