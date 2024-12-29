@@ -1,11 +1,50 @@
 import json
+import os
+import secrets
+from abc import ABC, abstractmethod
 from typing import List, Optional, Union
 
+import jwt
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
+from arkaine.registrar.registrar import Registrar
 from arkaine.tools.tool import Context, Tool
+
+
+class AuthRequest(BaseModel):
+    tools: Union[str, List[str]]
+    key: str
+
+
+class AuthResponse(BaseModel):
+    token: str
+
+
+class Auth(ABC):
+    """
+    Auth is an abstract class that defines an authentication and authorization
+    interface for optional use for ToolAPI.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    @abstractmethod
+    def auth(self, request: Request, tool: Tool) -> bool:
+        """
+        Authenticate and authorize the request.
+        """
+        pass
+
+    @abstractmethod
+    def issue(self, request: AuthRequest) -> str:
+        """
+        Issue an auth token for the given tools.
+        """
+        pass
 
 
 class ToolAPI(FastAPI):
@@ -23,6 +62,7 @@ class ToolAPI(FastAPI):
         description: Optional[str] = None,
         prefix: str = "/api",
         api_docs: str = "/api",
+        auth: Optional[Auth] = None,
     ):
         """
         Initialize the server.
@@ -45,9 +85,60 @@ class ToolAPI(FastAPI):
         )
 
         self._prefix = prefix
+        self.auth = auth
 
+        # Add routes for tools
         for tool in self.tools:
             self.add_tool_route(tool)
+
+        # Add authentication middleware and route if auth is provided
+        if auth:
+            # Add auth endpoint
+            route = "/auth"
+            if self._prefix:
+                route = f"{self._prefix.rstrip('/')}{route}"
+            self._auth_route = route
+            self.add_api_route(
+                route,
+                self.auth_handler,
+                methods=["POST"],
+                response_model=AuthResponse,
+            )
+
+            # Add auth middleware
+            @self.middleware("http")
+            async def auth_middleware(request: Request, call_next):
+                return await self._auth_middleware(request, call_next)
+
+    async def _auth_middleware(self, request: Request, call_next):
+        """Handle authentication middleware for HTTP requests."""
+        try:
+            # Skip auth check for auth endpoint
+            if request.url.path == self._auth_route:
+                return await call_next(request)
+
+            # Find matching tool based on path
+            path = request.url.path.rstrip("/")
+            if self._prefix:
+                prefix = self._prefix.rstrip("/")
+                if path.startswith(prefix):
+                    path = path[len(prefix) :]
+
+            path = path.lstrip("/")
+            matching_tool = None
+            for tool in self.tools:
+                if path == tool.tname:
+                    matching_tool = tool
+                    break
+
+            if matching_tool and not self.auth.auth(request, matching_tool):
+                return JSONResponse(
+                    status_code=401, content={"detail": "Unauthorized"}
+                )
+
+            return await call_next(request)
+        except Exception as e:
+            return JSONResponse(status_code=500, content={"detail": str(e)})
 
     def __create_endpoint_handler(self, tool: Tool):
         """Create a handler function for a tool endpoint."""
@@ -189,13 +280,31 @@ class ToolAPI(FastAPI):
                 if example.output:
                     description += f"\nOutput: {example.output}"
 
-        for m in method:
-            self.add_api_route(
-                route,
-                self.__create_endpoint_handler(tool),
-                methods=[m],
-                description=description,
-            )
+        self.add_api_route(
+            route,
+            self.__create_endpoint_handler(tool),
+            methods=method,
+            description=description,
+        )
+
+    @staticmethod
+    def __strip_bearer(auth_header: Optional[str]) -> Optional[str]:
+        """Helper method to strip 'Bearer ' prefix from auth header"""
+        if not auth_header:
+            return None
+        return auth_header.replace("Bearer ", "")
+
+    async def auth_handler(self, request: Request) -> AuthResponse:
+        """Handle authentication requests and return JWT tokens"""
+        try:
+            # Parse the raw request body into AuthRequest model
+            body = await request.json()
+            auth_request = AuthRequest(**body)
+            return AuthResponse(token=self.auth.issue(auth_request))
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
 
     def serve(
         self,
@@ -247,10 +356,6 @@ class ToolAPI(FastAPI):
             - WebSocket endpoints will be available at the same routes as HTTP
               endpoints when ws=True.
         """
-        # if not http and not ws:
-        #     raise ValueError(
-        #         "At least one protocol (HTTP or WebSocket) must be enabled"
-        #     )
 
         ssl_config = None
         if ssl_keyfile and ssl_certfile:
@@ -274,3 +379,90 @@ class ToolAPI(FastAPI):
             proxy_headers=proxy_headers,
             forwarded_allow_ips=forwarded_allow_ips,
         )
+
+
+class JSONWebTokenAuth(Auth):
+    """
+    JSONWebTokenAuth is an implementation of Auth that uses JSON Web Tokens
+    for authentication and authorization.
+    """
+
+    def __init__(self, secret: str, keys: List[str]):
+        super().__init__()
+        self.secret = secret
+        self.keys = dict(zip(keys, [None] * len(keys)))
+
+    def auth(self, request: Request, tool: Tool) -> bool:
+        token = request.headers.get("Authorization")
+
+        if not token:
+            return False
+
+        # Strip 'Bearer ' prefix if present
+        if token.startswith("Bearer "):
+            token = token[7:]
+
+        try:
+            payload = jwt.decode(token, self.secret, algorithms=["HS256"])
+
+            if "all" in payload["tools"] or tool.tname in payload["tools"]:
+                return True
+            else:
+                return False
+        except jwt.InvalidTokenError as e:
+            return False
+
+    def issue(self, request: AuthRequest) -> str:
+        """
+        Issue a JWT token for the given tools.
+        """
+        possible_tools = Registrar.get_tools()
+        tools_requested = request.tools
+
+        if isinstance(request.tools, str):
+            tools_requested = [request.tools]
+
+        key = request.key
+
+        # Compare the key against known keys
+        if key not in self.keys:
+            raise HTTPException(status_code=401, detail="Invalid key")
+
+        # Confirm that requested tools exist
+        if (isinstance(tools_requested, str) and tools_requested != "all") or (
+            isinstance(tools_requested, list) and tools_requested != ["all"]
+        ):
+            if isinstance(tools_requested, str):
+                tools_requested = [tools_requested]
+            for tool_name in tools_requested:
+                if tool_name not in possible_tools:
+                    raise HTTPException(status_code=401, detail="Invalid tool")
+
+        # Now that we have allowed_tools, create a JWT token
+        payload = {"tools": tools_requested}
+        token = jwt.encode(payload, self.secret, algorithm="HS256")
+
+        return token
+
+    @classmethod
+    def from_env(cls):
+        secret = os.getenv("JWT_SECRET")
+        if not secret:
+            raise ValueError("JWT_SECRET environment variable is not set")
+        keys = os.getenv("JWT_KEYS")
+        if not keys:
+            raise ValueError("JWT_KEYS environment variable is not set")
+        return cls(secret, keys)
+
+    @classmethod
+    def from_file(cls, path: str):
+        with open(path, "r") as f:
+            config = json.load(f)
+        return cls(config["secret"], config["keys"])
+
+    def create_key_file(self, path: str, key_count: int = 1):
+        # Generate a secret and at least one key:
+        secret = secrets.token_urlsafe(32)
+        keys = [secrets.token_urlsafe(32) for _ in range(key_count)]
+        with open(path, "w") as f:
+            json.dump({"secret": secret, "keys": keys}, f)
