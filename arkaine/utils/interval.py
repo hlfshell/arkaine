@@ -16,14 +16,24 @@ class Interval:
     MONTHLY = "monthly"
     YEARLY = "yearly"
 
+    SECONDS = ":seconds"
+    MINUTES = ":minutes"
+    HOURS = ":hours"
+
     def __init__(self, trigger_at: datetime, recur_every: Optional[str] = None):
         # Convert all time units to seconds and store as total_seconds
         self.__trigger_at: Optional[None] = trigger_at
 
         # Calendar-based attributes remain unchanged
         self.__last_triggered: datetime = None
-        if recur_every not in [
-            None,
+        if not self.__validate_recurrence(recur_every):
+            raise ValueError(f"Invalid recurrence value: {recur_every}")
+        self.__recur_every = recur_every
+
+    def __validate_recurrence(self, value: Optional[str]) -> bool:
+        if value is None:
+            return True
+        return value in [
             self.HOURLY,
             self.DAILY,
             self.TWICEADAY,
@@ -33,9 +43,7 @@ class Interval:
             self.FORTNIGHTLY,
             self.MONTHLY,
             self.YEARLY,
-        ]:
-            raise ValueError(f"Invalid recurrence value: {recur_every}")
-        self.__recur_every = recur_every
+        ] or value.endswith((self.SECONDS, self.MINUTES, self.HOURS))
 
     @property
     def trigger_at(self) -> Optional[datetime]:
@@ -56,21 +64,9 @@ class Interval:
 
     @recur_every.setter
     def recur_every(self, value: Optional[str] = None):
-        if value not in [
-            None,
-            self.HOURLY,
-            self.DAILY,
-            self.TWICEADAY,
-            self.WEEKENDS,
-            self.WEEKDAYS,
-            self.WEEKLY,
-            self.FORTNIGHTLY,
-            self.MONTHLY,
-            self.YEARLY,
-        ]:
+        if not self.__validate_recurrence(value):
             raise ValueError(f"Invalid recurrence value: {value}")
         self.__recur_every = value
-
         self.__set_next_trigger_at()
 
     def __set_next_trigger_at(self):
@@ -78,6 +74,26 @@ class Interval:
             self.__trigger_at = None
             return None
 
+        # Handle time-based intervals
+        for unit in [self.SECONDS, self.MINUTES, self.HOURS]:
+            if self.recur_every.endswith(unit):
+                try:
+                    value = float(self.recur_every.split(":")[0])
+                    if unit == self.SECONDS:
+                        self.__trigger_at = self.__trigger_at + timedelta(
+                            seconds=value
+                        )
+                    elif unit == self.MINUTES:
+                        self.__trigger_at = self.__trigger_at + timedelta(
+                            minutes=value
+                        )
+                    else:
+                        self.__trigger_at = self.__trigger_at + timedelta(
+                            hours=value
+                        )
+                    return
+                except ValueError:
+                    raise ValueError(f"Invalid value in: {self.recur_every}")
         if self.recur_every == self.HOURLY:
             self.__trigger_at = self.__trigger_at + timedelta(hours=1)
         elif self.recur_every == self.DAILY:
