@@ -7,7 +7,7 @@ import click
 from arkaine.tools.tool import Argument, Context, Tool
 
 
-class ToolCli(click.Group):
+class CLI(click.Group):
     """
     A Click-based CLI application for arkaine tools.
 
