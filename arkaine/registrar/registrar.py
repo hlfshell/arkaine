@@ -52,6 +52,16 @@ class Registrar:
             return list(cls._tools.values())
 
     @classmethod
+    def get_tool(cls, identifier: str) -> "Tool":
+        with cls._lock:
+            for tool in cls._tools.values():
+                if tool.id == identifier:
+                    return tool
+                if tool.name == identifier:
+                    return tool
+            raise ValueError(f"Tool with identifier {identifier} not found")
+
+    @classmethod
     def add_tool_call_listener(
         cls, listener: Callable[["Tool", "Context"], None]
     ):
