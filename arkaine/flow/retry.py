@@ -1,5 +1,5 @@
 import time
-from typing import Any, List, Optional, Type, Union
+from typing import Any, List, Optional, Tuple, Type, Union
 
 from arkaine.tools.tool import Context, Tool
 
@@ -125,3 +125,35 @@ class Retry(Tool):
             context.children = []
 
             return self._tool.retry(child_ctx)
+
+
+def retry(
+    max_retries: int = 3,
+    delay: float = 0,
+    exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = Exception,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+):
+    """
+    A decorator that wraps a Tool to add retry functionality.
+
+    Args:
+        max_retries (int): Maximum number of retry attempts. Defaults to 3.
+        delay (float): Delay in seconds between retries. Defaults to 0.
+        exceptions (Union[Type[Exception], Tuple[Type[Exception], ...]]):
+            Exception type(s) to catch and retry on. Defaults to Exception.
+    """
+
+    def decorator(tool: Tool):
+        # Save original invoke method
+
+        return Retry(
+            tool,
+            max_retries,
+            exceptions,
+            delay,
+            name,
+            description,
+        )
+
+    return decorator
