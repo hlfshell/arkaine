@@ -1,7 +1,6 @@
 import os
 import re
 import tempfile
-from queue import Queue
 from threading import Lock
 from typing import Optional
 from urllib.parse import urlparse
@@ -9,7 +8,6 @@ from urllib.parse import urlparse
 import requests
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
-from playwright.sync_api import sync_playwright
 from pymupdf4llm import to_markdown
 
 
@@ -147,26 +145,3 @@ class Website:
 
     def __repr__(self):
         return self.__str__()
-
-
-class PlaywrightQueue:
-    _instance = None
-    _lock = Lock()
-
-    def __new__(cls):
-        with cls._lock:
-            if cls._instance is None:
-                cls._instance = super().__new__(cls)
-            return cls._instance
-
-    def __init__(self):
-        self.queue = Queue()
-
-    def __enter__(self):
-        pass
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        pass
-
-    def __del__(self):
-        pass
