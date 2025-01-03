@@ -1,35 +1,30 @@
 from setuptools import find_packages, setup
 
 setup(
-    name="composable-agents",
+    name="arkaine",
     version="0.1",
     packages=find_packages(),
-    install_requires=[
-        "openai",  # For OpenAI backend
-        "numpy",  # Likely needed for embeddings/vectors
-        "requests",  # For API calls
-        "beautifulsoup4",  # For web scraping
-        "markdownify",  # For HTML to markdown conversion
-        "groq",  # For Groq LLM integration
-        "ollama",  # For Ollama LLM integration
-        "pydantic",  # For data validation (if using OpenAI's latest client)
-    ],
+    install_requires=[],
     extras_require={
         "dev": [
             "pytest",
         ],
+        "sms": [
+            "twilio",
+            "boto3",
+            "messagebird",
+            "vonage",
+        ],
     },
     python_requires=">=3.8",  # Specify minimum Python version
     author="Keith Chester",
-    author_email="your.email@example.com",
-    description="A framework for composable LLM agents",
+    author_email="kchester@gmail.com",
+    description="",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/composable-agents",
+    url="https://github.com/hlfshell/arkaine",
     license="MIT",
     classifiers=[
-        "Development Status :: 3 - Alpha",
-        "Intended Audience :: Developers",
         "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.8",
