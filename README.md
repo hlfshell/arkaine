@@ -274,6 +274,118 @@ result = agent.invoke(context={})
 print(result)
 ```
 
+# Contexts, State, and You
+
+This is a bit of an advanced topic, so feel free to skip this section if you're just getting started.
+
+All tools and agents are passed a `Context` object. The goal of the context object is to track tool state, be it the tool's specific state or its children. Similarly, it provides a number of helper functions to make it easier to work with tooling. All of context's functionalities are thread safe.
+
+Contexts are acyclic graphs with a single root node. Children can branch out, but ultimately return to the root node for its output.
+
+Contexts track the progress, input, and output of the tool and all sub tools. They can be saved (`.save(filepath)`) and loaded (`.load(filepath)`) for future reference.
+
+Contexts are automatically created when you call your tool, but a blank one can be passed in as the first argument to all tools as well.
+
+```python
+context = Context()
+my_tool(context, {"input": "some input"})
+```
+
+## State Tracking
+
+Contexts can track state for its own tool, temporary debug information, or provide overall tool state.
+
+To track information within the execution of a tool (and only in that tool), you can access the context's thread safe state by using it like a `dict`.
+
+```python
+context["your_variable"] = "some information"
+print(context["your_variable"])
+```
+
+To make working with this data in a threadsafe manner easier, arkaine provides additional functionality not found in a normal `dict`:
+
+- `append` - append a value to a list value contained within the context
+- `concat` - concatenate a value to a string value contained within the context
+- `increment` - increment a numeric value contained within the context
+- `decrement` - decrement a numeric value contained within the context
+- `update` - update a value contained within the context using a function, allowing more complex operations to be performed atomically
+
+This information is stored on the context it is accessed from.
+
+Again, context contains information for its own state, but children context can not access this information (or vice versa).
+
+```python
+context.x["your_variable"] = "it'd be neat if we just were nice to each other"
+print(context.x["your_variable"])
+# it'd be neat if we just were nice to each other
+
+child_context = context.child_context()
+print(child_context.x["your_variable"])
+# KeyError: 'your_variable'
+```
+
+### Execution Level State
+
+It may be possible that you want state to persist across the entire chain of contexts. arkaine considers this as "execution" state, which is not a part of any individual context, but the entire entity of all contexts for the given execution. This is useful for tracking state across multiple tools and being able to access it across children.
+
+To utilize this, you can use `.x` on any `Context` object. Just as with the normal state, it is thread safe and provides all features.
+
+```python
+context.x["your_variable"] = "robots are pretty cool"
+print(context.x["your_variable"])
+# robots are pretty cool
+
+child_context = context.child_context()
+print(child_context.x["your_variable"])
+# robots are pretty cool
+```
+
+### Debug State
+
+It may be necessary to report key information if you wish to debug the performance of a tool. To help this along, arkaine provides a debug state. Values are only written to it if the global context option of debug is et to true.
+
+```python
+context.debug["your_variable"] = "robots are pretty cool"
+print(context.debug["your_variable"])
+# KeyError: 'your_variable'
+
+from arkaine.options.context import ContextOptions
+ContextOptions.debug(True)
+
+context.debug["your_variable"] = "robots are pretty cool"
+print(context.debug["your_variable"])
+# robots are pretty cool
+```
+
+Debug states are entirely contained within the context it is set to, like the base state.
+
+## Retrying Failed Contexts
+
+Let's say you're developing a chain of tools and agents to create a complex behavior. Since we're possibly talking about multiple tools likely making web calls and multiple LLM calls, it may take a significant amount of time and compute to re-run everything from scratch. To help with this, you can save the context and call call `retry(ctx)` on its tool. It will utilize the same arguments, and call down to its children until it finds an incomplete or error'ed out context, and then pick up the re-run from that. You can thus skip re-running the entire chain if setup right.
+
+## Asynchronous Execution
+
+You may want to trigger your tooling in a non-blocking manner. `arkaine` has you covered.
+
+```python
+ctx = my_tool.async_call({"input": "some input"})
+
+# do other things
+
+ctx.wait()
+print(ctx.result)
+```
+
+If you prefer futures, you can request a future from any context.
+
+```python
+ctx = my_tool.async_call({"input": "some input"})
+
+# do other things
+
+ctx.future().result()
+```
+
 # Flow
 
 Agents can feed into other agents, but the flow of information between these agents can be complex! To make this easier, arkaine provdies several flow tools that maintain observability and handles a lot of the complexity for you.
@@ -309,8 +421,6 @@ Since arkaine is trying to be a batteries-included framework, it comes with a se
 - `WebSearcher` - given a topic or task, generate a list of potentially relevant queries perform a web search (defaults to DuckDuckGo, but compatible with Google and Bing). Then, given the results, isolate the relevant websites that have a high potential of containing relevant information.
 
 - `Wikipedia` - Given a question, this agent will attempt to retrieve the Wikipedia page on that topic and utilize it to answer the question.
-
-
 
 # Integrations
 
