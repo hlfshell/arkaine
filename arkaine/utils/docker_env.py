@@ -308,7 +308,7 @@ class PythonEnv(DockerContainer):
     # ):
     #     pass
 
-    def __handle_client(self, client: socket, context: Context):
+    def __handle_client(self, client: socket, context: Context) -> Any:
         try:
             # Get size first
             size = struct.unpack("!Q", client.recv(8))[0]
@@ -326,6 +326,24 @@ class PythonEnv(DockerContainer):
             # Handle ping requests
             if data["function"] == "_ping":
                 response = pickle.dumps("pong")
+                client.sendall(struct.pack("!Q", len(response)))
+                client.sendall(response)
+                return
+
+            if data["function"] == "_result":
+                context.output = data["args"][0]
+                response = pickle.dumps(None)
+                client.sendall(struct.pack("!Q", len(response)))
+                client.sendall(response)
+                return
+
+            if data["function"] == "_exception":
+                exception, traceback = data["args"]
+
+                context.exception = PythonExecutionException(
+                    exception, traceback
+                )
+                response = pickle.dumps(None)
                 client.sendall(struct.pack("!Q", len(response)))
                 client.sendall(response)
                 return
@@ -413,7 +431,15 @@ class PythonEnv(DockerContainer):
         bridge_functions_path = join(
             Path(__file__).parent,
             "extras",
+            "python_env",
             "_bridge_functions.py",
+        )
+
+        tool_call_path = join(
+            Path(__file__).parent,
+            "extras",
+            "python_env",
+            "_tool_call.py",
         )
 
         with open(bridge_functions_path, "r") as f:
@@ -428,16 +454,23 @@ class PythonEnv(DockerContainer):
             f"{self.__local_directory}/{self.__client_import_filename}", "w"
         ) as f:
             # We need to append each tool to the bridge functions.
+            with open(tool_call_path, "r") as template:
+                tool_call_template = template.read()
+
             for tool in tools:
-                bridge_code += f"""
-def {tool.tname}(*args, **kwargs):
-    return __call_host_function('{tool.tname}', *args, **kwargs)"""
+                bridge_code += tool_call_template.replace(
+                    "{tool_name}", tool.tname
+                )
 
             f.write(bridge_code)
 
     def __add_bridge_imports(self):
 
-        ignore_files = ["setup.py", self.__client_import_filename]
+        ignore_files = [
+            "setup.py",
+            self.__client_import_filename,
+            "_execute.py",
+        ]
 
         # For each code file in the tmp filesystem that's .py, save
         # the bridge function itself, append an import line to the
@@ -529,17 +562,61 @@ def {tool.tname}(*args, **kwargs):
             else:
                 raise ValueError(f"Invalid code type: {type(code)}")
 
+        # Add our subprocess execution wrapper
+        exec_path = join(
+            Path(__file__).parent,
+            "extras",
+            "python_env",
+            "_execute.py",
+        )
+
+        with open(exec_path, "r") as f:
+            exec_template = f.read()
+
+        exec_template = (
+            exec_template.replace("{target_file}", target_file)
+            .replace(
+                "{client_import}",
+                self.__client_import_filename.removesuffix(".py"),
+            )
+            .replace(
+                "{main_function}",
+                "main",
+            )
+        )
+
+        with open(f"{self.__local_directory}/__arkaine_exec.py", "w") as f:
+            f.write(exec_template)
+
+        # Now we confirm main function, or set it to run
+        # as __main__
+        with open(f"{self.__local_directory}/{target_file}", "r") as f:
+            body = f.read()
+        if "def main()" in body:
+            pass
+        elif "if __name__ == '__main__'" in body:
+            body = body.replace("if __name__ == '__main__':", "def main():")
+            with open(f"{self.__local_directory}/{target_file}", "w") as f:
+                f.write(body)
+        else:
+            raise ValueError("No main function found")
+
     def __execute_code(
         self,
+        context: Context,
         code: Union[str, IO, Dict[str, str], Path],
         target_file: str = "main.py",
     ):
         try:
-            result = self.run(f"python /arkaine/{target_file}")
+            # result = self.run(f"python /{self.__container_directory}/{target_file}")
+            self.run(f"python /{self.__container_directory}/__arkaine_exec.py")
 
-            return result
+            return context.output
         except Exception as e:
-            raise PythonExecutionException(str(e), traceback.format_exc())
+            if context.exception:
+                raise context.exception
+            else:
+                raise PythonExecutionException(e, traceback.format_exc())
         finally:
             self.stop()
 
@@ -548,25 +625,27 @@ def {tool.tname}(*args, **kwargs):
         code: Union[str, IO, Dict[str, Union[str, Dict]], Path],
         context: Optional[Context] = None,
         target_file: str = "main.py",
-    ) -> str:
+    ) -> Tuple[Any, Exception]:
         if context is None:
             context = Context()
 
         with context:
+            context.executing = True
             self.__copy_code_to_tmp(code, target_file)
 
-            if self.__tools:
-                self.__add_bridge_imports()
+            # if self.__tools:
+            self.__add_bridge_imports()
 
-                if self.__server_thread is None:
-                    self.__server_thread = Thread(
-                        target=self.__run_socket_server,
-                        args=(context,),
-                        daemon=True,
-                    )
-                    self.__server_thread.start()
+            if self.__server_thread is None:
+                self.__server_thread = Thread(
+                    target=self.__run_socket_server,
+                    args=(context,),
+                    daemon=True,
+                )
+                self.__server_thread.start()
 
-            return self.__execute_code(code, target_file)
+            self.__execute_code(context, code, target_file)
+            return context.output, context.exception
 
     def __del__(self):
         self.__halt = True
@@ -593,25 +672,12 @@ def {tool.tname}(*args, **kwargs):
         self.stop()
 
 
-class PythonNotParseableException(Exception):
-    def __init__(self, message: str, stack_trace: str = None):
-        self.message = message
+class PythonExecutionException(Exception):
+    def __init__(self, e: Exception, stack_trace: str = ""):
+        self.exception = e
+        try:
+            self.message = e.message
+        except:
+            self.message = str(e)
         self.stack_trace = stack_trace
         super().__init__(self.message)
-
-    def __str__(self):
-        if self.stack_trace:
-            return f"Python code is not parseable:\n{self.message}\n\nStack trace:\n{self.stack_trace}"
-        return f"Python code is not parseable: {self.message}"
-
-
-class PythonExecutionException(Exception):
-    def __init__(self, message: str, stderr_or_trace: str = None):
-        self.message = message
-        self.stderr_or_trace = stderr_or_trace
-        super().__init__(self.message)
-
-    def __str__(self):
-        if self.stderr_or_trace:
-            return f"Python code execution failed:\n{self.message}\n\nError output:\n{self.stderr_or_trace}"
-        return f"Python code execution failed: {self.message}"

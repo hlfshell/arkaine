@@ -2,6 +2,7 @@ import pickle
 import socket
 import struct
 import time
+import traceback
 
 
 def __wait_for_host():
@@ -46,6 +47,21 @@ def __send_recv_data(sock, data):
         bytes_received += len(chunk)
 
     return pickle.loads(b"".join(chunks))
+
+
+def __send_exception(exception):
+    """
+    Send an exception and stack trace to the host.
+    """
+    trace = traceback.format_exc()
+    __call_host_function("_exception", exception, trace)
+
+
+def __send_result(result):
+    """
+    Send a result to the host.
+    """
+    __call_host_function("_result", result)
 
 
 def __call_host_function(func_name, *args, **kwargs):
