@@ -5,11 +5,14 @@ import time
 
 
 def __wait_for_host():
-    """Wait for the host to become available by attempting to connect to the socket."""
+    """
+    Wait for the host to become available by attempting to connect to the
+    socket.
+    """
     while True:
         try:
             sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            sock.connect("/arkaine/arkaine_bridge.sock")
+            sock.connect("/{code_directory}/{socket_file}")
             # Send a ping and wait for acknowledgment
             result = __send_recv_data(
                 sock, {"function": "_ping", "args": (), "kwargs": {}}
@@ -23,6 +26,9 @@ def __wait_for_host():
 
 
 def __send_recv_data(sock, data):
+    """
+    Send data to the host and receive a response.
+    """
     # Send size first, then data
     data_bytes = pickle.dumps(data)
     sock.sendall(struct.pack("!Q", len(data_bytes)))
@@ -43,9 +49,12 @@ def __send_recv_data(sock, data):
 
 
 def __call_host_function(func_name, *args, **kwargs):
+    """
+    Call a function on the host and return the result.
+    """
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
-        sock.connect("/arkaine/arkaine_bridge.sock")
+        sock.connect("/{code_directory}/{socket_file}")
         result = __send_recv_data(
             sock, {"function": func_name, "args": args, "kwargs": kwargs}
         )
@@ -57,4 +66,5 @@ def __call_host_function(func_name, *args, **kwargs):
         sock.close()
 
 
+# Wait for the host to connect to give us the go-ahead
 __wait_for_host()

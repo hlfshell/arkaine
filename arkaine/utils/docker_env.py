@@ -259,6 +259,9 @@ class PythonEnv(DockerContainer):
         entrypoint: str = None,
         command: Optional[str] = None,
         env: Dict[str, Any] = {},
+        container_code_directory: str = "/arkaine",
+        socket_file: str = "arkaine_bridge.sock",
+        local_code_directory: str = None,
     ):
         if name is None:
             name = f"arkaine-python-{uuid4()}"
@@ -267,13 +270,19 @@ class PythonEnv(DockerContainer):
 
         self.__tools = {tool.tname: tool for tool in tools}
 
-        self.__tmp_folder = tempfile.mkdtemp()
-        # if not os.path.exists(self.__tmp_folder):
-        #     os.makedirs(self.__tmp_folder)
-        self.__tmp_volume = DockerVolume(self.__tmp_folder, "/arkaine")
-        self.__socket_path = join(self.__tmp_folder, "arkaine_bridge.sock")
+        if local_code_directory is None:
+            self.__local_directory = tempfile.mkdtemp()
+        else:
+            self.__local_directory = local_code_directory
 
-        volumes.append(self.__tmp_volume)
+        self.__container_directory = container_code_directory
+        self.__socket_file = socket_file
+        self.__tmp_bind = DockerVolume(
+            self.__local_directory, self.__container_directory
+        )
+        self.__socket_path = join(self.__local_directory, self.__socket_file)
+
+        volumes.append(self.__tmp_bind)
 
         self.__client_import_filename = "arkaine_bridge.py"
 
@@ -408,13 +417,18 @@ class PythonEnv(DockerContainer):
         with open(bridge_functions_path, "r") as f:
             bridge_code = f.read()
 
+        # Replace {code_directory} and {socket_file} with the actual values
+        bridge_code = bridge_code.replace(
+            "{code_directory}", self.__container_directory
+        ).replace("{socket_file}", self.__socket_file)
+
         with open(
-            f"{self.__tmp_folder}/{self.__client_import_filename}", "w"
+            f"{self.__local_directory}/{self.__client_import_filename}", "w"
         ) as f:
             # We need to append each tool to the bridge functions.
             for tool in tools:
                 bridge_code += f"""
-def {tool.name}(*args, **kwargs):
+def {tool.tname}(*args, **kwargs):
     return __call_host_function('{tool.tname}', *args, **kwargs)"""
 
             f.write(bridge_code)
@@ -426,7 +440,7 @@ def {tool.name}(*args, **kwargs):
         # For each code file in the tmp filesystem that's .py, save
         # the bridge function itself, append an import line to the
         # file.
-        for file in Path(self.__tmp_folder).rglob("*.py"):
+        for file in Path(self.__local_directory).rglob("*.py"):
             if file.is_file() and not any(
                 part.startswith(".") for part in file.parts
             ):
@@ -457,16 +471,32 @@ def {tool.name}(*args, **kwargs):
                     with open(file, "w") as f:
                         f.write(new_content)
 
+    def __dict_to_files(
+        self, code: Dict[str, Union[str, Dict]], parent_dir: str
+    ):
+        for filename, content in code.items():
+            if isinstance(content, Dict):
+                # If it's a dict, we make it a directory, and then recurse
+                # so that we can go as deep as we need.
+                os.makedirs(
+                    f"{self.__local_directory}/{parent_dir}", exist_ok=True
+                )
+                self.__dict_to_files(content, f"{parent_dir}/{filename}")
+            else:
+                # ...otherwise it's a file; write it
+                with open(f"{self.__local_directory}/{filename}", "w") as f:
+                    f.write(content)
+
     def __copy_code_to_tmp(
         self,
         code: Union[str, IO, Dict[str, str], Path],
         target_file: str = "main.py",
     ):
         if isinstance(code, IO):
-            with open(f"{self.__tmp_folder}/{target_file}", "w") as f:
+            with open(f"{self.__local_directory}/{target_file}", "w") as f:
                 f.write(code.read())
         elif isinstance(code, str):
-            with open(f"{self.__tmp_folder}/{target_file}", "w") as f:
+            with open(f"{self.__local_directory}/{target_file}", "w") as f:
                 f.write(code)
         elif isinstance(code, Dict):
             if target_file not in code:
@@ -474,15 +504,11 @@ def {tool.name}(*args, **kwargs):
                     f"Target file {target_file} not found in code files; "
                     "unsure what to execute"
                 )
-            for filename, content in code.items():
-                # TODO - make it recursive dicts such that we can specify
-                # folders this way.
-                with open(f"{self.__tmp_folder}/{filename}", "w") as f:
-                    f.write(content)
+            self.__dict_to_files(code, self.__local_directory)
         elif isinstance(code, Path):
             # IF it's a single file Path, copy it to the tmp_folder
             if code.is_file():
-                with open(f"{self.__tmp_folder}/{target_file}", "w") as f:
+                with open(f"{self.__local_directory}/{target_file}", "w") as f:
                     f.write(code.read_text())
             # If it's a dir, copy all the files to the tmp_folder
             elif code.is_dir():
@@ -490,7 +516,9 @@ def {tool.name}(*args, **kwargs):
                 for file in code.iterdir():
                     if file.name == target_file:
                         target_file_included = True
-                    with open(f"{self.__tmp_folder}/{file.name}", "w") as f:
+                    with open(
+                        f"{self.__local_directory}/{file.name}", "w"
+                    ) as f:
                         f.write(file.read_text())
                 if not target_file_included:
                     raise ValueError(
@@ -537,15 +565,15 @@ def {tool.name}(*args, **kwargs):
         if self.__server_thread is not None:
             self.__server_thread.join(timeout=1)
 
-        if os.path.exists(self.__tmp_folder):
-            shutil.rmtree(self.__tmp_folder)
+        if os.path.exists(self.__local_directory):
+            shutil.rmtree(self.__local_directory)
 
         if os.path.exists(self.__socket_path):
             os.unlink(self.__socket_path)
 
         super().__del__()
 
-        del self.__tmp_volume
+        del self.__tmp_bind
 
     def __enter__(self):
         self.__halt = False
