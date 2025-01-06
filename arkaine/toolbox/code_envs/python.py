@@ -13,7 +13,7 @@ from typing import IO, Any, Dict, List, Optional, Tuple, Union
 from uuid import uuid4
 
 from arkaine.tools.tool import Context, Tool
-from arkaine.utils.docker import BindVolume, Container
+from arkaine.utils.docker import BindVolume, Container, Volume
 
 
 class PythonEnv(Container):
@@ -27,7 +27,7 @@ class PythonEnv(Container):
         # ] = None,
         image: Optional[str] = None,
         tools: List[Tool] = [],
-        volumes: List[BindVolume] = [],
+        volumes: List[Union[BindVolume, Volume]] = [],
         ports: List[str] = [],
         entrypoint: str = None,
         command: Optional[str] = None,
