@@ -15,7 +15,7 @@ from uuid import uuid4
 from docker import DockerClient
 from docker.models.containers import Container
 
-from arkaine.tools.tool import Tool
+from arkaine.tools.tool import Context, Tool
 
 
 # TODO - this is dumb - we don't need to start a container
@@ -308,7 +308,7 @@ class PythonEnv(DockerContainer):
     # ):
     #     pass
 
-    def __handle_client(self, client: socket):
+    def __handle_client(self, client: socket, context: Context):
         try:
             # Get size first
             size = struct.unpack("!Q", client.recv(8))[0]
@@ -332,7 +332,7 @@ class PythonEnv(DockerContainer):
 
             try:
                 tool = self.__tools[data["function"]]
-                result = tool(*data["args"], **data["kwargs"])
+                result = tool(context, *data["args"], **data["kwargs"])
             except Exception as e:
                 result = e
 
@@ -342,7 +342,7 @@ class PythonEnv(DockerContainer):
         finally:
             client.close()
 
-    def __run_socket_server(self):
+    def __run_socket_server(self, context: Context):
         if os.path.exists(self.__socket_path):
             os.unlink(self.__socket_path)
 
@@ -401,7 +401,9 @@ class PythonEnv(DockerContainer):
                 if self.__halt:
                     break
                 Thread(
-                    target=self.__handle_client, args=(client,), daemon=True
+                    target=self.__handle_client,
+                    args=(client, context),
+                    daemon=True,
                 ).start()
                 client, _ = server.accept()
             except:  # noqa: E722
@@ -543,21 +545,28 @@ def {tool.tname}(*args, **kwargs):
 
     def execute(
         self,
-        code: Union[str, IO, Dict[str, str], Path],
+        code: Union[str, IO, Dict[str, Union[str, Dict]], Path],
+        context: Optional[Context] = None,
         target_file: str = "main.py",
     ) -> str:
-        self.__copy_code_to_tmp(code, target_file)
+        if context is None:
+            context = Context()
 
-        if self.__tools:
-            self.__add_bridge_imports()
+        with context:
+            self.__copy_code_to_tmp(code, target_file)
 
-            if self.__server_thread is None:
-                self.__server_thread = Thread(
-                    target=self.__run_socket_server, daemon=True
-                )
-                self.__server_thread.start()
+            if self.__tools:
+                self.__add_bridge_imports()
 
-        return self.__execute_code(code, target_file)
+                if self.__server_thread is None:
+                    self.__server_thread = Thread(
+                        target=self.__run_socket_server,
+                        args=(context,),
+                        daemon=True,
+                    )
+                    self.__server_thread.start()
+
+            return self.__execute_code(code, target_file)
 
     def __del__(self):
         self.__halt = True
