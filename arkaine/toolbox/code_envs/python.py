@@ -13,10 +13,10 @@ from typing import IO, Any, Dict, List, Optional, Tuple, Union
 from uuid import uuid4
 
 from arkaine.tools.tool import Context, Tool
-from arkaine.utils.docker import DockerContainer, DockerVolume
+from arkaine.utils.docker import BindVolume, Container
 
 
-class PythonEnv(DockerContainer):
+class PythonEnv(Container):
 
     def __init__(
         self,
@@ -27,7 +27,7 @@ class PythonEnv(DockerContainer):
         # ] = None,
         image: Optional[str] = None,
         tools: List[Tool] = [],
-        volumes: List[DockerVolume] = [],
+        volumes: List[BindVolume] = [],
         ports: List[str] = [],
         entrypoint: str = None,
         command: Optional[str] = None,
@@ -50,7 +50,7 @@ class PythonEnv(DockerContainer):
 
         self.__container_directory = container_code_directory
         self.__socket_file = socket_file
-        self.__tmp_bind = DockerVolume(
+        self.__tmp_bind = BindVolume(
             self.__local_directory, self.__container_directory
         )
         self.__socket_path = join(self.__local_directory, self.__socket_file)

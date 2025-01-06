@@ -1,35 +1,96 @@
-from typing import Any, Dict, List, Optional, Tuple
+import shutil
+import tempfile
+from typing import Any, Dict, List, Optional, Tuple, Union
 from uuid import uuid4
 
 from docker import DockerClient
 from docker.models.containers import Container
 
 
-# TODO - this is dumb - we don't need to start a container
-# here becaue we just reference it locally anyway.
-class DockerVolume:
+class Volume:
 
     def __init__(
         self,
-        local: str = None,
-        remote: str = "/data",
         name: Optional[str] = None,
-        read_only: bool = False,
-        image: str = "alpine:latest",
+        remote: str = "/data",
+        image: Optional[str] = None,
         persist_volume: bool = False,
+        read_only: bool = False,
     ):
         if name is None:
             self.__name = f"arkaine-{uuid4()}"
         else:
             self.__name = name
-        self.__local = local
+        self.__remote = remote
+        self.__image = image
+        self.__persist_volume = persist_volume
+        self.__read_only = read_only
+
+    @property
+    def name(self) -> str:
+        return self.__name
+
+    @property
+    def remote(self) -> str:
+        return self.__remote
+
+    @property
+    def read_only(self) -> bool:
+        return self.__read_only
+
+    @property
+    def image(self) -> str:
+        return self.__image
+
+    @property
+    def persist_volume(self) -> bool:
+        return self.__persist_volume
+
+    def mount_args(self) -> Dict[str, str]:
+        return {
+            "type": "volume",
+            "source": self.__name,
+            "target": self.__remote,
+            "read_only": self.__read_only,
+        }
+
+    def delete(self):
+        """
+        Deletes the volume, *even if persist volume is set*; this
+        is meant as an "overwrite" method to manually clean up the
+        volume after its persistence is unneeded.
+        """
+        self.__persist_volume = False
+        del self
+
+    def __del__(self):
+        if self.__persist_volume:
+            pass
+        else:
+            self.__client.volumes.get(self.__name).remove()
+
+
+class BindVolume:
+
+    def __init__(
+        self,
+        local: Optional[str] = None,
+        remote: str = "/data",
+        name: Optional[str] = None,
+        read_only: bool = False,
+    ):
+        if name is None:
+            self.__name = f"arkaine-{uuid4()}"
+        else:
+            self.__name = name
+        if local is None:
+            self.__local = tempfile.mkdtemp()
+            self.__tmpdir = True
+        else:
+            self.__local = local
+            self.__tmpdir = False
         self.__remote = remote
         self.__read_only = read_only
-        self.__client = DockerClient.from_env()
-        self.__image = image
-        self.__container = None
-        self.__persist_volume = persist_volume
-        self.__is_bind_mount = local is not None
 
     @property
     def name(self) -> str:
@@ -59,56 +120,25 @@ class DockerVolume:
         pass
 
     def mount_args(self) -> Dict[str, str]:
-        if self.__is_bind_mount:
-            return {
-                "type": "bind",
-                "source": self.__local,
-                "target": self.__remote,
-                "read_only": self.__read_only,
-            }
-        else:
-            return {
-                "type": "volume",
-                "source": self.__name,
-                "target": self.__remote,
-                "read_only": self.__read_only,
-            }
-
-    def start(self):
-        # Create volume if not using bind mount
-        if not self.__is_bind_mount:
-            self.__client.volumes.create(name=self.__name)
-
-        self.__container = self.__client.containers.run(
-            self.__image,
-            command="sleep infinity",
-            detach=True,
-            mounts=[self.mount_args()],
-        )
-
-    def stop(self):
-        if self.__container:
-            self.__container.stop()
+        return {
+            "type": "bind",
+            "source": self.__local,
+            "target": self.__remote,
+            "read_only": self.__read_only,
+        }
 
     def __enter__(self):
-        self.start()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        self.stop()
+        pass
 
     def __del__(self):
-        self.stop()
-        # Only try to remove volume if it's not a bind mount and not persistent
-        if not self.__is_bind_mount and not self.__persist_volume:
-            try:
-                self.__client.volumes.get(self.__name).remove()
-            except:
-                pass  # Ignore errors during cleanup
-        self.__client.close()
+        if self.__tmpdir:
+            shutil.rmtree(self.__local)
 
 
-class DockerContainer:
+class Container:
 
     def __init__(
         self,
@@ -116,7 +146,7 @@ class DockerContainer:
         image: str = "alpine:latest",
         args: Dict[str, Any] = {},
         env: Dict[str, Any] = {},
-        volumes: List[DockerVolume] = [],
+        volumes: List[Union[BindVolume, Volume]] = [],
         ports: Dict[str, str] = [],
         entrypoint: str = None,
         command: Optional[str] = None,
