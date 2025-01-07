@@ -8,6 +8,28 @@ from docker.models.containers import Container as dContainer
 
 
 class Volume:
+    """
+    Volume represents a Docker volume that can be used to persist data
+    across container runs. It encapsulates the properties and behaviors
+    associated with a Docker volume.
+
+    Attributes:
+        name (str): A unique identifier for the volume. If not provided,
+            a UUID will be generated.
+        remote (str): The path inside the container where the volume will
+            be mounted. Default is "/data".
+        image (Optional[str]): The Docker image associated with the volume.
+        persist_volume (bool): Indicates whether the volume should persist
+            after the container is stopped. Default is False.
+        read_only (bool): Indicates whether the volume should be mounted as
+            read-only. Default is False.
+
+    Methods:
+        delete():
+            Deletes the volume, even if it is marked as persistent. This method
+            is intended for manual cleanup of the volume when persistence is no
+            longer needed.
+    """
 
     def __init__(
         self,
@@ -71,6 +93,21 @@ class Volume:
 
 
 class BindVolume:
+    """
+    BindVolume represents a bind mount in Docker, allowing a local directory
+    to be mounted into a container. This is useful for sharing files between
+    the host and the container.
+
+    Attributes:
+        local (Optional[str]): The local path on the host machine to be
+            mounted. If not provided, a temporary directory will be created.
+        remote (str): The path inside the container where the bind mount will
+            be located. Default is "/data".
+        name (Optional[str]): A unique identifier for the bind volume. If not
+            provided, a UUID will be generated.
+        read_only (bool): Indicates whether the bind mount should be read-only.
+            Default is False.
+    """
 
     def __init__(
         self,
@@ -139,6 +176,40 @@ class BindVolume:
 
 
 class Container:
+    """
+    Container represents a Docker container that can be created, started,
+    and managed. It encapsulates the properties and behaviors associated
+    with a Docker container.
+
+    Attributes:
+        name (str): A unique identifier for the container.
+        image (str): The Docker image to use for the container. Default is
+                     "alpine:latest".
+        args (Dict[str, Any]): Arguments to pass to the container at runtime.
+        env (Dict[str, Any]): Environment variables to set in the container.
+        volumes (List[Union[BindVolume, Volume]]): A list of volumes to mount
+            in the container.
+        ports (Dict[str, str]): Port mappings between the container and the
+            host.
+        entrypoint (Optional[str]): The command to run when the container
+            starts.
+        command (Optional[str]): The command to execute in the container.
+
+    Methods:
+        start():
+            Starts the container with the specified configuration, running a
+            command to keep it alive.
+
+        run(command: Optional[str]) -> Tuple[str, str]:
+            Executes a command in the running container and returns the output
+            and error messages.
+
+        bash(command: str) -> str:
+            Executes a bash command in the container.
+
+        stop():
+            Stops and removes the container.
+    """
 
     def __init__(
         self,
@@ -251,10 +322,6 @@ class Container:
         if self._container:
             self._container.remove(force=True)
             self._container = None
-
-    def cleanup(self):
-        if self._container:
-            self.stop()
 
     @property
     def container(self) -> dContainer:

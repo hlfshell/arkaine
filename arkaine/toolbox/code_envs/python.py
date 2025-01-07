@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import pickle
 import shutil
@@ -17,6 +19,86 @@ from arkaine.utils.docker import BindVolume, Container, Volume
 
 
 class PythonEnv(Container):
+    """
+    PythonEnv represents a Docker container specifically configured to run
+    Python environments. It encapsulates the properties and behaviors
+    associated with a Python execution environment within a Docker container.
+
+    Attributes:
+        name (str): A unique identifier for the Python environment container.
+
+        version (str): The version of Python to use in the environment. Default
+            is "3.12".
+
+        modules (Optional[Union[Dict[str, Union[str, Tuple[str, str]]],
+        List[str]]]):
+            A list or dictionary of Python modules to install in the
+            environment. See documentation below for more details.
+
+        image (Optional[str]): The Docker image to use for the Python
+            environment.
+
+        tools (List[Tool]): A list of tools that can be used within the Python
+            environment.
+
+        volumes (List[Union[BindVolume, Volume]]): A list of volumes to mount
+            in the container.
+
+        ports (List[str]): A list of port mappings between the container and
+            the host.
+
+        entrypoint (str): The command to run when the container starts.
+
+        command (Optional[str]): The command to execute in the container.
+
+        env (Dict[str, Any]): Environment variables to set in the container.
+
+        container_code_directory (str): The directory inside the container
+            where code will be executed. Default is "/arkaine".
+
+        socket_file (str): The name of the socket file for communication.
+            Default is "arkaine_bridge.sock".
+
+        local_code_directory (Optional[str]): The local directory on the host
+            to mount in the container.
+
+    Methods:
+        execute(code: (see below) -> Tuple[Any, Exception]:
+            Code can be a string, file-like object, dictionary, or path. Each
+            have their own meaning.
+             - string : the code to execute
+             - file-like / IO object : the code to execute
+             - dict : a dict of files to write to the container.
+                The keys are the filenames, and the values are the file
+                contents. If a value of a key is another dict, it will be
+                treated as a directory, and so on recursively until all files
+                are written.
+             - path : a path to a directory or file. If it's a file, it will
+                be copied to the container. If it's a directory, all the files
+                in the directory will be copied to the container.
+
+            Executes the provided code in the Python environment, managing the
+            execution context and handling exceptions.
+
+    On module installation:
+        When utilizing the modules argument, you can specify it in two ways.
+        The overall functionality of this feature is to install the modules
+        specified at initial running of the container. Do note, however, that
+        it is more ideal to utilize an image with the correct modules already
+        installed.
+
+        If passed a list, it will be treated as a list of modules to install
+        using pip.
+
+        If passed a dict, the key is the package manager to use, and the value
+        is a list of modules to install. The following package managers are
+        supported, but not necessarily in the image used:
+            - pip
+            - conda
+            - poetry
+            - uv
+            - mamba
+    """
 
     def __init__(
         self,
@@ -76,9 +158,16 @@ class PythonEnv(Container):
 
         self.__load_bridge_functions(tools)
 
-    def __install_modules(
-        self,
-    ):
+    def __install_modules(self):
+        """
+        Installs the specified Python modules in the environment using the
+        appropriate package manager.
+
+        This method constructs installation commands based on the provided
+        modules and executes them in the container. It supports multiple
+        package managers such as pip, conda, poetry, uv, and mamba. If any
+        installation fails, a PythonModuleInstallationException is raised.
+        """
         commands: List[str] = []
 
         def versioned_str(installer: str, input: Tuple[str, str]) -> str:
@@ -171,6 +260,20 @@ class PythonEnv(Container):
                 raise PythonModuleInstallationException(e)
 
     def __handle_client(self, client: socket, context: Context) -> Any:
+        """
+        Handles communication with a client connected to the Python
+        environment's socket.
+
+        This method receives data from the client, processes requests, and
+        sends back responses. It supports handling various function calls,
+        including ping requests, results, and exceptions.
+
+        Args:
+            client (socket): The socket connection to the client.
+
+            context (Context): The context associated with the current
+                execution.
+        """
         try:
             # Get size first
             size = struct.unpack("!Q", client.recv(8))[0]
@@ -223,6 +326,18 @@ class PythonEnv(Container):
             client.close()
 
     def __run_socket_server(self, context: Context):
+        """
+        Starts a socket server to listen for incoming client connections and
+        handle requests.
+
+        This method creates a Unix socket server that listens for client
+        connections. It spawns a new thread to handle each client connection,
+        allowing multiple clients to be served concurrently.
+
+        Args:
+            context (Context): The context associated with the current
+                execution.
+        """
         if os.path.exists(self.__socket_path):
             os.unlink(self.__socket_path)
 
@@ -274,8 +389,6 @@ class PythonEnv(Container):
         be processed in parallel. Then we start listening yet again. Of course,
         we also have a __halt check; if we call stop or go to delete the
         process we stop this and die off.
-
-        TODO - use a threadpool executor to clean this up
         """
         client, _ = server.accept()
         while True:
@@ -292,6 +405,18 @@ class PythonEnv(Container):
                 break
 
     def __load_bridge_functions(self, tools: List[Tool]):
+        """
+        Loads bridge functions from external files and prepares them for use in
+        the Python environment.
+
+        This method reads bridge function definitions from specified files,
+        replaces placeholders with actual values, and appends tool-specific
+        function calls to the bridge code.
+
+        Args:
+            tools (List[Tool]): A list of tools whose functions will be
+                included in the bridge.
+        """
         bridge_functions_path = join(
             Path(__file__).parent,
             "extras",
@@ -329,7 +454,14 @@ class PythonEnv(Container):
             f.write(bridge_code)
 
     def __add_bridge_imports(self):
+        """
+        Appends import statements for bridge functions to Python files in the
+        local code directory.
 
+        This method scans the local code directory for Python files and adds
+        import statements for the bridge functions, ensuring that they are
+        available for execution.
+        """
         ignore_files = [
             "setup.py",
             self.__client_import_filename,
@@ -373,6 +505,20 @@ class PythonEnv(Container):
     def __dict_to_files(
         self, code: Dict[str, Union[str, Dict]], parent_dir: str
     ):
+        """
+        Recursively writes a dictionary of code files to the local code
+        directory.
+
+        This method creates directories as needed and writes the contents of
+        the provided dictionary to the specified location in the local code
+        directory.
+
+        Args:
+            code (Dict[str, Union[str, Dict]]): A dictionary where keys are
+                filenames and values are file contents.
+
+            parent_dir (str): The parent directory in which to write the files.
+        """
         for filename, content in code.items():
             if isinstance(content, Dict):
                 # If it's a dict, we make it a directory, and then recurse
@@ -391,6 +537,21 @@ class PythonEnv(Container):
         code: Union[str, IO, Dict[str, str], Path],
         target_file: str = "main.py",
     ):
+        """
+        Copies code from various sources to the temporary local code directory
+        for execution.
+
+        This method handles different types of input (string, file-like object,
+        dictionary, or path) and writes the code to the specified target file
+        in the local code directory.
+
+        Args:
+            code (Union[str, IO, Dict[str, str], Path]): The code to copy,
+                which can be a string, file-like object, dictionary, or path.
+
+            target_file (str): The name of the target file to write the code
+                to.
+        """
         if isinstance(code, IO):
             with open(f"{self.__local_directory}/{target_file}", "w") as f:
                 f.write(code.read())
@@ -471,8 +632,29 @@ class PythonEnv(Container):
         code: Union[str, IO, Dict[str, str], Path],
         target_file: str = "main.py",
     ):
+        """
+        Executes the specified code in the Python environment and returns the
+        output.
+
+        This method runs the code in the context of the Python environment,
+        capturing the output and handling any exceptions that may occur during
+        execution.
+
+        Args:
+            context (Context): The context associated with the current
+                execution.
+
+            code (Union[str, IO, Dict[str, str], Path]): The code to execute.
+
+            target_file (str): The name of the target file to execute.
+
+        Returns:
+            Any: The output of the executed code.
+
+        Raises:
+            PythonExecutionException: If an error occurs during code execution.
+        """
         try:
-            # result = self.run(f"python /{self.__container_directory}/{target_file}")
             self.run(f"python /{self.__container_directory}/__arkaine_exec.py")
 
             return context.output
@@ -488,6 +670,28 @@ class PythonEnv(Container):
         context: Optional[Context] = None,
         target_file: str = "main.py",
     ) -> Tuple[Any, Exception]:
+        """
+        Executes the provided code in the Python environment, managing the
+        execution context and handling exceptions.
+
+        This method prepares the execution environment, installs necessary
+        modules, and runs the code while capturing output and exceptions. It
+        returns the output and any exception that occurred.
+
+        Args:
+            code (Union[str, IO, Dict[str, Union[str, Dict]], Path]): The code
+                to execute.
+
+            context (Optional[Context]): The context to use for execution. If
+                None, a new context will be created.
+
+            target_file (str): The name of the target file to execute. Default
+                is "main.py".
+
+        Returns:
+            Tuple[Any, Exception]: A tuple containing the output of the
+                executed code and any exception that occurred.
+        """
         if context is None:
             context = Context()
 
@@ -508,10 +712,11 @@ class PythonEnv(Container):
             return context.output, context.exception
 
     def __del__(self):
+        """
+        Cleans up resources when the PythonEnv instance is deleted, including
+        stopping the container and removing temporary files.
+        """
         self.__halt = True
-
-        # if self.__server_thread is not None:
-        #     self.__server_thread.join(timeout=1)
 
         if os.path.exists(self.__local_directory):
             shutil.rmtree(self.__local_directory)
@@ -523,11 +728,34 @@ class PythonEnv(Container):
 
         del self.__tmp_bind
 
-    def __enter__(self):
+    def __enter__(self) -> PythonEnv:
+        """
+        Prepares the Python environment for use in a context manager.
+
+        This method starts the Python environment and returns the instance for
+        use within the context.
+
+        Returns:
+            PythonEnv: The current instance of the PythonEnv.
+        """
         self.__halt = False
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
+        """
+        Cleans up resources when exiting the context manager.
+
+        This method ensures that the Python environment is properly stopped and
+        cleaned up.
+
+        Args:
+            exc_type: The type of exception raised, if any.
+
+            exc_value: The value of the exception raised, if any.
+
+            traceback: The traceback object associated with the exception, if
+                any.
+        """
         self.__halt = True
         self.stop()
 
