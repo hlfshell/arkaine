@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from uuid import uuid4
 
 from docker import DockerClient
-from docker.models.containers import Container
+from docker.models.containers import Container as dContainer
 
 
 class Volume:
@@ -172,10 +172,10 @@ class Container:
         else:
             self.__command = command
 
-        self.__container: Optional[Container] = None
+        self._container: Optional[dContainer] = None
         self.__client = DockerClient.from_env()
 
-    def run(self, command: Optional[str]) -> Tuple[str, str]:
+    def __image_check(self):
         # Check to see if we have the image; if not, attempt
         # to pull it
         try:
@@ -186,7 +186,24 @@ class Container:
             except:  # noqa: E722
                 pass
 
-        self.__container = self.__client.containers.run(
+    def __wait_for_container(self):
+        self._container.reload()
+        if self._container.status != "running":
+            raise DockerExecutionException(
+                f"Container failed to start. Status: {self._container.status}"
+            )
+
+    def start(self):
+        """
+        start runs the container with a "sleep infinity" command to keep
+        it alive and running until it is told to stop.
+        """
+        if self._container:
+            return
+
+        self.__image_check()
+
+        self._container = self.__client.containers.run(
             self.__image,
             name=self.__name,
             command="sleep infinity",
@@ -197,15 +214,18 @@ class Container:
             entrypoint=self.__entrypoint,
         )
 
-        # Wait for the container to be fully running
-        self.__container.reload()
-        if self.__container.status != "running":
-            raise DockerExecutionException(
-                f"Container failed to start. Status: {self.__container.status}"
-            )
+        self.__wait_for_container()
+
+    def run(self, command: Optional[str]) -> Tuple[str, str]:
+        self.__image_check()
+
+        command = self.__command if command is None else command
+
+        if not self._container:
+            self.start()
 
         # Execute execute execute!
-        result = self.__container.exec_run(
+        result = self._container.exec_run(
             command,
             stderr=True,  # Enable stderr capture
             demux=True,  # Split stdout/stderr apart
@@ -222,19 +242,23 @@ class Container:
 
         return stdout
 
+    def bash(self, command: str) -> str:
+        # Make sure escape characters are handled for quotations
+        command = command.replace("'", "\\'")
+        return self.run(f"/bin/bash -c '{command}'")
+
     def stop(self):
-        if self.__container:
-            self.__container.remove(force=True)
-            self.__container = None
+        if self._container:
+            self._container.remove(force=True)
+            self._container = None
 
     def cleanup(self):
-        if self.__container:
+        if self._container:
             self.stop()
-            self.__container.remove()
 
     @property
-    def container(self) -> Container:
-        return self.__container
+    def container(self) -> dContainer:
+        return self._container
 
     def __enter__(self):
         self.run(None)

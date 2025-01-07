@@ -22,9 +22,9 @@ class PythonEnv(Container):
         self,
         name: Optional[str] = None,
         version: str = "3.12",
-        # modules: Optional[
-        #     Union[Dict[str, Union[str, Tuple[str, str]]], List[str]]
-        # ] = None,
+        modules: Optional[
+            Union[Dict[str, Union[str, Tuple[str, str]]], List[str]]
+        ] = None,
         image: Optional[str] = None,
         tools: List[Tool] = [],
         volumes: List[Union[BindVolume, Volume]] = [],
@@ -57,13 +57,6 @@ class PythonEnv(Container):
 
         volumes.append(self.__tmp_bind)
 
-        self.__client_import_filename = "arkaine_bridge.py"
-
-        self.__server_thread: Optional[Thread] = None
-        self.__halt = False
-
-        self.__load_bridge_functions(tools)
-
         super().__init__(
             name,
             image,
@@ -75,11 +68,107 @@ class PythonEnv(Container):
             command=command,
         )
 
-    # def __install_modules(
-    #     self,
-    #     modules: Union[Dict[str, Union[str, Tuple[str, str]]], List[str]],
-    # ):
-    #     pass
+        self.__modules = modules
+
+        self.__client_import_filename = "arkaine_bridge.py"
+
+        self.__halt = False
+
+        self.__load_bridge_functions(tools)
+
+    def __install_modules(
+        self,
+    ):
+        commands: List[str] = []
+
+        def versioned_str(installer: str, input: Tuple[str, str]) -> str:
+            if installer in ["pip", "poetry"]:
+                return f"{input[0]}=={input[1]}"  # pip and poetry use '=='
+            elif installer in ["conda", "uv", "mamba"]:
+                return f"{input[0]}={input[1]}"  # conda, uv, and mamba use '='
+            else:
+                raise ValueError(f"Installer '{installer}' is not supported.")
+
+        acceptable_installers = ["pip", "conda", "poetry", "uv", "mamba"]
+
+        if isinstance(self.__modules, List):
+            commands = [
+                "pip install "
+                + " ".join(
+                    (
+                        versioned_str("pip", module)
+                        if isinstance(module, Tuple)
+                        else module
+                    )
+                    for module in self.__modules
+                )
+            ]
+        elif isinstance(self.__modules, Dict):
+            commands = []
+            non_pip_installers_used: List[str] = []
+            for installer, installer_modules in self.__modules.items():
+                if installer not in acceptable_installers:
+                    raise ValueError(
+                        f"Installer '{installer}' is not supported."
+                    )
+                if installer == "pip":
+                    commands.append(
+                        "pip install "
+                        + " ".join(
+                            (
+                                versioned_str(installer, module)
+                                if isinstance(module, Tuple)
+                                else module
+                            )
+                            for module in installer_modules
+                        )
+                    )
+                elif installer == "conda":
+                    commands.append(
+                        "conda install -y "
+                        + " ".join(
+                            (
+                                versioned_str(installer, module)
+                                if isinstance(module, Tuple)
+                                else module
+                            )
+                            for module in installer_modules
+                        )
+                    )
+                    non_pip_installers_used.append(installer)
+                elif installer == "poetry":
+                    commands.append(
+                        "poetry add "
+                        + " ".join(
+                            (
+                                versioned_str(installer, module)
+                                if isinstance(module, Tuple)
+                                else module
+                            )
+                            for module in installer_modules
+                        )
+                    )
+                    non_pip_installers_used.append(installer)
+
+                elif installer in ["uv", "mamba"]:
+                    commands.append(
+                        f"{installer} install -y "
+                        + " ".join(
+                            (
+                                versioned_str(installer, module)
+                                if isinstance(module, Tuple)
+                                else module
+                            )
+                            for module in installer_modules
+                        )
+                    )
+                    non_pip_installers_used.append(installer)
+
+        for command in commands:
+            try:
+                self.bash(command)
+            except Exception as e:
+                raise PythonModuleInstallationException(e)
 
     def __handle_client(self, client: socket, context: Context) -> Any:
         try:
@@ -177,12 +266,14 @@ class PythonEnv(Container):
         ping_thread.start()
 
         """
-        How this works - basically it opens the socket and checks for a
-        connection. Once made (via a message being sent), we create a thread
-        to handle the client message coming in. This allows possibly multiple 
-        incoming messages to be processed in parallel. Then we start listening
-        yet again. Of course, we also have a __halt check; if we call stop or
-        go to delete the process we stop this and die off.
+        How this works™:
+
+        Basically it opens the socket and checks for a connection. Once made
+        (via a message being sent), we create a thread to handle the client
+        message coming in. This allows possibly multiple incoming messages to
+        be processed in parallel. Then we start listening yet again. Of course,
+        we also have a __halt check; if we call stop or go to delete the
+        process we stop this and die off.
 
         TODO - use a threadpool executor to clean this up
         """
@@ -390,8 +481,6 @@ class PythonEnv(Container):
                 raise context.exception
             else:
                 raise PythonExecutionException(e, traceback.format_exc())
-        finally:
-            self.stop()
 
     def execute(
         self,
@@ -405,17 +494,15 @@ class PythonEnv(Container):
         with context:
             context.executing = True
             self.__copy_code_to_tmp(code, target_file)
-
-            # if self.__tools:
             self.__add_bridge_imports()
+            self.__install_modules()
 
-            if self.__server_thread is None:
-                self.__server_thread = Thread(
-                    target=self.__run_socket_server,
-                    args=(context,),
-                    daemon=True,
-                )
-                self.__server_thread.start()
+            thread = Thread(
+                target=self.__run_socket_server,
+                args=(context,),
+                daemon=True,
+            )
+            thread.start()
 
             self.__execute_code(context, code, target_file)
             return context.output, context.exception
@@ -423,8 +510,8 @@ class PythonEnv(Container):
     def __del__(self):
         self.__halt = True
 
-        if self.__server_thread is not None:
-            self.__server_thread.join(timeout=1)
+        # if self.__server_thread is not None:
+        #     self.__server_thread.join(timeout=1)
 
         if os.path.exists(self.__local_directory):
             shutil.rmtree(self.__local_directory)
@@ -450,7 +537,13 @@ class PythonExecutionException(Exception):
         self.exception = e
         try:
             self.message = e.message
-        except:
+        except:  # noqa: E722
             self.message = str(e)
         self.stack_trace = stack_trace
         super().__init__(self.message)
+
+
+class PythonModuleInstallationException(Exception):
+    def __init__(self, e: Exception):
+        self.exception = e
+        super().__init__(f"Failed to install modules: {e}")
