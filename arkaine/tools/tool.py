@@ -24,6 +24,7 @@ from arkaine.tools.events import (
     ToolReturn,
 )
 from arkaine.tools.example import Example
+from arkaine.tools.result import Result
 from arkaine.tools.types import ToolArguments
 
 
@@ -740,6 +741,7 @@ class Tool:
         func: Callable,
         examples: List[Example] = [],
         id: Optional[str] = None,
+        result: Optional[Result] = None,
     ):
         self.__id = id or str(uuid4())
         self.name = name
@@ -748,7 +750,7 @@ class Tool:
         self.func = func
         self.examples = examples
         self._on_call_listeners: List[Callable[[Tool, Context], None]] = []
-
+        self.result = result
         self._executor = ThreadPoolExecutor()
 
         Registrar.register(self)
