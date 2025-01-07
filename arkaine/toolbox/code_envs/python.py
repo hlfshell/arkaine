@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import pickle
+import re
 import shutil
 import socket
 import struct
@@ -619,8 +620,13 @@ class PythonEnv(Container):
             body = f.read()
         if "def main()" in body:
             pass
-        elif "if __name__ == '__main__'" in body:
-            body = body.replace("if __name__ == '__main__':", "def main():")
+
+        # Check for any form of __name__ == '__main__'
+        # by seeing if __name__, ==, and __main__ are in the same line:
+        elif re.search(r"__name__\s*==\s*__main__", body):
+            body = re.sub(
+                r"__name__\s*==\s*['\"]__main__['\"]\s*:", "def main():", body
+            )
             with open(f"{self.__local_directory}/{target_file}", "w") as f:
                 f.write(body)
         else:
