@@ -448,7 +448,7 @@ class PythonEnv(Container):
                 tool_call_template = template.read()
 
             for tool in tools:
-                bridge_code += tool_call_template.replace(
+                bridge_code += "\n\n" + tool_call_template.replace(
                     "{tool_name}", tool.tname
                 )
 
@@ -621,9 +621,10 @@ class PythonEnv(Container):
         if "def main()" in body:
             pass
 
-        # Check for any form of __name__ == '__main__'
-        # by seeing if __name__, ==, and __main__ are in the same line:
-        elif re.search(r"__name__\s*==\s*__main__", body):
+        # Check for any form of __name__ == '__main__' - multiple spaces, "
+        # versus ', etc. Then check to see if __name__, ==, and __main__ are in
+        # the same line:
+        elif re.search(r"__name__\s*==\s*['\"]__main__['\"]", body):
             body = re.sub(
                 r"__name__\s*==\s*['\"]__main__['\"]\s*:", "def main():", body
             )
@@ -780,4 +781,5 @@ class PythonExecutionException(Exception):
 class PythonModuleInstallationException(Exception):
     def __init__(self, e: Exception):
         self.exception = e
+        super().__init__(f"Failed to install modules: {e}")
         super().__init__(f"Failed to install modules: {e}")
