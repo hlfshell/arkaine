@@ -18,29 +18,36 @@ def python(
     Returns:
         str: The generated docstring.
     """
-    docstring = f'"""{tool.description}\n\n'
+    # Build function signature with tool name and args
+    func_sig = f"\ndef {tool.name}("
+    if tool.args:
+        func_sig += ", ".join(arg.name for arg in tool.args)
+    func_sig += ")\n"
+
+    docstring = func_sig + f'"""\n{tool.description}\n\n'
 
     # Add arguments based on the output style
-    if output_style == "google":
-        docstring += "Args:\n"
-        for arg in tool.args:
-            desc = arg.description if hasattr(arg, "description") else ""
-            arg_desc = f"    {arg.name} ({arg.type}): {desc}\n"
-            docstring += arg_desc
-    elif output_style == "numpy":
-        docstring += "Parameters\n----------\n"
-        for arg in tool.args:
-            desc = arg.description if hasattr(arg, "description") else ""
-            arg_desc = f"{arg.name} : {arg.type}\n    {desc}\n"
-            docstring += arg_desc
-    elif output_style == "standard":
-        docstring += "Args:\n"
-        for arg in tool.args:
-            desc = arg.description if hasattr(arg, "description") else ""
-            arg_desc = f"    {arg.name} ({arg.type}): {desc}\n"
-            docstring += arg_desc
-    else:
-        raise ValueError(f"Invalid output style: {output_style}")
+    if tool.args:
+        if output_style == "google":
+            docstring += "Args:\n"
+            for arg in tool.args:
+                desc = arg.description if hasattr(arg, "description") else ""
+                arg_desc = f"    {arg.name} ({arg.type}): {desc}\n"
+                docstring += arg_desc
+        elif output_style == "numpy":
+            docstring += "Parameters\n----------\n"
+            for arg in tool.args:
+                desc = arg.description if hasattr(arg, "description") else ""
+                arg_desc = f"{arg.name} : {arg.type}\n    {desc}\n"
+                docstring += arg_desc
+        elif output_style == "standard":
+            docstring += "Args:\n"
+            for arg in tool.args:
+                desc = arg.description if hasattr(arg, "description") else ""
+                arg_desc = f"    {arg.name} ({arg.type}): {desc}\n"
+                docstring += arg_desc
+        else:
+            raise ValueError(f"Invalid output style: {output_style}")
 
     if tool.result:
         docstring += f"\n{tool.result}\n"
