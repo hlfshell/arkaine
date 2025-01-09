@@ -702,8 +702,12 @@ class PythonEnv(Container):
         if context is None:
             context = Context()
 
+        if context.executing:
+            context = context.child_context(None)
+
+        context.executing = True
+
         with context:
-            context.executing = True
             self.__copy_code_to_tmp(code, target_file)
             self.__add_bridge_imports()
             self.__install_modules()
