@@ -98,7 +98,7 @@ class BaseBackend(ABC):
         """
         if tool.name in self.tools:
             return
-        self.tools[tool.name] = tool
+        self.tools[tool] = tool
 
     def call_tools(
         self, context: Context, calls: List[Tuple[str, ToolArguments]]
@@ -118,7 +118,7 @@ class BaseBackend(ABC):
     def estimate_tokens(self, prompt: Prompt) -> int:
         return self.llm.estimate_tokens(prompt)
 
-    def __initialize_state(self, context: Context):
+    def _initialize_state(self, context: Context):
         state = self.initial_state.copy()
         for key, value in state.items():
             context[key] = value
@@ -130,7 +130,7 @@ class BaseBackend(ABC):
         max_steps: Optional[int] = None,
         stop_at_first_tool: bool = False,
     ) -> str:
-        self.__initialize_state(context)
+        self._initialize_state(context)
 
         # Build prompt
         prompt = self.prepare_prompt(context, **args)
