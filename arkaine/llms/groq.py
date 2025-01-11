@@ -1,13 +1,13 @@
 import os
 from typing import Optional
 
-from groq import Groq
+from groq import Groq as GroqAPI
 
 from arkaine.agent import Prompt
 from arkaine.llms.llm import LLM
 
 
-class GroqLLM(LLM):
+class Groq(LLM):
 
     CONTEXT_LENGTHS = {
         "gemma2-9b-it": 8192,

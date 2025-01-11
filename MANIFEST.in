@@ -1,4 +1,5 @@
 include LICENSE
 include README.md
 include requirements.txt
-recursive-include arkaine/backends/prompts *.prompt.*
+recursive-include arkaine/backends/prompts *.prompt
+recursive-include arkaine/composer/static/*
