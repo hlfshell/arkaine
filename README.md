@@ -1,19 +1,16 @@
 # arkaine
 
-*We've trapped lightning into a rock and tricked it to think. Add some incantations (programming) and some summoning words (prompts) and let's see what we can cook up...*
-
-Empower your summoned AI agents. arkaine is a batteries-included framework built for DIY builders to create easy tool enhanced AI agents. Utilize completed agents to compose ever-more complex agents.
+Empower your summoned AI agents. arkaine is a batteries-included framework built for DIY builders, individuals, and small scale solutions.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 
 ## Overview
 
-This is a framework for experimenting with agent construction using Large Language Models (LLMs). The goal is to create a set of tools that make it possible to work with a wide variety of LLMs to create capable, simple agents. Agents themselves are also tools, allowing agents to consist of sub-agents for increasingly complex tasks.
+arkaine is built to allow individuals with a little python knowledge to easily create deployable AI agents enhanced with tools. While other frameworks are focused on scalable web-scale solutions, arkaine is focused on the smaller scale projects - the prototype, the small cron job, the weekend project. arkaine attempts to be batteries included - multiple features and tools built in to allow you to go from idea to execution rapidly.
 
-## Who is this for?
-
-This is a framework dedicated to making it easy to create agentic tools to perform a wide variety of tasks for the average DIY coder.
+## WARNING
+This is a *very* early work in progress. Expect breaking changes, bugs, and rapidly expanding features.
 
 ## Features
 
@@ -28,23 +25,15 @@ This is a framework dedicated to making it easy to create agentic tools to perfo
     - More coming soon...
 - 🧰 Built-in common tools (web search, file operations, etc.)
 
-## Supported LLMs
-
-- OpenAI (GPT-3.5, GPT-4)
-- Anthropic Claude
-- Groq
-- Ollama (local models)
-
 ## Key Concepts
 
-The framework uses the following key concepts:
-
-- **LLM**: An instruct-based model that generates text (e.g., GPT-3.5, Claude, Llama, etc).
-- **Tool**: A properly formatted piece of functionality that contains descriptors of what it does, how it works, and possibly includes examples. Can be called as a normal function in code, hiding much of the complexity.
-- **Agent**: A type of tool that utilizes an LLM and possibly other tools to perform a function. The default agent is merely a singular LLM call performing the function for the agent.
-    - **MetaAgent** - A meta agent is an agent that can repeatedly call an LLM to try and perform its task, where the agent can identify when it is complete with its task.
-    - **BackendAgent** - A backend agent is an agent that utilizes a **backend** to perform its task.
-- **Backend**: A backend is a system that empowers an LLM to utilize tools and detect when it is finished with its task.
+- 🔧 **Tools** - Tools are functions (with some extra niceties) that can be called and do something. That's it!
+- 🤖 **Agents** - Agents are tools that use LLMS. Different kinds of agents can call other tools, which might be agents themselves!
+    -  **MetaAgents** - MetaAgents are multi-shot agents that can repeatedly call an LLM to try and perform its task, where the agent can identify when it is complete with its task.
+    - &#129520; **BackendAgents** - BackendAgents are agents that utilize a **Backend** to perform its task.
+-  **Backends** - Backends are systems that empower an LLM to utilize tools and detect when it is finished with its task. You probably won't need to worry about them!
+- 📦 **Integrations** - Integrations are systems that can trigger your agents in a configurable manner. Want a web server for your agents? Or want your agent firing off every hour? arkaine has you covered.
+- **Context** - Context provides thread-safe state across tools. No matter how complicated your workflow gets by plugging agents into agents, contexts will keep track of everything.
 
 ## Installation
 
@@ -95,7 +84,7 @@ def func(name: str, age: Optional[int] = None) -> str:
     """
     return f"Hello {name}!"
 
-toolify
+@toolify
 def func2(text: str, times: int = 1) -> str:
     """
     Repeats text a specified number of times.
@@ -120,6 +109,8 @@ def func3(a: int, b: int) -> int:
     return a + b
 func3 = toolify(func3)
 ```
+
+#### docstring scanning
 
 Not only will `toolify` turn `func1/2/3` into a `Tool`, it also attempts to read the type hints and documentation to create a fully fleshed out tool for you, so you don't have to rewrite descriptions or argument explainers.
 
@@ -218,15 +209,24 @@ class MyBackend(BaseBackend):
         return []
 ```
 
+### Choosing a Backend
+
+When in doubt, trial and error works. You have the following backends available:
+
+- `OpenAI` - utilizes OpenAI's built in tool calling API
+- `Simple` - a simple scanner to see if the model's response starts a line with a tool call. Nothing fancy.
+- `REACT` - a backend that utilizes the Thought/Action/Answer paradigm to call tools and think through tasks.
+- `Python` - utilize python coding within a docker environment to safely execute LLM code with access to your tools to try and solve problems.
+
 
 ## LLMs
 
 Arkaine supports multiple integrations with different LLM interfaces:
 
-- **OpenAI**: Supports GPT-3.5 and GPT-4 models.
-- **Anthropic Claude**: A powerful LLM for various tasks.
-- **Groq**: For specialized LLM tasks.
-- **Ollama**: Supports local models for offline use.
+- **OpenAI**
+- **Anthropic Claude**
+- **Groq**
+- **Ollama** - local offline models supported!
 
 ### Expanding to other LLMs
 
@@ -278,11 +278,11 @@ print(result)
 
 This is a bit of an advanced topic, so feel free to skip this section if you're just getting started.
 
-All tools and agents are passed a `Context` object. The goal of the context object is to track tool state, be it the tool's specific state or its children. Similarly, it provides a number of helper functions to make it easier to work with tooling. All of context's functionalities are thread safe.
+All tools and agents are passed at execution time (when they are called) a `Context` object. The goal of the context object is to track tool state, be it the tool's specific state or its children. Similarly, it provides a number of helper functions to make it easier to work with tooling. All of a context's functionalities are thread safe.
 
-Contexts are acyclic graphs with a single root node. Children can branch out, but ultimately return to the root node for its output.
+Contexts are acyclic graphs with a single root node. Children can branch out, but ultimately return to the root node as execution completes.
 
-Contexts track the progress, input, and output of the tool and all sub tools. They can be saved (`.save(filepath)`) and loaded (`.load(filepath)`) for future reference.
+Contexts track the progress, input, output, and possible exceptions of the tool and all sub tools. They can be saved (`.save(filepath)`) and loaded (`.load(filepath)`) for future reference.
 
 Contexts are automatically created when you call your tool, but a blank one can be passed in as the first argument to all tools as well.
 
@@ -399,6 +399,123 @@ Agents can feed into other agents, but the flow of information between these age
 - `ParallelList` - Given a list of inputs, execute in parallel the same tool/agent and aggregate their results at the end.
 
 - `Retry` - Given a tool/agent, retry it until it succeeds or up to a set amount of attempts. Also provides a way to specify which exceptions to retry on.
+
+## Linear
+
+You can make tools out of the `Linear` tool, where you pass it a name, description, and a list of steps. Each step can be a tool, a function, or a lambda. - lambdas and functions are `toolify`d into tools when created.
+
+```python
+from arkaine.flow.linear import Linear
+
+def some_function(x: int) -> int:
+    return str(x) + " is a number"
+
+my_linear_tool = Linear(
+    name="my_linear_flow",
+    description="A linear flow",
+    steps=[
+        tool_1,
+        lambda x: x**2,
+        some_function,
+        ...
+    ],
+)
+
+my_linear_tool({"x": 1})
+```
+
+## Conditional
+
+A `Conditional` tool is a tool that will execute a set of agents in a conditional fashion, allowing a branching of if->then/else logic. The then/otherwise attributes are the true/false branches respectively, and can be other tools or functions.
+
+```python
+from arkaine.flow.conditional import Conditional
+
+my_tool = Conditional(
+    name="my_conditional_flow",
+    description="A conditional flow",
+    args=[Argument("x", "An input value", "int", required=True)],
+    condition=lambda x: x > 10,
+    then=tool_1,
+    otherwise=lambda x: x**2,
+)
+
+my_tool(x=11)
+```
+
+
+## Branch
+
+A `Branch` tool is a tool that will execute a set of agents in a parallel fashion, allowing a branching from an input to multiple tools/agents.
+
+```python
+from arkaine.flow.branch import Branch
+
+my_tool = Branch(
+    name="my_branch_flow",
+    description="A branch flow",
+    args=[Argument("x", "An input value", "int", required=True)],
+    tools=[tool_1, tool_2, ...],
+)
+
+my_tool(11)
+```
+
+The output of each function can be formatted using the `formatters` attribute; it accepts a list of functions wherein the index of the function corresponds to the index of the associated tool.
+
+By default, the branch assumes the `all` completion strategy (set using the `completion_strategy` attribute). This waits for all branches to complete. You also have access to `any` for the first, `n` for the first n, and `majority` for the majority of branches to complete.
+
+Similarly, you can set an `error_strategy` on whether or not to fail on any exceptions amongst the children tools.
+
+## ParallelList
+
+A `ParallelList` tool is a tool that will execute a singular tool across a list of inputs. These are fired off in parallel (with an optional `max_workers` setting).
+
+```python
+from arkaine.flow.parallel_list import ParallelList
+
+@toolify
+def my_tool(x: int) -> int:
+    return x**2
+
+my_parallel_tool = ParallelList(
+    tool=my_tool,
+)
+
+my_tool([1, 2, 3])
+```
+
+If you have a need to format the items prior to being fed into the tool, you can use the `item_formatter` attribute, which runs against each input individually.
+
+```python
+my_parallel_tool = ParallelList(
+    tool=my_tool,
+    item_formatter=lambda x: int(x),
+)
+
+my_parallel_tool(["1", "2", "3"])
+```
+
+...and as before with `Branch`, you can set attributes for `completion_strategy`, `completion_count`, and `error_strategy`.
+
+## Retry
+
+A `Retry` tool is a tool that will retry a tool/agent until it succeeds or up to a set amount of attempts, with an option to specify which exceptions to retry on.
+
+```python
+from arkaine.flow.retry import Retry
+
+my_tool = ...
+
+my_resilient_tool = Retry(
+    tool=tool_1,
+    max_retries=3,
+    delay=0.5,
+    exceptions=[ValueError, TypeError],
+)
+
+my_resilient_tool("hello world")
+```
 
 # Toolbox
 
