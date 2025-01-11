@@ -13,12 +13,12 @@ class Claude(LLM):
     """
 
     CONTEXT_LENGTHS = {
-        "claude-3-opus-20240229": 200_000,
-        "claude-3-sonnet-20240229": 200_000,
-        "claude-3-haiku-20240307": 200_000,
-        "claude-2.1": 200_000,
-        "claude-2.0": 100_000,
-        "claude-instant-1.2": 100_000,
+        "claude-3-opus-20240229": 4096,
+        "claude-3-sonnet-20240229": 4096,
+        "claude-3-haiku-20240307": 4096,
+        "claude-2.1": 4096,
+        "claude-2.0": 4096,
+        "claude-instant-1.2": 4096,
     }
 
     def __init__(
@@ -75,23 +75,32 @@ class Claude(LLM):
         # Convert the messages format if needed
         messages = []
         for msg in prompt:
-            # Map 'user' -> 'user' and 'assistant' -> 'assistant'
-            # Map 'system' -> 'user' with a special prefix
             if msg["role"] == "system":
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": f"\n\nHuman: {msg['content']}\n\nAssistant: "
-                        + "I understand. I will follow these instructions.",
-                    }
-                )
+                messages.append({"role": "user", "content": msg["content"]})
             else:
                 messages.append(msg)
 
-        response = self.__client.messages.create(
-            model=self.__model,
-            messages=messages,
-            temperature=self.default_temperature,
+        messages.append(
+            {
+                "role": "assistant",
+                "content": "I understand. I will follow these instructions.",
+            }
         )
+
+        attempts = 0
+        while True:
+            attempts += 1
+            if attempts > 3:
+                raise Exception("Failed to get a response from Claude")
+            response = self.__client.messages.create(
+                model=self.__model,
+                messages=messages,
+                temperature=self.default_temperature,
+                max_tokens=self.context_length,
+            )
+            if response.content:
+                break
+
+        print("CLAUDE RESPONSE", response)
 
         return response.content[0].text
