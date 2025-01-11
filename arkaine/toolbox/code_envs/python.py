@@ -159,7 +159,7 @@ class PythonEnv(Container):
 
         self.__load_bridge_functions(tools)
 
-    def __install_modules(self):
+    def _install_modules(self):
         """
         Installs the specified Python modules in the environment using the
         appropriate package manager.
@@ -326,7 +326,7 @@ class PythonEnv(Container):
         finally:
             client.close()
 
-    def __run_socket_server(self, context: Context):
+    def _run_socket_server(self, context: Context) -> socket.socket:
         """
         Starts a socket server to listen for incoming client connections and
         handle requests.
@@ -391,19 +391,25 @@ class PythonEnv(Container):
         we also have a __halt check; if we call stop or go to delete the
         process we stop this and die off.
         """
-        client, _ = server.accept()
-        while True:
-            try:
-                if self.__halt:
+
+        def listen_to_client():
+            client, _ = server.accept()
+            while True:
+                try:
+                    if self.__halt:
+                        break
+                    Thread(
+                        target=self.__handle_client,
+                        args=(client, context),
+                        daemon=True,
+                    ).start()
+                    client, _ = server.accept()
+                except:  # noqa: E722
                     break
-                Thread(
-                    target=self.__handle_client,
-                    args=(client, context),
-                    daemon=True,
-                ).start()
-                client, _ = server.accept()
-            except:  # noqa: E722
-                break
+
+        Thread(target=listen_to_client, daemon=True).start()
+
+        return server
 
     def __load_bridge_functions(self, tools: List[Tool]):
         """
@@ -454,7 +460,7 @@ class PythonEnv(Container):
 
             f.write(bridge_code)
 
-    def __add_bridge_imports(self):
+    def _add_bridge_imports(self):
         """
         Appends import statements for bridge functions to Python files in the
         local code directory.
@@ -533,7 +539,7 @@ class PythonEnv(Container):
                 with open(f"{self.__local_directory}/{filename}", "w") as f:
                     f.write(content)
 
-    def __copy_code_to_tmp(
+    def _copy_code_to_tmp(
         self,
         code: Union[str, IO, Dict[str, str], Path],
         target_file: str = "main.py",
@@ -717,16 +723,11 @@ class PythonEnv(Container):
         context.executing = True
 
         with context:
-            self.__copy_code_to_tmp(code, target_file)
-            self.__add_bridge_imports()
-            self.__install_modules()
+            self._copy_code_to_tmp(code, target_file)
+            self._add_bridge_imports()
+            self._install_modules()
 
-            thread = Thread(
-                target=self.__run_socket_server,
-                args=(context,),
-                daemon=True,
-            )
-            thread.start()
+            self._run_socket_server(context)
 
             output, stdout, stderr = self.__execute_code(
                 context, code, target_file
@@ -799,5 +800,4 @@ class PythonExecutionException(Exception):
 class PythonModuleInstallationException(Exception):
     def __init__(self, e: Exception):
         self.exception = e
-        super().__init__(f"Failed to install modules: {e}")
         super().__init__(f"Failed to install modules: {e}")

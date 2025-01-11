@@ -26,6 +26,23 @@ def __wait_for_host():
             sock.close()
 
 
+def __wait_for_data(sock):
+    """
+    Wait for data to be sent from the host.
+    """
+    size = struct.unpack("!Q", sock.recv(8))[0]
+    chunks = []
+    bytes_received = 0
+    while bytes_received < size:
+        chunk = sock.recv(min(size - bytes_received, 4096))
+        if not chunk:
+            raise RuntimeError("Connection broken")
+        chunks.append(chunk)
+        bytes_received += len(chunk)
+
+    return pickle.loads(b"".join(chunks))
+
+
 def __send_recv_data(sock, data):
     """
     Send data to the host and receive a response.
