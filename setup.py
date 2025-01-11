@@ -1,8 +1,17 @@
 from setuptools import find_packages, setup
 
+with open("README.md", "r", encoding="utf-8") as fh:
+    long_description = fh.read()
+
 setup(
     name="arkaine",
-    version="0.1",
+    version="0.0.1",  # Follow semantic versioning
+    author="Keith Chester",
+    author_email="k@hlfshell.ai",
+    description="A batteries-included framework for DIY AI agents",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    url="https://github.com/hlfshell/arkaine",
     packages=find_packages(),
     install_requires=[],
     extras_require={

@@ -162,3 +162,19 @@ cython_debug/
 #.idea/
 
 .vscode/*
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/

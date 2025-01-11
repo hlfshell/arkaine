@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arkaine"
+version = "0.0.1"
+description = "A batteries-included framework for DIY AI agents"
+readme = "README.md"
+authors = [{name = "Keith Chester", email = "k@hlfshell.ai"}]
+license = {file = "MIT"}
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+requires-python = ">=3.8"
+dependencies = [
+    # Add your dependencies here
+    "openai",
+    "anthropic",
+    "groq",
+]
+
+[tool.black]
+line-length = 80
+target-version = ['py38']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q"
+testpaths = [
+    "tests",
+] 
+
+[project.urls]
+Homepage = "https://github.com/hlfshell/arkaine"
+Documentation = "https://arkaine.readthedocs.io/"
+Repository = "https://github.com/hlfshell/arkaine.git" 
