@@ -105,7 +105,8 @@ class PromptTemplate:
         text = template_text
         for var, value in merged_variables.items():
             pattern = delimiter_pattern.replace("(.*?)", re.escape(var))
-            text = re.sub(pattern, str(value), text)
+            sanitized_value = str(value).replace("\\", "\\\\")
+            text = re.sub(pattern, sanitized_value, text)
 
         return [{"role": role, "content": text}]
 

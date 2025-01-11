@@ -2,7 +2,10 @@ from arkaine.tools.tool import Tool
 
 
 def python(
-    tool: Tool, output_style: str = "standard", include_examples: bool = False
+    tool: Tool,
+    output_style: str = "standard",
+    include_examples: bool = False,
+    include_return: bool = True,
 ) -> str:
     """
     Generate a Python docstring for the given tool.
@@ -14,6 +17,9 @@ def python(
             "google", "numpy").
 
         include_examples (bool): Whether to include examples in the docstring.
+
+        include_return (bool): Whether to include the return type in the
+            docstring (if a Result is specified for the tool).
 
     Returns:
         str: The generated docstring.
@@ -49,8 +55,8 @@ def python(
         else:
             raise ValueError(f"Invalid output style: {output_style}")
 
-    if tool.result:
-        docstring += f"\n{tool.result}\n"
+    if tool.result and include_return:
+        docstring += f"\n\nReturns: {tool.result}\n"
 
     if include_examples and tool.examples:
         docstring += "\nExamples:\n"

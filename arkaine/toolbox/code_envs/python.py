@@ -656,15 +656,21 @@ class PythonEnv(Container):
             target_file (str): The name of the target file to execute.
 
         Returns:
-            Any: The output of the executed code.
+            Tuple(
+                Any: The output of the executed code.
+                stdout: The stdout of the executed code.
+                stderr: The stderr of the executed code.
+            )
 
         Raises:
             PythonExecutionException: If an error occurs during code execution.
         """
         try:
-            self.run(f"python /{self.__container_directory}/__arkaine_exec.py")
+            stdout, stderr = self.run(
+                f"python /{self.__container_directory}/__arkaine_exec.py"
+            )
 
-            return context.output
+            return context.output, stdout, stderr
         except Exception as e:
             if context.exception:
                 raise context.exception
@@ -676,7 +682,7 @@ class PythonEnv(Container):
         code: Union[str, IO, Dict[str, Union[str, Dict]], Path],
         context: Optional[Context] = None,
         target_file: str = "main.py",
-    ) -> Tuple[Any, Exception]:
+    ) -> Tuple[Any, Exception, str, str]:
         """
         Executes the provided code in the Python environment, managing the
         execution context and handling exceptions.
@@ -696,8 +702,11 @@ class PythonEnv(Container):
                 is "main.py".
 
         Returns:
-            Tuple[Any, Exception]: A tuple containing the output of the
-                executed code and any exception that occurred.
+            Tuple[Any, Exception]: A tuple containing:
+                output: The output of the executed code.
+                exception: The exception that occurred during code execution.
+                stdout: The stdout of the executed code.
+                stderr: The stderr of the executed code.
         """
         if context is None:
             context = Context()
@@ -719,8 +728,10 @@ class PythonEnv(Container):
             )
             thread.start()
 
-            self.__execute_code(context, code, target_file)
-            return context.output, context.exception
+            output, stdout, stderr = self.__execute_code(
+                context, code, target_file
+            )
+            return output, context.exception, stdout, stderr
 
     def __del__(self):
         """
@@ -780,6 +791,9 @@ class PythonExecutionException(Exception):
             self.message = str(e)
         self.stack_trace = stack_trace
         super().__init__(self.message)
+
+    def __str__(self):
+        return f"{self.message}:\n{self.stack_trace}"
 
 
 class PythonModuleInstallationException(Exception):

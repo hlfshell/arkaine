@@ -61,9 +61,17 @@ class PythonJudgeResponse:
 
 class PythonOutput:
 
-    def __init__(self, output: Any, exception: Optional[Exception]):
+    def __init__(
+        self,
+        output: Any,
+        exception: Optional[Exception],
+        stdout: str,
+        stderr: str,
+    ):
         self.output = output
         self.exception = exception
+        self.stdout = stdout
+        self.stderr = stderr
 
     def __str__(self):
         return f"OUTPUT: {self.output}\nEXCEPTION: {self.exception}"
@@ -81,6 +89,7 @@ class PythonBackend(BaseBackend):
         agent_explanation: str,
         initial_state: Dict[str, Any] = {},
         process_answer: Optional[Callable[[Any], Any]] = None,
+        retry_code_attempts: int = 3,
     ):
         super().__init__(
             llm,
@@ -104,6 +113,29 @@ class PythonBackend(BaseBackend):
                 "python_followup.prompt",
             )
         )
+        self.__judge_template = PromptTemplate.from_file(
+            path.join(
+                pathlib.Path(__file__).parent,
+                "prompts",
+                "python_judge.prompt",
+            )
+        )
+
+        self.__retry_code_attempts = retry_code_attempts
+
+    def __dict_to_code_blocks(self, code_dict: Dict[str, Any]) -> str:
+        blocks = []
+        code_dict_queue = [(code_dict, "")]
+        while code_dict_queue:
+            code_dict, prefix = code_dict_queue.pop()
+            for filename, content in code_dict.items():
+                path = f"{prefix}/{filename}" if prefix else filename
+                if isinstance(content, dict):
+                    code_dict_queue.append((content, path))
+                else:
+                    blocks.append(f"```python:{path}\n{content}\n```")
+
+        return "\n\n".join(blocks)
 
     def prepare_prompt(self, context: Context, **kwargs) -> Prompt:
         if self.tools:
@@ -117,36 +149,19 @@ class PythonBackend(BaseBackend):
         else:
             tools_block = ""
 
-        prompt = self.__base_template.render(
-            {
-                "tools_block": tools_block,
-                "task": kwargs["task"],
-            }
-        )
+        followup = ""
 
         if "responses" in context:
             last_code = context["code"][-1]
             last_output = context["outputs"][-1]
-
-            coding_block = ""
+            last_judge = context["judgements"][-1]
 
             # Given that last_code is a dict[str, [Dict[str, (recursive)]]] we
             # need to convert it to a string block. All directories are
             # expressed as subdirectories in the filename, ie if we are
             # multiple dict keys in, they are combined with
             # dir1/dir2/filename.py etc
-            blocks = []
-            code_dict_queue = [(last_code, "")]
-            while code_dict_queue:
-                code_dict, prefix = code_dict_queue.pop()
-                for filename, content in code_dict.items():
-                    path = f"{prefix}/{filename}" if prefix else filename
-                    if isinstance(content, dict):
-                        code_dict_queue.append((content, path))
-                    else:
-                        blocks.append(f"```python:{path}\n{content}\n```")
-
-            coding_block = "\n\n".join(blocks)
+            coding_block = self.__dict_to_code_blocks(last_code)
 
             # For the output block, we either have a successful run w/
             # the output, or an exception object. Note the output might
@@ -168,20 +183,23 @@ class PythonBackend(BaseBackend):
                     output = str(output)
                 output_block = output
 
-            print(
+            followup = self.__followup_template.render(
                 {
-                    "last_code": coding_block,
-                    "last_output": output_block,
+                    "code_block": coding_block,
+                    "output_block": output_block,
+                    "reason": last_judge.reason,
+                    "suggested_changes": last_judge.changes,
                     "task": kwargs["task"],
                 }
-            )
-            prompt += self.__followup_template.render(
-                {
-                    "last_code": coding_block,
-                    "last_output": output_block,
-                    "task": kwargs["task"],
-                }
-            )
+            )[0]["content"]
+
+        prompt = self.__base_template.render(
+            {
+                "tools_block": tools_block,
+                "task": kwargs["task"],
+                "followup": followup,
+            }
+        )
 
         return prompt
 
@@ -302,6 +320,86 @@ class PythonBackend(BaseBackend):
         """
         return []
 
+    def __parse_judge_response(self, text: str) -> PythonJudgeResponse:
+        # Extract status which is always present
+        try:
+            status_match = re.search(r"STATUS:\s*(.+?)(?:\n|$)", text)
+            if not status_match:
+                raise ValueError("STATUS field not found in response")
+            status = status_match.group(1).strip()
+        except Exception as e:
+            raise ValueError(f"Failed to parse STATUS: {str(e)}")
+
+        # Check for REASON/CHANGES group first
+        try:
+            reason_match = re.search(r"REASON:\s*(.+?)(?:\n|$)", text)
+            changes_match = re.search(
+                r"CHANGES:\s*(.+?)(?:\n|$)", text, re.DOTALL
+            )
+            if reason_match and changes_match:
+                return PythonJudgeResponse(
+                    status=status,
+                    answer="",
+                    reason=reason_match.group(1).strip(),
+                    changes=changes_match.group(1).strip(),
+                )
+        except Exception:
+            pass
+
+        # If no REASON/CHANGES, look for ANSWER
+        try:
+            answer_match = re.search(r"ANSWER:\s*(.+?)(?:\n|$)", text)
+            if answer_match:
+                return PythonJudgeResponse(
+                    status=status,
+                    answer=answer_match.group(1).strip(),
+                    reason="",
+                    changes="",
+                )
+        except Exception:
+            pass
+
+        raise ValueError(
+            "Response must contain either ANSWER or both REASON and CHANGES"
+        )
+
+    def __judge_response(
+        self,
+        context: Context,
+        task: str,
+        response: PythonBackendResponse,
+        output: PythonOutput,
+    ) -> PythonJudgeResponse:
+        output_block = ""
+        if output.exception:
+            output_block = f"Exception thrown:\n"
+            output_block += f"{output.exception.__class__.__name__}: "
+            output_block += f"{str(output.exception)}\n"
+            output_block += "".join(
+                traceback.format_tb(output.exception.__traceback__)
+            )
+        else:
+            if output.output is None:
+                output_block = "No output"
+            else:
+                output_block = output.output
+
+        prompt = self.__judge_template.render(
+            {
+                "code": self.__dict_to_code_blocks(response.code),
+                "output": output_block,
+                "task": task,
+                "stdout": output.stdout,
+                "stderr": output.stderr,
+            }
+        )
+
+        raw_response = self.llm.completion(prompt)
+
+        response = self.__parse_judge_response(raw_response)
+
+        return response
+
     def invoke(
         self,
         context: Context,
@@ -309,6 +407,7 @@ class PythonBackend(BaseBackend):
         max_steps: Optional[int] = None,
         stop_at_first_tool: bool = False,
     ) -> str:
+        task = args["task"]
         self._initialize_state(context)
 
         steps = 0
@@ -316,6 +415,9 @@ class PythonBackend(BaseBackend):
         with PythonEnv(tools=self.tools.values()) as env:
             while True:
                 steps += 1
+                if max_steps and steps > max_steps:
+                    raise Exception("too many steps")
+
                 context.broadcast(AgentBackendStep(steps))
 
                 if max_steps and steps > max_steps:
@@ -325,18 +427,31 @@ class PythonBackend(BaseBackend):
                 prompt = self.prepare_prompt(context, **args)
                 context.broadcast(AgentPrompt(prompt))
 
-                for p in prompt:
-                    role = p["role"]
-                    content = p["content"]
-                    print("-" * 100)
-                    print(f"{role}:")
-                    for line in content.split("\n"):
-                        print(line)
-                print("-" * 100)
-                raw_response = self.query_model(prompt)
-                print("RAW RESPONSE", raw_response)
+                code = None
+                code_attempts = 0
+                while not code:
+                    raw_response = self.query_model(prompt)
 
-                response = self.parse_response(context, raw_response)
+                    response = self.parse_response(context, raw_response)
+
+                    if (
+                        response.code
+                        and "main.py" in response.code
+                        and "main" in response.code["main.py"]
+                    ):
+                        break
+                    else:
+                        code_attempts += 1
+                        if (
+                            self.__retry_code_attempts > 0
+                            and code_attempts > self.__retry_code_attempts
+                        ):
+                            raise Exception(
+                                (
+                                    "too many attempts to get executable code "
+                                    "output"
+                                )
+                            )
 
                 if "responses" not in context:
                     context["responses"] = []
@@ -345,25 +460,34 @@ class PythonBackend(BaseBackend):
 
                 context.broadcast(AgentLLMResponse(response))
 
-                print("RESPONSE", response)
-
-                if response.answer and len(context["responses"]) > 1:
-                    return response.answer
-
                 if "code" not in context:
                     context["code"] = []
                 context["code"].append(response.code)
 
-                output, exception = env.execute(
+                output, exception, stdout, stderr = env.execute(
                     response.code,
                     context=context,
                 )
-                print("OUTPUT", output)
-                print("EXCEPTION", exception)
+
+                results = PythonOutput(
+                    output=output,
+                    exception=exception,
+                    stdout=stdout,
+                    stderr=stderr,
+                )
 
                 if "outputs" not in context:
                     context["outputs"] = []
 
-                context["outputs"].append(
-                    PythonOutput(output=output, exception=exception)
+                context["outputs"].append(results)
+
+                judgement = self.__judge_response(
+                    context, task, response, results
                 )
+
+                if "judgements" not in context:
+                    context["judgements"] = []
+                context["judgements"].append(judgement)
+
+                if "complete" in judgement.status.lower():
+                    return judgement.answer

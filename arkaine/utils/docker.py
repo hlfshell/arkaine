@@ -311,7 +311,7 @@ class Container:
         if result.exit_code != 0:
             raise DockerExecutionException(stdout, stderr)
 
-        return stdout
+        return stdout, stderr
 
     def bash(self, command: str) -> str:
         # Make sure escape characters are handled for quotations

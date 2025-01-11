@@ -1,0 +1,48 @@
+
+---
+
+# YOUR ATTEMPT
+Below is your last attempt at this task:
+
+## YOUR CODE:
+{code_block}
+
+## RESULTS:
+{output_block}
+
+## Refinement
+
+You should refine your code.
+
+### Reason:
+
+{reason}
+
+### Suggested Changes:
+
+{suggested_changes}
+
+---
+
+**Try again, following the response format**.
+
+### **Response Format:**
+
+PLAN:
+
+(Brief step-by-step breakdown of how you revised or verified the solution.)
+
+CODE:
+'''python:main.py
+(Any revised code, if necessary)
+'''
+
+'''python:other_file.py
+(Additional files, if necessary)
+'''
+
+ANSWER: (The desired answer/output to the task/question)
+```
+
+Remember, your task is:
+{task}
