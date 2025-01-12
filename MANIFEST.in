@@ -4,3 +4,4 @@ include requirements.txt
 recursive-include arkaine/backends/prompts *.prompt
 recursive-include arkaine/composer/static *
 recursive-include arkaine/tools/wrappers/prompts *
+recursive-include arkaine/toolbox/code_envs/extras/python_env *.py

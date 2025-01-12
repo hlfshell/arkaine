@@ -17,3 +17,5 @@ setuptools==65.5.0
 typing_extensions==4.12.2
 uvicorn==0.34.0
 websockets==14.1
+wikipedia==1.4.0
+ollama==0.4.5
