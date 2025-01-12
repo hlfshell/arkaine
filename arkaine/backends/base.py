@@ -96,9 +96,9 @@ class BaseBackend(ABC):
         """
         Adds a tool to the backend if it does not already exist.
         """
-        if tool.name in self.tools:
+        if tool.tname in self.tools:
             return
-        self.tools[tool] = tool
+        self.tools[tool.tname] = tool
 
     def call_tools(
         self, context: Context, calls: List[Tuple[str, ToolArguments]]
