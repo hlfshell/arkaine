@@ -38,12 +38,12 @@ class WebSearcher(Linear):
             examples=[],
             steps=[
                 Webqueryer(llm),
-                lambda queries: {"query_list": [{"query": q} for q in queries]},
+                lambda queries: {"input": [{"query": q} for q in queries]},
                 ParallelList(
                     websearch,
                     arguments=[
                         Argument(
-                            "query_list",
+                            "input",
                             "A list of web searh queries to to perform",
                             "list[Website]",
                             required=True,
