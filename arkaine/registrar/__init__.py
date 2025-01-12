@@ -1,5 +1,5 @@
-from arkaine.registrar.registry import Registry
+from arkaine.registrar.registrar import Registrar
 
 __all__ = [
-    "Registry",
+    "Registrar",
 ]

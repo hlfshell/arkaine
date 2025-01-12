@@ -39,7 +39,7 @@ class Groq(LLM):
     ):
         if api_key is None:
             api_key = os.environ.get("GROQ_API_KEY")
-        self.__client = Groq(api_key=api_key)
+        self.__client = GroqAPI(api_key=api_key)
         self.__model = model
         if context_length:
             self.__context_length = context_length

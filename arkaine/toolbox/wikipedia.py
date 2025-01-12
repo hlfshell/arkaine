@@ -6,13 +6,12 @@ from arkaine.agent import BackendAgent
 from arkaine.backends.base import BaseBackend
 from arkaine.backends.react import ReActBackend
 from arkaine.llms.llm import LLM
-from arkaine.tools.tool import Argument, Tool
+from arkaine.tools.tool import Argument, Result, Tool
 from arkaine.tools.wrappers.top_n import TopN
 from arkaine.utils.documents import (
     InMemoryEmbeddingStore,
     chunk_text_by_sentences,
 )
-from arkaine.utils.templater import PromptTemplate
 
 TOPIC_QUERY_TOOL_NAME = "wikipedia_search_pages"
 PAGE_CONTENT_TOOL_NAME = "wikipedia_get_page"
@@ -26,7 +25,7 @@ class WikipediaTopicQuery(Tool):
             "Search Wikipedia for articles that match a given query topic -"
             + " returns a list of titles of Wiki pages that possibly match. "
             + f"Follow this function call with a {PAGE_CONTENT_TOOL_NAME} "
-            + "function to get the content of the chosen title",
+            + "function to get the content of the chosen title.\n",
             [
                 Argument(
                     name="query",
@@ -39,6 +38,18 @@ class WikipediaTopicQuery(Tool):
                 ),
             ],
             self.topic_query,
+            result=Result(
+                str,
+                "A string enumerating the titles of top pages that match "
+                + "the query. An example would be, for example:\n"
+                + f"{TOPIC_QUERY_TOOL_NAME}('North Brunswick, NJ'):\n"
+                + "The following are titles to pages that match your query:\n"
+                + "North Brunswick, New Jersey\n"
+                + "East Brunswick, New Jersey\n"
+                + "North Brunswick station\n"
+                + "New Brunswick, New Jersey\n"
+                + "South Brunswick, New Jersey\n",
+            ),
         )
 
     def topic_query(self, query: str) -> List[str]:
@@ -73,6 +84,12 @@ class WikipediaPage(Tool):
                 )
             ],
             self.get_page,
+            result=Result(
+                "Dict[str, str]",
+                "Dictionary where keys are section titles and "
+                + "values the text from that section. Note we do not have "
+                + "nesting (subsections) - it's all one level deep.",
+            ),
         )
 
     def __break_down_content(self, content: str) -> Dict[str, str]:
@@ -228,6 +245,10 @@ class WikipediaSearch(BackendAgent):
                 )
             ],
             backend,
+            Result(
+                "str",
+                "The answer to the question",
+            ),
         )
 
     def prepare_for_backend(self, **kwargs) -> Dict[str, Any]:

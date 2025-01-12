@@ -24,7 +24,7 @@ class OpenAI(LLM):
 
     def __init__(
         self,
-        model: str,
+        model: str = "gpt-3.5-turbo",
         temperature: float = 0.7,
         max_tokens: int = 1024,
         api_key: Optional[str] = None,
