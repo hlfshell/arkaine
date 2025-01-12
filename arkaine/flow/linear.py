@@ -71,6 +71,7 @@ class Linear(Tool):
 
     def invoke(self, context: Context, **kwargs) -> Any:
         output = kwargs
+        context.x["init_input"] = output
 
         if "step" not in context:
             context["step"] = 0
