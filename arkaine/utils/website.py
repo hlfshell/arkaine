@@ -2,7 +2,7 @@ import os
 import re
 import tempfile
 from threading import Lock
-from typing import Optional
+from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
 import requests
@@ -145,3 +145,22 @@ class Website:
 
     def __repr__(self):
         return self.__str__()
+
+    def to_json(self) -> Dict[str, Any]:
+        return {
+            "url": self.url,
+            "title": self.title,
+            "snippet": self.snippet,
+            "domain": self.domain,
+            "raw_content": self.raw_content,
+            "is_pdf": self.is_pdf,
+        }
+
+    @classmethod
+    def from_json(cls, json_data: Dict[str, Any]) -> "Website":
+        return cls(
+            url=json_data["url"],
+            title=json_data["title"],
+            snippet=json_data["snippet"],
+            load_content=False,
+        )
