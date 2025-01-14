@@ -1,6 +1,5 @@
 import pytest
 
-from arkaine.tools.events import Event
 from arkaine.tools.tool import (
     Argument,
     Context,

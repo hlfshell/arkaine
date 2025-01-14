@@ -40,7 +40,8 @@ minversion = "6.0"
 addopts = "-ra -q"
 testpaths = [
     "tests",
-] 
+]
+asyncio_default_fixture_loop_scope = "function"
 
 [project.urls]
 Homepage = "https://github.com/hlfshell/arkaine"

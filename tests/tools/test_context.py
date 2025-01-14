@@ -6,6 +6,7 @@ from typing import List
 
 import pytest
 
+from arkaine.options.context import ContextOptions
 from arkaine.tools.tool import Context, Event, Tool
 
 
@@ -60,7 +61,7 @@ def test_event_broadcasting(context):
     def listener(ctx, event):
         received_events.append((ctx, event))
 
-    context.add_listener(listener, event_type="all")
+    context.add_event_listener(listener, event_type="all")
     test_event = Event("test", "test_data")
     context.broadcast(test_event)
 
@@ -90,8 +91,8 @@ def test_event_propagation(tool, context):
 
     child = context.child_context(tool)
 
-    context.add_listener(parent_listener)
-    child.add_listener(child_listener)
+    context.add_event_listener(parent_listener)
+    child.add_event_listener(child_listener)
 
     test_event = Event("test", "test_data")
     child.broadcast(test_event)
@@ -114,7 +115,7 @@ def test_context_status(tool, context):
     assert context.status == "running"
 
     # Test error state
-    context.exception(Exception("test error"))
+    context.exception = Exception("test error")
     assert context.status == "error"
 
     # Create new context to test success state
@@ -164,14 +165,12 @@ def test_context_to_json(tool, context):
     assert json_data["output"] == "test output"
 
     # Test context with error
-    context = Context(
-        tool
-    )  # Create new context since output can't be set twice
+    context = Context(tool)
     test_error = ValueError("test error")
-    context.exception(test_error)
+    context.exception = test_error
     json_data = context.to_json()
     assert json_data["status"] == "error"
-    assert json_data["error"] == str(test_error)
+    assert str(test_error) in json_data["error"]
 
 
 def test_context_to_json_with_events(context):
@@ -223,3 +222,21 @@ def test_context_to_json_complex_data(tool, context):
     json_data = context.to_json()
     event_json = json_data["history"][0]
     assert event_json["data"] == "string representation"
+
+
+def test_instance_level_datastore(context):
+    """Test instance-level data store functionality"""
+    context["var"] = "instance value"
+    assert context["var"] == "instance value"
+
+
+def test_execution_level_datastore(context):
+    """Test execution-level data store functionality"""
+    context.x["var"] = "execution value"
+    assert context.x["var"] == "execution value"
+
+
+def test_debug_datastore(context):
+    """Test debug data store functionality"""
+    context.debug["var"] = "debug value"
+    assert context.debug["var"] == "debug value"
