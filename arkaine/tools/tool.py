@@ -187,6 +187,13 @@ class Context:
         else:
             return self.root.x
 
+    @property
+    def debug(self) -> ThreadSafeDataStore:
+        if self.is_root:
+            return self.__debug
+        else:
+            return self.root.debug
+
     def operate(
         self, keys: Union[str, List[str]], operation: Callable[[Any], Any]
     ) -> None:
