@@ -1,4 +1,3 @@
-import json
 import threading
 from typing import Any, Callable, Dict, List, Optional, Union
 
@@ -146,7 +145,11 @@ class ThreadSafeDataStore:
         return self.update(key, lambda x: x - amount)
 
     def append(self, keys: Union[str, List[str]], value: Any) -> None:
-        self.operate(keys, lambda x: x.append(value))
+        def append(x):
+            x.append(value)
+            return x
+
+        self.operate(keys, append)
 
     def concat(self, keys: Union[str, List[str]], value: Any) -> None:
         self.operate(keys, lambda x: x + value)
