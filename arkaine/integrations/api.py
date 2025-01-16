@@ -143,7 +143,7 @@ class API(FastAPI):
             api_docs: URL for API documentation (set to None to disable)
         """
         self.tools = [tools] if isinstance(tools, Tool) else tools
-        name = name or self.tools[0].name
+        name = name or "Arkaine API"
         description = description or "API generated from arkAIne tools"
 
         super().__init__(
