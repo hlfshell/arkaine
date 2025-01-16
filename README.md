@@ -682,9 +682,326 @@ api = API(tools=my_tools, auth=CustomAuth())
 
 ## CLI
 
+The CLI integration allows you to instantly create command-line applications from your tools and agents. It provides rich help text, multiple input/output methods, and preserves all tool documentation.
+
+### Basic Usage
+
+The simplest way to create a CLI is to wrap a single tool:
+
+```python
+from arkaine.integrations.cli import CLI
+
+# Create CLI for a single tool
+cli = CLI(my_tool)
+cli()
+```
+
+For multiple tools:
+
+```python
+# Create CLI with multiple tools
+cli = CLI(
+    tools=[tool1, agent1, tool2],
+    name="MyToolkit",
+    help_text="A collection of useful tools"
+)
+cli()
+```
+
+### Features
+
+- **Rich Help Text**: Automatically generates help text from tool documentation
+- **Multiple Input Methods**:
+  - Standard arguments: `--arg value`
+  - File input: `--arg @filename` or `--arg-file filename`
+  - JSON input: `--json-input '{"arg": "value"}'` or `--json-input @file.json`
+  - Pipe input: `echo 'value' | command` or `echo '{"arg":"value"}' | command`
+- **Multiple Output Methods**:
+  - Standard output (default)
+  - File output: `--output-file filename`
+  - Append mode: `--output-append --output-file filename`
+- **Example Preservation**: Tool examples are converted to CLI usage examples
+
+### Example Usage
+
+For a single tool:
+
+```bash
+# Show help
+$ my-tool --help
+
+# Basic usage
+$ my-tool --input "Hello World"
+
+# File input
+$ my-tool --input @input.txt
+$ my-tool --input-file input.txt
+
+# JSON input
+$ my-tool --json-input '{"input": "Hello", "count": 3}'
+$ my-tool --json-input @params.json
+
+# Pipe input
+$ echo "Hello World" | my-tool
+$ echo '{"input": "Hello"}' | my-tool
+
+# Output to file
+$ my-tool --input "Hello" --output-file result.txt
+$ my-tool --input "World" --output-file result.txt --output-append
+```
+
+For multiple tools:
+
+```bash
+# Show available tools
+$ my-toolkit --help
+
+# Use specific tool
+$ my-toolkit tool1 --input "Hello"
+$ my-toolkit agent1 --query "What is the weather?"
+```
+
 ## Schedule
 
+The Schedule integration allows you to run your agents on a schedule, whether that's a one-time future execution or a recurring task. It provides flexible scheduling options and persistent task storage.
+
+### Basic Usage
+
+The simplest way to schedule a task is to create a Task with a tool and when to trigger it:
+
+```python
+from arkaine.integrations.schedule import Schedule, Task
+from arkaine.utils.interval import Interval
+from datetime import datetime, timedelta
+
+# Create a task that runs once in 5 minutes
+future_time = datetime.now() + timedelta(minutes=5)
+one_time_task = Task(
+    tool=my_tool,
+    args={"input": "Hello World"},
+    trigger_at=Interval(future_time)
+)
+
+# Create a task that runs every hour
+hourly_task = Task(
+    tool=my_agent,
+    args={"query": "What's new?"},
+    trigger_at=Interval(datetime.now(), recur_every=Interval.HOURLY)
+)
+
+# Add tasks to schedule and run
+schedule = Schedule([one_time_task, hourly_task])
+schedule.run()
+```
+
+### Intervals
+
+Intervals define when tasks should trigger. They can be one-time or recurring:
+
+```python
+from arkaine.utils.interval import Interval
+
+# One-time intervals
+future = datetime.now() + timedelta(hours=2)
+one_time = Interval(future)  # Triggers once at future time
+
+# Built-in recurring intervals
+hourly = Interval(datetime.now(), Interval.HOURLY)      # Every hour
+daily = Interval(datetime.now(), Interval.DAILY)        # Every day
+twice_daily = Interval(datetime.now(), Interval.TWICEADAY)  # Every 12 hours
+weekday = Interval(datetime.now(), Interval.WEEKDAYS)   # Every weekday
+weekend = Interval(datetime.now(), Interval.WEEKENDS)   # Every weekend day
+weekly = Interval(datetime.now(), Interval.WEEKLY)      # Every week
+monthly = Interval(datetime.now(), Interval.MONTHLY)    # Every month
+yearly = Interval(datetime.now(), Interval.YEARLY)      # Every year
+
+# Custom time-based intervals
+custom_seconds = Interval(datetime.now(), "30:seconds")  # Every 30 seconds
+custom_minutes = Interval(datetime.now(), "15:minutes")  # Every 15 minutes
+custom_hours = Interval(datetime.now(), "4:hours")      # Every 4 hours
+```
+
+### Task Storage
+
+Tasks can be persisted to disk and reloaded, allowing schedules to survive program restarts:
+
+```python
+from arkaine.integrations.schedule import FileScheduleStore
+
+# Create a store
+store = FileScheduleStore("path/to/tasks")
+
+# Create schedule with persistent storage
+schedule = Schedule(store)
+
+# Add new task - automatically persisted
+task = Task(
+    tool=my_tool,
+    args={"input": "Hello"},
+    trigger_at=Interval(datetime.now(), "1:hours")
+)
+schedule.add_task(task)
+```
+
+When reloaded, the schedule will utilize the store to load tasks and continue running as scheduled.
+
+### Task Management
+
+Tasks can be:
+- Paused/unpaused
+- Removed from schedule
+- Monitored for execution time history
+- Persisted to storage
+- Automatically reloaded on schedule creation
+
 ## RSS
+
+The RSS integration allows you to monitor RSS/Atom feeds and trigger agents when new items are detected. It supports multiple feeds with different check intervals and persistent storage of what items you've seen and processed.
+
+### Basic Usage
+
+The simplest way to monitor RSS feeds is to create Feed objects with check [intervals](#intervals) and agents/tools to trigger:
+
+```python
+from arkaine.integrations.rss import RSS, Feed
+from datetime import datetime
+
+# Create feeds with different check intervals
+feeds = [
+    Feed("http://example.com/rss", "30:minutes"),  # Check every 30 minutes
+    Feed("http://another.com/feed", "1:hours"),    # Check every hour
+]
+
+# Create RSS monitor with feeds and tools
+rss = RSS(feeds=feeds, tools=[my_agent])
+
+# Start monitoring
+rss.start()
+```
+
+Your tools will receive a list of `Item` objects that contain:
+- title: The item's title
+- description: A short description/summary
+- link: URL to the full content
+- published: Publication date
+- content: The full content if available
+
+### Features
+
+- **Multiple Feed Support**: Monitor any number of RSS/Atom feeds
+- **Flexible Check Intervals**: Set different check intervals per feed
+- **Persistent Storage**: Track seen items to prevent duplicate processing
+- **Parallel Processing**: Concurrent feed checking with configurable worker count
+- **Content Extraction**: Built-in HTML-to-markdown conversion for content
+- **PDF Support**: Automatic handling of PDF content in feeds
+
+### Advanced Usage
+
+```python
+from arkaine.integrations.rss import RSS, Feed, FileStore
+from arkaine.utils.interval import Interval
+
+# Create persistent storage
+store = FileStore("path/to/store")
+
+# Create RSS monitor with custom configuration
+rss = RSS(
+    feeds=[
+        Feed("http://news.com/rss", "15:minutes"),
+        Feed("http://blog.com/feed", "1:hours")
+    ],
+    store=store,                # Persist seen items
+    tools=[agent1, agent2],      # Multiple tools
+    max_workers=5,             # Parallel feed checking
+    feed_timeout=30            # Timeout for feed checks
+)
+
+# Start monitoring
+rss.start()
+
+# Add new feed while running
+rss.add_feed(Feed("https://hlfshell.ai/index.xml", "45:minutes"))
+
+# Add new tool while running
+rss.add_tool(new_tool)
+
+# Stop monitoring
+rss.stop()
+```
+
+### Storage
+
+By default, RSS uses a temporary file store that cleans up on exit. This does not allow persistence between program restarts. You can either use the `FileStore` or create your own.
+
+Using `Filestore` is easy:
+```python
+from arkaine.integrations.rss import RSS, Feed, FileStore
+
+# Create a store
+store = FileStore("path/to/store")
+
+# Create RSS monitor with custom configuration
+rss = RSS(feeds=feeds, store=store)
+```
+
+You can also implement your own storage by inheriting from `Store`:
+
+```python
+from arkaine.integrations.rss import Store, Feed, Item
+
+class CustomStore(Store):
+    def save_feed(self, feed: Feed) -> None:
+        # Save feed state
+        pass
+        
+    def load_feed(self, feed: Feed) -> Optional[Feed]:
+        # Load feed state
+        pass
+        
+    def save_item(self, item: Item) -> None:
+        # Save seen item
+        pass
+        
+    def load_item(self, item: Item) -> Optional[Item]:
+        # Load seen item
+        pass
+
+rss = RSS(feeds=feeds, store=CustomStore())
+```
+
+### Working with Items
+
+The RSS integration provides rich item objects that can be used to extract content:
+
+```python
+from arkaine.integrations.rss import Item
+from arkaine.tools.toolify import toolify
+
+
+@toolify
+def process_items(items: List[Item]):
+    for item in items:
+        # Basic metadata
+        print(f"Title: {item.title}")
+        print(f"Published: {item.published}")
+        print(f"Link: {item.link}")
+        
+        # Get full content
+        website = item.get_website()
+        content = website.get_markdown()  # Convert to markdown
+        
+        # Process content...
+```
+
+### Error Handling
+
+The RSS integration handles various error conditions:
+- Feed connection timeouts
+- Invalid feed formats
+- Content extraction failures
+- Storage errors
+
+Failed feed checks will be retried on the next interval, and errors won't stop other feeds from being processed.
 
 ## Inbox
 
