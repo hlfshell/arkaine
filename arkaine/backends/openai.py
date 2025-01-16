@@ -13,6 +13,7 @@ from arkaine.backends.common import simple_tool_results_to_prompts
 from arkaine.tools.tool import Context, Tool
 from arkaine.tools.types import ToolArguments, ToolResults
 from arkaine.utils.templater import PromptTemplate
+from arkaine.utils.tool_format import openai as openai_tool_format
 
 
 class OpenAI(BaseBackend):
@@ -81,36 +82,5 @@ class OpenAI(BaseBackend):
             messages=prompt,
             max_tokens=self.max_tokens,
             temperature=self.temperature,
-            tools=[
-                self.__tool_descriptor(tool) for tool in self.tools.values()
-            ],
+            tools=[openai_tool_format(tool) for tool in self.tools.values()],
         )
-
-    def __tool_descriptor(self, tool: Tool) -> Dict:
-        properties = {}
-        required_args = []
-
-        for arg in tool.args:
-            arg_type = arg.type_str()
-            if arg_type == "str":
-                arg_type = "string"
-
-            properties[arg.name] = {
-                "type": arg_type,
-                "description": arg.description,
-            }
-            if arg.required:
-                required_args.append(arg.name)
-
-        return {
-            "type": "function",
-            "function": {
-                "name": tool.name,
-                "description": tool.description,
-                "parameters": {
-                    "type": "object",
-                    "properties": properties,
-                    "required": required_args,
-                },
-            },
-        }

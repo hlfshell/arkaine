@@ -65,3 +65,63 @@ def python(
 
     docstring += '"""'
     return docstring
+
+
+def openai(
+    tool: Tool, include_examples: bool = False, include_return: bool = True
+) -> str:
+    """
+    Generates a structured representation of a tool for OpenAI integration.
+
+    This function takes a Tool object and constructs a dictionary that
+    describes the tool's properties, including its name, description,
+    parameters, and required arguments.
+
+    Args:
+        tool (Tool): The tool object containing metadata about the tool.
+
+        include_examples (bool): Whether to include example usages in the
+            output.
+
+        include_return (bool): Whether to include return type information in
+            the output.
+
+    Returns:
+        dict: A dictionary representation of the tool, suitable for OpenAI
+            function calls.
+    """
+    properties = {}
+    required_args = []
+
+    description = tool.description
+    if include_return and tool.result:
+        description += f"\n\nReturns: {tool.result}"
+    if include_examples and tool.examples:
+        description += "\n\nExamples:\n"
+        for example in tool.examples:
+            description += f"    {example}\n"
+
+    for arg in tool.args:
+        arg_type = arg.type_str()
+        if arg_type == "str":
+            arg_type = "string"
+
+        properties[arg.name] = {
+            "type": arg_type,
+            "description": arg.description,
+        }
+        if arg.required:
+            required_args.append(arg.name)
+
+    return {
+        "type": "function",
+        "function": {
+            "name": tool.name,
+            "description": tool.description,
+            "parameters": {
+                "type": "object",
+                "properties": properties,
+                "required": required_args,
+            },
+        },
+    }
