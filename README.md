@@ -32,7 +32,7 @@ This is a *very* early work in progress. Expect breaking changes, bugs, and rapi
     -  **IterativeAgents** - IterativeAgents are multi-shot agents that can repeatedly call an LLM to try and perform its task, where the agent can identify when it is complete with its task.
     - &#129520; **BackendAgents** - BackendAgents are agents that utilize a **Backend** to perform its task.
 -  **Backends** - Backends are systems that empower an LLM to utilize tools and detect when it is finished with its task. You probably won't need to worry about them!
-- 📦 **Integrations** - Integrations are systems that can trigger your agents in a configurable manner. Want a web server for your agents? Or want your agent firing off every hour? arkaine has you covered.
+- 📦 **Connectors** - Connectors are systems that can trigger your agents in a configurable manner. Want a web server for your agents? Or want your agent firing off every hour? arkaine has you covered.
 - **Context** - Context provides thread-safe state across tools. No matter how complicated your workflow gets by plugging agents into agents, contexts will keep track of everything.
 
 ## Installation
@@ -539,11 +539,11 @@ Since arkaine is trying to be a batteries-included framework, it comes with a se
 
 - `Wikipedia` - Given a question, this agent will attempt to retrieve the Wikipedia page on that topic and utilize it to answer the question.
 
-# Integrations
+# Connectors
 
-It's one thing to get an agent to work, it's another to get it to work when you specifically want it to, or in reaction to something else. For this arkaine provides *integrations* - components that stand alone and accept your agents as tools, triggering them in a configurable manner.
+It's one thing to get an agent to work, it's another to get it to work when you specifically want it to, or in reaction to something else. For this arkaine provides *connectors* - components that stand alone and accept your agents as tools, triggering them in a configurable manner.
 
-Current integrations include:
+Current connectors include:
 
 - [`API`](#api) - Given a set of tools, instantly create a web API that can expose your agents to any other tools.
 - [`CLI`](#cli) - Create a set of terminal applications for your agents for quick execution.
@@ -554,14 +554,14 @@ Current integrations include:
 
 ## API
 
-The API integration allows you to expose your tools and agents as HTTP endpoints, complete with automatic OpenAPI documentation, authentication support (JWTs), and flexible input/output handling.
+The API connector allows you to expose your tools and agents as HTTP endpoints, complete with automatic OpenAPI documentation, authentication support (JWTs), and flexible input/output handling.
 
 ### Basic Usage
 
 The simplest way to expose a tool is to create an API instance with your tool and start serving:
 
 ```python
-from arkaine.integrations.api import API
+from arkaine.connections import API
 
 # Create API with a single tool
 api = API(my_agent)
@@ -582,10 +582,10 @@ api.serve(port=9001)
 
 ### Authentication
 
-The API integration supports JWT-based authentication. You can either create your own Auth implementation or use the built-in `JWTAuth`:
+The API connector supports JWT-based authentication. You can either create your own Auth implementation or use the built-in `JWTAuth`:
 
 ```python
-from arkaine.integrations.api import API, JWTAuth
+from arkaine.connections import API, JWTAuth
 
 # Create auth handler with secret and API keys
 auth = JWTAuth.from_file("auth_config.json")  # Or JWTAuth.from_env()
@@ -666,7 +666,7 @@ Error responses:
 You can implement custom authentication by inheriting from the `Auth` class:
 
 ```python
-from arkaine.integrations.api import Auth, AuthRequest
+from arkaine.connections import Auth, AuthRequest
 
 class CustomAuth(Auth):
     def auth(self, request: Request, tool: Tool) -> bool:
@@ -682,14 +682,14 @@ api = API(tools=my_tools, auth=CustomAuth())
 
 ## CLI
 
-The CLI integration allows you to instantly create command-line applications from your tools and agents. It provides rich help text, multiple input/output methods, and preserves all tool documentation.
+The CLI connector allows you to instantly create command-line applications from your tools and agents. It provides rich help text, multiple input/output methods, and preserves all tool documentation.
 
 ### Basic Usage
 
 The simplest way to create a CLI is to wrap a single tool:
 
 ```python
-from arkaine.integrations.cli import CLI
+from arkaine.connections import CLI
 
 # Create CLI for a single tool
 cli = CLI(my_tool)
@@ -763,14 +763,14 @@ $ my-toolkit agent1 --query "What is the weather?"
 
 ## Schedule
 
-The Schedule integration allows you to run your agents on a schedule, whether that's a one-time future execution or a recurring task. It provides flexible scheduling options and persistent task storage.
+The Schedule connector allows you to run your agents on a schedule, whether that's a one-time future execution or a recurring task. It provides flexible scheduling options and persistent task storage.
 
 ### Basic Usage
 
 The simplest way to schedule a task is to create a Task with a tool and when to trigger it:
 
 ```python
-from arkaine.integrations.schedule import Schedule, Task
+from arkaine.connections import Schedule, Task
 from arkaine.utils.interval import Interval
 from datetime import datetime, timedelta
 
@@ -826,7 +826,7 @@ custom_hours = Interval(datetime.now(), "4:hours")      # Every 4 hours
 Tasks can be persisted to disk and reloaded, allowing schedules to survive program restarts:
 
 ```python
-from arkaine.integrations.schedule import FileScheduleStore
+from arkaine.connections import FileScheduleStore
 
 # Create a store
 store = FileScheduleStore("path/to/tasks")
@@ -856,14 +856,14 @@ Tasks can be:
 
 ## RSS
 
-The RSS integration allows you to monitor RSS/Atom feeds and trigger agents when new items are detected. It supports multiple feeds with different check intervals and persistent storage of what items you've seen and processed.
+The RSS connector allows you to monitor RSS/Atom feeds and trigger agents when new items are detected. It supports multiple feeds with different check intervals and persistent storage of what items you've seen and processed.
 
 ### Basic Usage
 
 The simplest way to monitor RSS feeds is to create Feed objects with check [intervals](#intervals) and agents/tools to trigger:
 
 ```python
-from arkaine.integrations.rss import RSS, Feed
+from arkaine.connections import RSS, Feed
 from datetime import datetime
 
 # Create feeds with different check intervals
@@ -898,7 +898,7 @@ Your tools will receive a list of `Item` objects that contain:
 ### Advanced Usage
 
 ```python
-from arkaine.integrations.rss import RSS, Feed, FileStore
+from arkaine.connections import RSS, Feed, FileStore
 from arkaine.utils.interval import Interval
 
 # Create persistent storage
@@ -935,7 +935,7 @@ By default, RSS uses a temporary file store that cleans up on exit. This does no
 
 Using `Filestore` is easy:
 ```python
-from arkaine.integrations.rss import RSS, Feed, FileStore
+from arkaine.connections import RSS, Feed, FileStore
 
 # Create a store
 store = FileStore("path/to/store")
@@ -947,7 +947,7 @@ rss = RSS(feeds=feeds, store=store)
 You can also implement your own storage by inheriting from `Store`:
 
 ```python
-from arkaine.integrations.rss import Store, Feed, Item
+from arkaine.connections import Store, Feed, Item
 
 class CustomStore(Store):
     def save_feed(self, feed: Feed) -> None:
@@ -971,10 +971,10 @@ rss = RSS(feeds=feeds, store=CustomStore())
 
 ### Working with Items
 
-The RSS integration provides rich item objects that can be used to extract content:
+The RSS connector provides rich item objects that can be used to extract content:
 
 ```python
-from arkaine.integrations.rss import Item
+from arkaine.connections import Item
 from arkaine.tools.toolify import toolify
 
 
@@ -995,7 +995,7 @@ def process_items(items: List[Item]):
 
 ### Error Handling
 
-The RSS integration handles various error conditions:
+The RSS connector handles various error conditions:
 - Feed connection timeouts
 - Invalid feed formats
 - Content extraction failures
@@ -1005,11 +1005,11 @@ Failed feed checks will be retried on the next interval, and errors won't stop o
 
 ## Inbox
 
-The Inbox integration allows you to monitor email accounts and trigger tools/agents based on incoming emails. It supports various email providers including Gmail, Outlook, Yahoo, AOL, and iCloud.
+The Inbox connector allows you to monitor email accounts and trigger tools/agents based on incoming emails. It supports various email providers including Gmail, Outlook, Yahoo, AOL, and iCloud.
 
 ### Providers
 
-The Inbox integration works with any IMAP server, but has built in "easy" support for the following services:
+The Inbox connector works with any IMAP server, but has built in "easy" support for the following services:
 
 * gmail
 * outlook
@@ -1022,7 +1022,7 @@ The Inbox integration works with any IMAP server, but has built in "easy" suppor
 
 
 ```python
-from arkaine.integrations.inbox import Inbox, EmailFilter
+from arkaine.connections import Inbox, EmailFilter
 from arkaine.tools import Tool
 
 # Create an inbox that checks every 5 minutes
@@ -1044,7 +1044,7 @@ inbox.start()
 You can scan multiple folders, specify different filters (or add them together), and use lambdas or other functions as filters as long as it returns a boolean.
 
 ```python
-from arkaine.integrations.inbox import Inbox, EmailFilter
+from arkaine.connections import Inbox, EmailFilter
 from datetime import datetime, timedelta
 
 # More complex setup
@@ -1125,10 +1125,10 @@ Filters can be combined by adding them together, creating a new filter that chec
 
 ### Message Store
 
-By default, the Inbox integration keeps track of processed messages in a local file. You can provide your own message store implementation by inheriting from `SeenMessageStore`:
+By default, the Inbox connector keeps track of processed messages in a local file. You can provide your own message store implementation by inheriting from `SeenMessageStore`:
 
 ```python
-from arkaine.integrations.inbox import SeenMessageStore
+from arkaine.connections import SeenMessageStore
 
 class CustomStore(SeenMessageStore):
     def add(self, message):
@@ -1147,7 +1147,7 @@ inbox = Inbox(
 
 ### Coming Soon:
 
-These are planned integrations:
+These are planned connectors:
 
 - `Chat` - a chat interface that is powered by your agentic tools.
 - `Discord` - Agents that will react to your Discord messages.
