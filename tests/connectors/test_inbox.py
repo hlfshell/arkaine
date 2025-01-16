@@ -1,14 +1,13 @@
 import socket
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from imaplib import IMAP4
 from threading import Lock, Thread
 from time import sleep
 from typing import Dict, List, Optional, Union
 
 import pytest
 
-from arkaine.integrations.inbox import (
+from arkaine.connectors.inbox import (
     EmailFilter,
     EmailMessage,
     FileSeenMessageStore,
