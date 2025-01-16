@@ -2,7 +2,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from arkaine.tools.tool import Argument, Context, Tool
 from arkaine.tools.wrapper import Wrapper
-from arkaine.utils.documents import InMemoryEmbeddingStore, cosine_distance
+from arkaine.utils.documents import cosine_distance
+from arkaine.utils.embeddings.model import OllamaEmbeddingModel
+from arkaine.utils.embeddings.store import InMemoryEmbeddingStore
 
 
 class ContentFilter(Tool):
@@ -40,32 +42,34 @@ class ContentFilter(Tool):
         name: str = "ContentFilter",
         description: Optional[str] = None,
         n: int = 5,
-        embedder: Optional[InMemoryEmbeddingStore] = None,
-        embedder_arguments: Optional[Dict[str, Any]] = None,
+        embedding_store: Optional[InMemoryEmbeddingStore] = None,
+        embedding_store_args: Optional[Dict[str, Any]] = None,
         cluster_threshold: Optional[float] = None,
     ):
         self.n = n
         self.cluster_threshold = cluster_threshold
 
         # Validate embedder and embedder_arguments combination
-        if embedder is None:
-            self.embedder = InMemoryEmbeddingStore
-            self.embedder_arguments = {}
-        elif isinstance(embedder, type):
-            if embedder_arguments is None:
+        if embedding_store is None:
+            self.embedding_store = InMemoryEmbeddingStore
+            self.embedding_store_args = {
+                "embedding_model": OllamaEmbeddingModel()
+            }
+        elif isinstance(embedding_store, type):
+            if embedding_store_args is None:
                 raise ValueError(
                     "embedder_arguments required when embedder is a class"
                 )
-            self.embedder = embedder
-            self.embedder_arguments = embedder_arguments
+            self.embedding_store = embedding_store
+            self.embedding_store_args = embedding_store_args
         else:
-            if embedder_arguments:
+            if embedding_store_args:
                 raise ValueError(
                     "embedder_arguments should be None when embedder is an"
                     + " instance"
                 )
-            self.embedder = embedder
-            self.embedder_arguments = None
+            self.embedding_store = embedding_store
+            self.embedding_store_args = None
 
         args = [
             Argument(
@@ -138,10 +142,10 @@ class ContentFilter(Tool):
         """Filter content based on similarity to query."""
         items = self._process_content(content)
 
-        if self.embedder_arguments is not None:
-            embedder = self.embedder(**self.embedder_arguments)
+        if self.embedding_store_args is not None:
+            embedder = self.embedding_store(**self.embedding_store_args)
         else:
-            embedder = self.embedder
+            embedder = self.embedding_store
 
         embedder.add_text(items)
 
@@ -208,8 +212,8 @@ class ContentFilterWrapper(Wrapper):
 
         self.content_filter = ContentFilter(
             n=n,
-            embedder=embedder,
-            embedder_arguments=embedder_arguments,
+            embedding_store=embedder,
+            embedding_store_args=embedder_arguments,
             cluster_threshold=cluster_threshold,
         )
 

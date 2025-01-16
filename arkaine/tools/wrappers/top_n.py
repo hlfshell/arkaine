@@ -2,9 +2,11 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from arkaine.tools.tool import Argument, Context, Tool
 from arkaine.tools.wrapper import Wrapper
-from arkaine.utils.documents import (
+from arkaine.utils.documents import chunk_text_by_sentences
+from arkaine.utils.embeddings.model import OllamaEmbeddingModel
+from arkaine.utils.embeddings.store import (
+    EmbeddingStore,
     InMemoryEmbeddingStore,
-    chunk_text_by_sentences,
 )
 
 
@@ -58,7 +60,7 @@ class TopN(Wrapper):
         self,
         tool: Tool,
         n: int,
-        embedder: Optional[InMemoryEmbeddingStore] = None,
+        embedder: Optional[EmbeddingStore] = None,
         embedder_kwargs: Optional[Dict[str, Any]] = None,
         sentences_per: int = 3,
         tool_formatter: Optional[Callable[[str], Union[str, List[str]]]] = None,
@@ -71,7 +73,7 @@ class TopN(Wrapper):
         # Validate embedder and embedder_kwargs combination
         if embedder is None:
             self._embedder = InMemoryEmbeddingStore
-            self._embedder_kwargs = {}
+            self._embedder_kwargs = {"embedding_model": OllamaEmbeddingModel()}
         elif isinstance(embedder, type):
             if embedder_kwargs is None:
                 raise ValueError(

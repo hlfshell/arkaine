@@ -8,9 +8,11 @@ from arkaine.backends.react import ReActBackend
 from arkaine.llms.llm import LLM
 from arkaine.tools.tool import Argument, Result, Tool
 from arkaine.tools.wrappers.top_n import TopN
-from arkaine.utils.documents import (
+from arkaine.utils.documents import chunk_text_by_sentences
+from arkaine.utils.embeddings.model import OllamaEmbeddingModel
+from arkaine.utils.embeddings.store import (
+    EmbeddingStore,
     InMemoryEmbeddingStore,
-    chunk_text_by_sentences,
 )
 
 TOPIC_QUERY_TOOL_NAME = "wikipedia_search_pages"
@@ -147,7 +149,7 @@ class WikipediaPageTopN(TopN):
         self,
         name: Optional[str] = None,
         wp: Optional[WikipediaPage] = None,
-        embedder: Optional[InMemoryEmbeddingStore] = None,
+        embedder: Optional[EmbeddingStore] = None,
         n: int = 5,
     ):
         if wp is None:
@@ -157,7 +159,7 @@ class WikipediaPageTopN(TopN):
             name = "wikipedia_page"
 
         if embedder is None:
-            embedder = InMemoryEmbeddingStore()
+            embedder = InMemoryEmbeddingStore(OllamaEmbeddingModel())
 
         description = (
             "Get the content of a Wikipedia page based on its title. "
