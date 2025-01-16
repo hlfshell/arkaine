@@ -1150,7 +1150,6 @@ inbox = Inbox(
 These are planned integrations:
 
 - `Chat` - a chat interface that is powered by your agentic tools.
-- `Inbox` - Agents that will react to your incoming e-mails.
 - `Discord` - Agents that will react to your Discord messages.
 - `HomeAssistant` - implement AI into your home automation systems
 - `Slack` - Agents that will react to your Slack messages or act as a bot
