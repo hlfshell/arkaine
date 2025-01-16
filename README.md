@@ -545,10 +545,288 @@ It's one thing to get an agent to work, it's another to get it to work when you 
 
 Current integrations include:
 
-- `API` - Given a set of tools, instantly create a web API that can expose your agents to any other tools.
-- `CLI` - Create a set of terminal applications for your agents for quick execution.
-- `Schedule` - Schedule your agents to trigger at a set time or at recurring intervals 
-- `RSS` - Have your agents routinely check RSS feeds and react to new content.
+- [`API`](#api) - Given a set of tools, instantly create a web API that can expose your agents to any other tools.
+- [`CLI`](#cli) - Create a set of terminal applications for your agents for quick execution.
+- [`Schedule`](#schedule) - Schedule your agents to trigger at a set time or at recurring intervals 
+- [`RSS`](#rss) - Have your agents routinely check RSS feeds and react to new content.
+- [`Inbox`](#inbox) - Agents that will react to your incoming e-mails.
+
+
+## API
+
+The API integration allows you to expose your tools and agents as HTTP endpoints, complete with automatic OpenAPI documentation, authentication support (JWTs), and flexible input/output handling.
+
+### Basic Usage
+
+The simplest way to expose a tool is to create an API instance with your tool and start serving:
+
+```python
+from arkaine.integrations.api import API
+
+# Create API with a single tool
+api = API(my_agent)
+api.serve()  # Starts server at http://localhost:8000
+```
+
+For multiple tools with a custom prefix:
+
+```python
+# Create API with multiple tools and custom route prefix
+api = API(
+    tools=[agent1, tool1, agent2],
+    name="MyAPI",
+    prefix="/api/v1"
+)
+api.serve(port=9001)
+```
+
+### Authentication
+
+The API integration supports JWT-based authentication. You can either create your own Auth implementation or use the built-in `JWTAuth`:
+
+```python
+from arkaine.integrations.api import API, JWTAuth
+
+# Create auth handler with secret and API keys
+auth = JWTAuth.from_file("auth_config.json")  # Or JWTAuth.from_env()
+
+# Create authenticated API
+api = API(
+    tools=my_tools,
+    auth=auth
+)
+
+# Get auth token
+token = auth.issue(AuthRequest(tools=["tool1"], key="my-api-key"))
+
+# Make authenticated request
+# curl -H "Authorization: Bearer {token}" http://localhost:8000/api/tool1
+```
+
+To generate an authentication configuration file:
+
+```python
+auth = JWTAuth(secret="your-secret", keys=["your-api-key"])
+auth.create_key_file("auth_config.json")
+```
+
+Note that this handles authorizaton as well as authentication, wherein a JWT token can give access to either "all" or individual agents/tools.
+
+### Advanced Usage
+
+```python
+api = API(
+    tools=[tool1, tool2],
+    name="MyAPI",
+    description="Custom API description",
+    prefix="/api/v1",
+    api_docs="/docs",  # OpenAPI docs location
+    auth=JWTAuth.from_env()
+)
+
+# Configure server options
+api.serve(
+    host="0.0.0.0",
+    port=8080,
+    ssl_keyfile="path/to/key.pem",
+    ssl_certfile="path/to/cert.pem",
+    workers=4,
+    log_level="info"
+)
+```
+
+### Headers
+
+Special headers that modify API behavior:
+
+- `X-Return-Context`: Set to "true" to include execution context in response
+- `X-Context-ID`: Returned in response with context identifier
+- `Authorization`: Bearer token for authenticated endpoints
+
+### Response Format
+
+Successful responses:
+```json
+{
+    "result": "<tool output>",
+    "context": "<context data if requested>"
+}
+```
+
+Error responses:
+```json
+{
+    "detail": "Error message",
+    "context": "<context data if requested>"
+}
+```
+
+### Custom Authentication
+
+You can implement custom authentication by inheriting from the `Auth` class:
+
+```python
+from arkaine.integrations.api import Auth, AuthRequest
+
+class CustomAuth(Auth):
+    def auth(self, request: Request, tool: Tool) -> bool:
+        # Implement authentication logic
+        return True
+        
+    def issue(self, request: AuthRequest) -> str:
+        # Implement token issuance
+        return "token"
+
+api = API(tools=my_tools, auth=CustomAuth())
+```
+
+## CLI
+
+## Schedule
+
+## RSS
+
+## Inbox
+
+The Inbox integration allows you to monitor email accounts and trigger tools/agents based on incoming emails. It supports various email providers including Gmail, Outlook, Yahoo, AOL, and iCloud.
+
+### Providers
+
+The Inbox integration works with any IMAP server, but has built in "easy" support for the following services:
+
+* gmail
+* outlook
+* yahoo
+* icloud
+
+### Usage
+
+`call_when` is a dictionary that maps filters to tools/agents. The filter is a combination of one or more `EmailFilter` objects, and the tool is the tool to call when the filter is met.
+
+
+```python
+from arkaine.integrations.inbox import Inbox, EmailFilter
+from arkaine.tools import Tool
+
+# Create an inbox that checks every 5 minutes
+inbox = Inbox(
+    call_when={
+        EmailFilter(subject_pattern="Important:.*"): notification_tool,
+        EmailFilter(sender_pattern="boss@company.com"): urgent_tool
+    },
+    username="your.email@gmail.com",
+    password="your-app-password",  # For Gmail, use App Password
+    service="gmail",
+    check_every="5:minutes"
+)
+
+# Start monitoring
+inbox.start()
+```
+
+You can scan multiple folders, specify different filters (or add them together), and use lambdas or other functions as filters as long as it returns a boolean.
+
+```python
+from arkaine.integrations.inbox import Inbox, EmailFilter
+from datetime import datetime, timedelta
+
+# More complex setup
+inbox = Inbox(
+    call_when={
+        # Combine multiple filters
+        EmailFilter(subject_pattern="Urgent:.*") + 
+        EmailFilter(sender_pattern=".*@company.com"): my_agent,
+        
+        # Custom filter function
+        lambda msg: "priority" in msg.tags: priority_tool
+    },
+    username="your.email@gmail.com",
+    password="your-app-password",
+    service="gmail",
+    check_every="5:minutes",
+    folders=["INBOX", "[Gmail]/Important"],  # Monitor multiple folders
+    ignore_emails_older_than=datetime.now() - timedelta(days=1),
+    max_messages_to_process=100
+)
+
+# Add error handling
+inbox.add_listener("error", lambda e: print(f"Error: {e}"))
+
+# Add message handling
+inbox.add_listener("send", lambda msg, filter, ctx: print(f"Processed: {msg.subject}"))
+
+inbox.start()
+```
+
+### Note on Gmail usage
+
+For Gmail accounts, you'll need to use an App Password instead of your regular account password. This is a security requirement from Google for third-party applications.
+
+1. Go to [Google App Passwords](https://myaccount.google.com/apppasswords)
+2. Select "Mail" and your device
+3. Use the generated 16-character password as your `password` parameter
+
+Note that the G-Mail `Important` folder is labeled as `[Gmail]/Important`, and can be specified in `Inbox`'s `folders` parameter.
+
+
+### Custom Email Filters
+
+You can create sophisticated email filters by combining patterns and custom functions:
+
+```python
+# Filter by subject
+subject_filter = EmailFilter(subject_pattern=r"Important:.*")
+
+# Filter by sender
+sender_filter = EmailFilter(sender_pattern=r".*@company\.com")
+
+# Filter by body content
+body_filter = EmailFilter(body_pattern=r"urgent")
+
+# Filter by tags
+tag_filter = EmailFilter(tags=["important", "urgent"])
+
+# Custom filter function
+def custom_filter(message):
+    return "priority" in message.subject.lower()
+
+# Combine filters
+combined_filter = subject_filter + sender_filter + custom_filter
+
+# Use in inbox
+inbox = Inbox(
+    call_when={combined_filter: notification_tool},
+    # ... other configuration ...
+)
+```
+
+You can also specify whether you want all specified filters to be met, or if *any* of them are met, via the `match_all` attribute.
+
+Filters can be combined by adding them together, creating a new filter that checks to see if both filters are met - this can be done ad infinitum.
+
+`EmailFilter.all()` creates a filter that accepts all e-mails.
+
+### Message Store
+
+By default, the Inbox integration keeps track of processed messages in a local file. You can provide your own message store implementation by inheriting from `SeenMessageStore`:
+
+```python
+from arkaine.integrations.inbox import SeenMessageStore
+
+class CustomStore(SeenMessageStore):
+    def add(self, message):
+        # Implementation for storing a message
+        pass
+        
+    def contains(self, message) -> bool:
+        # Implementation for checking if a message exists
+        return False
+
+inbox = Inbox(
+    # ... other configuration ...
+    store=CustomStore()
+)
+```
 
 ### Coming Soon:
 
