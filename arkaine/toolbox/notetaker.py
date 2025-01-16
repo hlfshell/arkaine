@@ -2,13 +2,13 @@ import pathlib
 from os import path
 from typing import List, Optional
 
-from arkaine.agent import MetaAgent
+from arkaine.agent import IterativeAgent
 from arkaine.llms.llm import LLM
 from arkaine.tools.tool import Argument, Context
 from arkaine.utils.templater import PromptTemplate
 
 
-class NoteTaker(MetaAgent):
+class NoteTaker(IterativeAgent):
     """An agent that creates structured notes and outlines from content.
 
     This agent processes text content in chunks, creating a hierarchical outline

@@ -1,14 +1,14 @@
 import pathlib
 from os import path
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
-from arkaine.agent import MetaAgent
+from arkaine.agent import IterativeAgent
 from arkaine.llms.llm import LLM, Prompt
 from arkaine.tools.tool import Argument, Context
 from arkaine.utils.templater import PromptTemplate
 
 
-class Summarizer(MetaAgent):
+class Summarizer(IterativeAgent):
 
     def __init__(
         self,

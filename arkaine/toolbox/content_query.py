@@ -2,7 +2,7 @@ import pathlib
 from os import path
 from typing import Any, Dict, List, Optional, Tuple
 
-from arkaine.agent import MetaAgent
+from arkaine.agent import IterativeAgent
 from arkaine.llms.llm import LLM, Prompt
 from arkaine.tools.tool import Argument, Context
 from arkaine.utils.templater import PromptTemplate
@@ -40,7 +40,7 @@ class ContentResponse:
         return result
 
 
-class ContentQuery(MetaAgent):
+class ContentQuery(IterativeAgent):
     """An agent that processes documents chunk by chunk to answer queries.
 
     This agent takes a document and a query, breaks the document into

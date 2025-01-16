@@ -29,7 +29,7 @@ This is a *very* early work in progress. Expect breaking changes, bugs, and rapi
 
 - 🔧 **Tools** - Tools are functions (with some extra niceties) that can be called and do something. That's it!
 - 🤖 **Agents** - Agents are tools that use LLMS. Different kinds of agents can call other tools, which might be agents themselves!
-    -  **MetaAgents** - MetaAgents are multi-shot agents that can repeatedly call an LLM to try and perform its task, where the agent can identify when it is complete with its task.
+    -  **IterativeAgents** - IterativeAgents are multi-shot agents that can repeatedly call an LLM to try and perform its task, where the agent can identify when it is complete with its task.
     - &#129520; **BackendAgents** - BackendAgents are agents that utilize a **Backend** to perform its task.
 -  **Backends** - Backends are systems that empower an LLM to utilize tools and detect when it is finished with its task. You probably won't need to worry about them!
 - 📦 **Integrations** - Integrations are systems that can trigger your agents in a configurable manner. Want a web server for your agents? Or want your agent firing off every hour? arkaine has you covered.
@@ -136,14 +136,14 @@ class MyAgent(Agent):
         return f"Perform the following task: {kwargs['task']}"
 ```
 
-## Creating MetaAgents
+## Creating IterativeAgents
 
-`MetaAgents` are agents that can repeatedly call an LLM to try and perform its task, where the agent can identify when it is complete with its task. To create one, inherit from the `MetaAgent` class.
+`IterativeAgents` are agents that can repeatedly call an LLM to try and perform its task, where the agent can identify when it is complete with its task. To create one, inherit from the `IterativeAgent` class.
 
 ```python
-from arkaine.agent import MetaAgent
+from arkaine.agent import IterativeAgent
 
-class MyMetaAgent(MetaAgent):
+class MyIterativeAgent(IterativeAgent):
     def __init__(self, llm: LLM):
         super().__init__("my_meta_agent", "A custom meta agent", [], llm)
     

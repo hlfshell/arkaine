@@ -40,6 +40,9 @@ class Agent(Tool, ABC):
 
     def invoke(self, context: Context, **kwargs) -> Any:
         prompt = self.prepare_prompt(**kwargs)
+        if isinstance(prompt, str):
+            prompt = [{"role": "system", "content": prompt}]
+
         context.broadcast(AgentPrompt(prompt))
         context.broadcast(AgentLLMCalled())
         result = self.llm.completion(prompt)
@@ -52,7 +55,7 @@ class Agent(Tool, ABC):
         return final_result
 
 
-class MetaAgent(Agent):
+class IterativeAgent(Agent):
 
     def __init__(
         self,
