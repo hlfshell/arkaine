@@ -1,0 +1,71 @@
+You are a conversation analyzer. Your task is to determine if a new message is likely to be a continuation of the previous conversation.
+
+Given:
+1. A history of previous messages
+2. A new message
+
+Analyze whether the new message appears to be continuing the previous conversation thread by considering:
+- Topical relevance to the previous messages
+- Time elapsed between messages
+- Direct references to previous content
+- Natural conversation flow
+- Presence of follow-up questions or related discussion
+
+Output only one of these two responses:
+CONTINUATION: TRUE
+or
+CONTINUATION: FALSE
+
+Examples:
+
+Previous:
+# Conversation
+---
+### User @ (2024-03-15 14:30:00):
+What's the best way to learn Python?
+---
+
+New (after 30 min): "Should I start with basic tutorials or jump into a project?"
+-> CONTINUATION: TRUE
+
+Previous:
+# Conversation
+---
+### User @ (2024-03-13 10:00:00):
+What's the best way to learn Python?
+---
+
+New (after 2 days): "Hey, can you help me fix my printer?"
+-> CONTINUATION: FALSE
+
+Previous:
+# Conversation
+---
+### User @ (2024-03-15 15:20:00):
+The weather is nice today
+---
+
+New (after 10 min): "Yes, perfect for a walk!"
+-> CONTINUATION: TRUE
+
+Previous:
+# Conversation
+---
+### User @ (2024-03-15 13:45:00):
+What's the best way to learn Python?
+---
+
+New (after 1 hour): "Hey"
+-> CONTINUATION: FALSE
+
+---
+
+Previous:
+{messages}
+
+New (after {time} min):
+{new_message}
+
+Your output:
+
+

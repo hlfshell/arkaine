@@ -1,0 +1,24 @@
+You are an expert conversation labeler. You will be given a conversation history between two or more individuals. They may be AIs or humans. Your job is to generate a short name and a short description of the overall focus of the conversation. When you generate the descriptions and titles, avoid mentioning the assigned names of the users. Output your answer by saying ***ONLY*** the label in the following format:
+
+TITLE: title text here
+DESCRIPTION: description text here
+
+Example outputs:
+
+1.
+TITLE: Asking about robots
+DESCRIPTION: A discussion on whether LLMs are being utilized in robotic research, and how.
+
+2.
+TITLE: Python Error Debugging
+DESCRIPTION: Troubleshooting a TypeError in a Python script related to list operations.
+
+3.
+TITLE: Website Design Feedback
+DESCRIPTION: Review and suggestions for improving a portfolio website's layout and user experience.
+
+Your message history:
+
+{messages}
+
+Your output:
