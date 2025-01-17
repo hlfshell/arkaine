@@ -5,6 +5,6 @@ This module provides the core functionality for creating and managing AI agents
 with built-in tools and capabilities.
 """
 
-__version__ = "0.0.1-beta.2"
+__version__ = "0.0.1-beta.3"
 __author__ = "Keith Chester"
 __email__ = "keith@hlfshell.ai"
