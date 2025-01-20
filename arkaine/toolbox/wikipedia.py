@@ -8,7 +8,6 @@ from arkaine.backends.react import ReActBackend
 from arkaine.llms.llm import LLM
 from arkaine.tools.tool import Argument, Result, Tool
 from arkaine.tools.wrappers.top_n import TopN
-from arkaine.utils.documents import chunk_text_by_sentences
 from arkaine.utils.embeddings.model import OllamaEmbeddingModel
 from arkaine.utils.embeddings.store import (
     EmbeddingStore,
@@ -222,9 +221,14 @@ class WikipediaSearch(BackendAgent):
         if not backend:
             if llm is None:
                 raise ValueError("LLM is required if not specifying a backend")
+            if compress_article:
+                page_tool = WikipediaPageTopN(embedder=embedder)
+            else:
+                page_tool = WikipediaPage()
+
             backend = ReActBackend(
                 llm,
-                [WikipediaPageTopN(embedder=embedder), WikipediaTopicQuery()],
+                [page_tool, WikipediaTopicQuery()],
                 description,
             )
         else:
