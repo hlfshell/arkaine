@@ -53,7 +53,9 @@ class Chat(Tool, ABC):
     def _get_active_conversation(self, new_message: Message) -> Conversation:
         try:
             conversations = self._store.get_conversations(
-                order="newest", limit=1
+                order="newest",
+                limit=1,
+                participants=[self._agent_name, new_message.author],
             )
             last_conversation = (
                 None if len(conversations) == 0 else conversations[0]
