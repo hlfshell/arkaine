@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from concurrent.futures import Future, wait
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from arkaine.events import (
@@ -79,7 +80,12 @@ class BaseBackend(ABC):
         return of that tool (Any). This is done because any given tool can be
         invoked multiple times by the model in a single iteration.
 
-        The return is an updated context
+        If the tool threw an exception, it is returned as the result. How you
+        handle that result is up to the implementer of the backend. It is
+        recommended, however, that you handle InvalidArgumentException and
+        ToolNotFoundException as they are essentially caused by mistakes of the
+        LLM, and you can use this to better prompt/guide the LLM towards
+        utilizing the tools correctly.
         """
         pass
 
@@ -103,12 +109,23 @@ class BaseBackend(ABC):
     def call_tools(
         self, context: Context, calls: List[Tuple[str, ToolArguments]]
     ) -> ToolResults:
-        # TODO - parallelize it!
-        results: ToolResults = []
-        for tool, args in calls:
+        results: List[Any] = [None] * len(calls)
+        futures: List[Future] = []
+        for idx, (tool, args) in enumerate(calls):
             if tool not in self.tools:
-                raise ToolNotFoundException(tool, args)
-            results.append((tool, args, self.tools[tool](context, **args)))
+                results[idx] = (tool, args, ToolNotFoundException(tool, args))
+                continue
+
+            ctx = self.tools[tool].async_call(context, args)
+            futures.append(ctx.future())
+
+        wait(futures)
+
+        for idx, future in enumerate(futures):
+            try:
+                results[idx] = (calls[idx][0], calls[idx][1], future.result())
+            except Exception as e:
+                results[idx] = (calls[idx][0], calls[idx][1], e)
 
         return results
 
