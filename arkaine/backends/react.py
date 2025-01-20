@@ -7,8 +7,9 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from pydantic import BaseModel
 
-from arkaine.backends.base import BaseBackend
+from arkaine.backends.base import BaseBackend, ToolNotFoundException
 from arkaine.llms.llm import LLM, Prompt
+from arkaine.tools.argument import InvalidArgumentException
 from arkaine.tools.tool import Context, Tool
 from arkaine.tools.types import ToolArguments, ToolResults
 from arkaine.utils.templater import PromptTemplate
@@ -76,10 +77,21 @@ class ReActBackend(BaseBackend):
             elif line.startswith("Action Input:"):
                 action_input_str = line.split("Action Input:", 1)[1].strip()
                 try:
-                    # Attempt to parse Action Input as JSON
+                    # First try to parse as JSON
                     results["Action Input"] = json.loads(action_input_str)
                 except json.JSONDecodeError:
-                    results["Action Input"] = action_input_str
+                    try:
+                        # If JSON fails, try evaluating as Python literal
+                        # Replace None, True, False with their JSON equivalents
+                        action_input_str = (
+                            action_input_str.replace("None", "null")
+                            .replace("True", "true")
+                            .replace("False", "false")
+                        )
+                        results["Action Input"] = json.loads(action_input_str)
+                    except json.JSONDecodeError:
+                        # If both fail, use the raw string
+                        results["Action Input"] = action_input_str
             elif line.startswith("Answer:"):
                 # Found the answer, capture it and any remaining lines
                 results["Answer"] = (
@@ -155,7 +167,16 @@ class ReActBackend(BaseBackend):
                     out += f'"{value}"'
                 else:
                     out += f"{value}"
-            out += f") returned:\n{result}\n"
+            out += ") "
+
+            if isinstance(result, InvalidArgumentException):
+                out += "encountered an error with the arguments passed"
+                out += f"for this tool:\n{result.args}\n"
+            elif isinstance(result, ToolNotFoundException):
+                out += "No such tool exists.\n"
+            else:
+                out += f"returned:\n{result}\n"
+
             prompt.append(
                 {
                     "role": "system",
