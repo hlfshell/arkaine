@@ -859,8 +859,10 @@ class Tool:
             return results
 
     def async_call(
-        self, context: Optional[Context] = None, **kwargs
+        self, context: Optional[Context] = None, *args, **kwargs
     ) -> Context:
+        context, kwargs = self.extract_arguments(args, kwargs)
+
         if context is None:
             context = Context()
         else:
