@@ -31,6 +31,7 @@ This is a *very* early work in progress. Expect breaking changes, bugs, and rapi
 - 🤖 **Agents** - Agents are tools that use LLMS. Different kinds of agents can call other tools, which might be agents themselves!
     -  **IterativeAgents** - IterativeAgents are multi-shot agents that can repeatedly call an LLM to try and perform its task, where the agent can identify when it is complete with its task.
     - &#129520; **BackendAgents** - BackendAgents are agents that utilize a **Backend** to perform its task.
+    - 💬 **Chats** - Chats are agents that interact with a user over a prolonged interaction in some way, and can be pair with tools, backends, and other agents.
 -  **Backends** - Backends are systems that empower an LLM to utilize tools and detect when it is finished with its task. You probably won't need to worry about them!
 - 📦 **Connectors** - Connectors are systems that can trigger your agents in a configurable manner. Want a web server for your agents? Or want your agent firing off every hour? arkaine has you covered.
 - **Context** - Context provides thread-safe state across tools. No matter how complicated your workflow gets by plugging agents into agents, contexts will keep track of everything.
@@ -157,6 +158,66 @@ class MyIterativeAgent(IterativeAgent):
         ... generate output
         return output
 ```
+
+## Chats
+
+Chats are assumed to inherit from the `Chat` abstract class. They follow some pattern of interaction with the user. Chats create `Conversation`s - these are histories of messages shared between 2 or more entities - typically the user or the agent, but not necessarily limited to this scope. The `Chat` class includes the ability to determine whether an incoming message is a new conversation, or a continuation of the previous conversation.
+
+
+### SimpleChat
+
+The `SimpleChat` class is currently the sole implementation, though more are planned. It is deemed "simple" as it only supports the pattern of one user to one agent in a typical user message to agent response pattern.
+
+- Multiple conversations with isolated histories
+- Tool/agent integration for enhanced capabilities  
+- Conversation persistence
+- Custom agent personalities
+- Multiple LLM backends
+
+#### Basic Usage
+
+Here's a simple example of creating and using SimpleChat:
+
+```python
+from arkaine.chat.simple import SimpleChat
+from arkaine.chat.conversation import FileConversationStore
+from arkaine.llms.openai import OpenAI
+
+# Initialize components
+llm = OpenAI()
+store = FileConversationStore("path/to/store")
+tools = [tool1, agent1]
+
+# Create chat instance
+chat = SimpleChat(
+    llm=llm,
+    tools=tools,
+    store=store,
+    agent_name="Rose",  # Optional, defaults to "Arkaine"
+    user_name="Abigail",      # Optional, defaults to "User"
+)
+
+while True:
+    msg = input("Abigail: ")
+    if msg.lower() in ["quit", "exit"]:
+        break
+
+    response = chat(message=msg)
+    print(f"Rose: {response}")
+```
+
+#### Advanced Usage
+
+SimpleChat can be customized with different backends, personalities, and tool configurations:
+
+* `personality` - a brief sentence or so describing the prefered personality of the agent's responses.
+* `conversation_auto_active` - if set, the chat will automatically continue a conversation if it has been within the specified time window of the prior conversation; otherwise, an LLM is asked to consider whether or not the current message belongs in a new conversation or the prior.
+
+#### Tool Integration
+
+SimpleChat can leverage tools to enhance its capabilities. When a user's message implies a task that could be handled by a tool, SimpleChat will automatically identify and use the appropriate tool.
+
+It does this by asking an LLM to identify from the prior message and the context of prior messages in the conversation, paired with descriptions of the tools, if any "tasks" can be identified that could benefit from a tool. Once generated, each task is individually fed into a `Backend`.
 
 ## BackendAgents
 
