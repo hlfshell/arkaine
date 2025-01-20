@@ -4,12 +4,10 @@ from threading import Lock
 from typing import Any, List, Optional, Tuple, Union
 
 from arkaine.backends.base import BaseBackend
-from arkaine.backends.ollama import Ollama
 from arkaine.backends.react import ReActBackend
 from arkaine.chat.chat import Chat
 from arkaine.chat.conversation import Conversation, ConversationStore, Message
 from arkaine.llms.llm import LLM
-from arkaine.llms.openai import OpenAI
 from arkaine.tools.tool import Context, Tool
 from arkaine.utils.templater import PromptTemplate
 
