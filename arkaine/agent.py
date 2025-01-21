@@ -4,6 +4,7 @@ from typing import Any, Callable, Dict, List, Optional
 from arkaine.backends.base import BaseBackend
 from arkaine.events import AgentLLMCalled, AgentLLMResponse, AgentPrompt
 from arkaine.llms.llm import LLM, Prompt
+from arkaine.tools.result import Result
 from arkaine.tools.tool import Argument, Context, Example, Tool
 
 
@@ -15,6 +16,7 @@ class Agent(Tool, ABC):
         args: List[Argument],
         llm: LLM,
         examples: List[Example] = [],
+        result: Optional[Result] = None,
         process_answer: Optional[Callable[[str], Any]] = None,
     ):
         """
@@ -64,6 +66,7 @@ class IterativeAgent(Agent):
         args: List[Argument],
         llm: LLM,
         examples: List[Example] = [],
+        result: Optional[Result] = None,
         initial_state: Dict[str, Any] = {},
         max_steps: Optional[int] = None,
     ):
@@ -114,6 +117,7 @@ class BackendAgent(Tool, ABC):
         args: List[Argument],
         backend: BaseBackend,
         examples: List[Example] = [],
+        result: Optional[Result] = None,
     ):
         super().__init__(name, description, args, None, examples)
         self.backend = backend
