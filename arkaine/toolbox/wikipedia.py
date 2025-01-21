@@ -251,7 +251,7 @@ class WikipediaSearch(BackendAgent):
                 )
             ],
             backend,
-            Result(
+            result=Result(
                 "str",
                 "The answer to the question",
             ),
