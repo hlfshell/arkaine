@@ -2,12 +2,16 @@
 <html>
 
 <head>
-    <title>Composer</title>
+    <title>Spellbook</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
+    <div class="header-bar">
+        <h1>&#x1F4D6; Spellbook &#x1FA84;</h1>
+    </div>
+
     <div id="app">
         <!-- Tools Toggle Button (left side) -->
         <button class="global-tools-button" @click="showTools = !showTools" @mouseover="randomizeToolEmoji"

@@ -125,6 +125,21 @@ const app = Vue.createApp({
             this.tools.set(toolData.id, toolData);
         },
         handleContext(contextData) {
+            let data = {}
+            if (contextData.data && "data" in contextData.data) {
+                data = contextData.data.data;
+            }
+
+            let data_x = {}
+            if (contextData.x && "data" in contextData.x) {
+                data_x = contextData.x.data;
+            }
+
+            let data_debug = {}
+            if (contextData.debug && "data" in contextData.debug) {
+                data_debug = contextData.debug.data;
+            }
+
             const context = {
                 id: contextData.id,
                 parent_id: contextData.parent_id,
@@ -138,15 +153,24 @@ const app = Vue.createApp({
                 created_at: contextData.created_at,
                 events: contextData.history || [],
                 children: [],
+                data: data,
+                x: data_x,
+                debug: data_debug
             };
+
+            // Log for debugging
+            console.log("Handling context with data:", contextData);
 
             this.contextsAll.set(context.id, context);
 
-            for (const child of contextData.children) {
-                this.handleContext(child);
+            // Handle any child contexts
+            if (contextData.children) {
+                for (const child of contextData.children) {
+                    this.handleContext(child);
+                }
             }
 
-            // Force reactivity
+            // Force reactivity by creating a new Map
             this.contextsAll = new Map(this.contextsAll);
         },
         handleEvent(data) {
@@ -192,6 +216,63 @@ const app = Vue.createApp({
             // Force reactivity by updating both maps
             this.contextsAll.set(contextId, { ...context });
         },
+        handleDataStore(data) {
+            const contextId = data.data.context;  // Note: Changed from data.context to data.data.context
+            const label = data.data.label;        // Changed from data.label to data.data.label
+            const dataStore = data.data.data;     // Changed to get the actual data
+
+            console.log("Handling datastore update:", { contextId, label, dataStore });
+
+            const context = this.contextsAll.get(contextId);
+            if (!context) {
+                console.warn(`Received data store for unknown context ${contextId}`);
+                return;
+            }
+
+            // Update the appropriate data store based on label
+            if (label === 'data') {
+                context.data = dataStore;
+            } else if (label === 'x') {
+                context.x = dataStore;
+            } else if (label === 'debug') {
+                context.debug = dataStore;
+            } else {
+                console.warn(`Received data store for unknown label ${label} in context ${contextId}`);
+                return;
+            }
+
+            // Force Vue to recognize the change
+            this.contextsAll.set(contextId, { ...context });
+        },
+        handleDataStoreUpdate(data) {
+            const contextId = data.data.context;  // Changed from data.context
+            const label = data.data.label;        // Changed from data.label
+            const key = data.data.key;            // Changed from data.key
+            const value = data.data.value;        // Changed from data.value
+
+            console.log("Handling datastore update:", { contextId, label, key, value });
+
+            const context = this.contextsAll.get(contextId);
+            if (!context) {
+                console.warn(`Received data store update for unknown context ${contextId}`);
+                return;
+            }
+
+            // Update the appropriate data store based on label
+            if (label === 'data') {
+                context.data[key] = value;
+            } else if (label === 'x') {
+                context.x[key] = value;
+            } else if (label === 'debug') {
+                context.debug[key] = value;
+            } else {
+                console.warn(`Received data store update for unknown label ${label} in context ${contextId}`);
+                return;
+            }
+
+            // Force Vue to recognize the change
+            this.contextsAll.set(contextId, { ...context });
+        },
         setupWebSocket() {
             try {
                 if (this.ws) {
@@ -216,6 +297,10 @@ const app = Vue.createApp({
                         this.handleEvent(data);
                     } else if (data.type === 'tool') {
                         this.handleTool(data);
+                    } else if (data.type === 'datastore') {
+                        this.handleDataStore(data);
+                    } else if (data.type === 'datastore_update') {
+                        this.handleDataStoreUpdate(data);
                     }
                 };
 

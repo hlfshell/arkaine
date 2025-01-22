@@ -1,3 +1,4 @@
+import { DataView } from './DataView.js';
 import { EventView } from './EventView.js';
 
 // Add syntaxHighlightJson function at the top level
@@ -25,16 +26,20 @@ function syntaxHighlightJson(obj) {
 export const ContextView = {
     name: 'ContextView',
     components: {
-        EventView
+        EventView,
+        DataView
     },
     props: ['context', 'settings', 'depth', 'contexts', 'searchQuery'],
     data() {
         return {
             isExpanded: false,
-            isEventsExpanded: false,  // Events section starts collapsed
-            isOutputExpanded: true,    // Output section starts expanded
-            isChildrenExpanded: false,  // Add new state for children section
-            isArgsExpanded: true,  // Add this line - default open
+            isEventsExpanded: false,
+            isOutputExpanded: true,
+            isChildrenExpanded: false,
+            isArgsExpanded: true,
+            isDataExpanded: false,
+            isXExpanded: false,
+            isDebugExpanded: false,
         }
     },
     computed: {
@@ -58,6 +63,9 @@ export const ContextView = {
                 created_at: this.context.created_at,
                 events: events,
                 children: childContexts,
+                data: this.context.data,
+                x: this.context.x,
+                debug: this.context.debug,
             };
             navigator.clipboard.writeText(JSON.stringify(contextData, null, 2));
         },
@@ -231,9 +239,14 @@ export const ContextView = {
 
             if (!this.context.error) return false;
             return this.context.error.toLowerCase().includes(query);
+        },
+        shouldShowData() {
+            const hasData = this.context.data && Object.keys(this.context.data).length > 0;
+            const hasX = this.context.x && Object.keys(this.context.x).length > 0;
+            const hasDebug = this.context.debug && Object.keys(this.context.debug).length > 0;
+            return hasData || hasX || hasDebug;
         }
     },
-    // template: '{{contexts}}'
     template: `
         <div v-if="shouldShowContext()" class="context-container">
             <div class="context-header">
@@ -334,6 +347,36 @@ export const ContextView = {
                             :search-query="searchQuery"
                         ></event-view>
                     </ul>
+                </div>
+
+                <!-- Data Section -->
+                <div v-if="shouldShowData()" class="context-section">
+                    <div class="section-header" @click="isDataExpanded = !isDataExpanded" style="cursor: pointer;">
+                        <span>Data</span>
+                        <span class="expand-icon">{{ isDataExpanded ? '−' : '+' }}</span>
+                    </div>
+                    <div v-show="isDataExpanded" class="section-content">
+                        <!-- Data Store -->
+                        <data-view
+                            v-if="context.data"
+                            :data="context.data"
+                            title="Data"
+                        ></data-view>
+
+                        <!-- Shared Data (x) -->
+                        <data-view
+                            v-if="context.x"
+                            :data="context.x"
+                            title="Execution Data (x)"
+                        ></data-view>
+
+                        <!-- Debug Data -->
+                        <data-view
+                            v-if="context.debug"
+                            :data="context.debug"
+                            title="Debug Data"
+                        ></data-view>
+                    </div>
                 </div>
 
                 <!-- Output section -->
