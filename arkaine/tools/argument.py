@@ -50,7 +50,7 @@ class Argument:
         return value
 
     def __str__(self) -> str:
-        out = f"{self.name} - {self.type} - Required: "
+        out = f"{self.name} - {self.type_str()} - Required: "
         out += f"{self.required} - "
         if self.default:
             out += f"Default: {self.default} - "
