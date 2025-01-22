@@ -96,13 +96,16 @@ class Context:
     """
 
     def __init__(
-        self, tool: Optional[Tool] = None, parent: Optional[Context] = None
+        self,
+        tool: Optional[Tool] = None,
+        parent: Optional[Context] = None,
+        llm: Optional["LLM"] = None,
     ):
         self.__id = str(uuid4())
         self.__executing = False
         self.__tool = tool
         self.__parent = parent
-        self.__tool = tool
+        self.__llm = llm
 
         self.__root: Optional[Context] = None
         # Trigger getter to hunt for root

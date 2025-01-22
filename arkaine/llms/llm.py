@@ -1,6 +1,9 @@
 import re
 from abc import ABC, abstractmethod
-from typing import Dict, List, Union
+from typing import Dict, List, Optional, Union
+
+from arkaine.tools.events import Event
+from arkaine.tools.tool import Context
 
 # A RolePrompt is a dict specifying a role, and a string specifying the
 # content. An example of this would be:
@@ -10,13 +13,17 @@ from typing import Dict, List, Union
 RolePrompt = Dict[str, str]
 
 # Prompt is a union type - either a straight string, or a RolePrompt.
-# Prompt = Union[str, List[RolePrompt]]
-
-
 Prompt = List[RolePrompt]
 
 
 class LLM(ABC):
+
+    def __init__(
+        self,
+        name: str = None,
+    ):
+        super().__init__()
+        self.name = name
 
     @property
     @abstractmethod
@@ -84,3 +91,91 @@ class LLM(ABC):
         completion. The string body of the completion is returned.
         """
         pass
+
+    def extract_arguments(self, args, kwargs):
+        # Extract context if present as first argument
+        context = None
+        if args and isinstance(args[0], Context):
+            context = args[0]
+            args = args[1:]
+
+        if len(args) == 1 and not kwargs and isinstance(args[0], dict):
+            kwargs = args[0]
+            args = ()
+
+        # Extract prompt from args or kwargs
+        prompt = None
+        if len(args) == 1:
+            prompt = args[0]
+        elif "prompt" in kwargs:
+            prompt = kwargs.pop("prompt")
+        else:
+            raise TypeError("prompt argument is required")
+
+        # Check to see if context is in the kwargs
+        if "context" in kwargs:
+            if context is not None:
+                raise ValueError("context passed twice")
+            context = kwargs.pop("context")
+
+        if kwargs:
+            raise TypeError(
+                f"Unexpected keyword arguments: {', '.join(kwargs.keys())}"
+            )
+
+        if isinstance(prompt, str):
+            prompt = [{"role": "user", "content": prompt}]
+
+        return context, prompt
+
+    def _init_context_(
+        self, context: Optional[Context], prompt: Prompt
+    ) -> Context:
+        if context is None:
+            ctx = Context(self)
+        else:
+            ctx = context
+
+        if ctx.executing:
+            ctx = context.child_context(self)
+            ctx.executing = True
+        else:
+            if not ctx.tool:
+                ctx.tool = self
+            ctx.executing = True
+
+        ctx.args = prompt
+
+    def __call__(self, *args, **kwargs) -> str:
+        context, prompt = self.extract_arguments(args, kwargs)
+
+        with self._init_context_(context, prompt) as ctx:
+            ctx.broadcast(LLMCalled(prompt))
+            response = self.completion(prompt)
+            ctx.broadcast(LLMResponse(response))
+            return response
+
+
+class LLMCalled(Event):
+
+    def __init__(self, prompt: Union[Prompt, str]):
+        super().__init__("llm_called", prompt)
+
+    def __str__(self) -> str:
+        if isinstance(self.data, str):
+            return f"{self._get_readable_timestamp()}:\n{self.data}"
+        else:
+            out = f"{self._get_readable_timestamp()}:\n"
+            for role, content in self.data:
+                out += f"{role}:\n{content}\n"
+                out += "---\n"
+            return out
+
+
+class LLMResponse(Event):
+
+    def __init__(self, response: str):
+        super().__init__("llm_response", response)
+
+    def __str__(self) -> str:
+        return f"{self._get_readable_timestamp()}:\n{self.data}"
