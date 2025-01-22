@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import json
 import threading
-from typing import Dict, Set
+from typing import Any, Dict, Set
 
 from websockets.server import WebSocketServerProtocol
 from websockets.sync.server import serve
 
 from arkaine.registrar.registrar import Registrar
+from arkaine.tools.datastore import ThreadSafeDataStore
 from arkaine.tools.events import ToolException, ToolReturn
 from arkaine.tools.tool import Context, Event, Tool
 
@@ -55,6 +56,16 @@ class ComposerSocket:
         context.add_event_listener(
             self._broadcast_event, ignore_children_events=True
         )
+
+        # Handle datastore event listeners
+        data, x, debug = context._datastores
+        self.__broadcast_datastore(data)
+        self.__broadcast_datastore(x)
+        self.__broadcast_datastore(debug)
+        data.add_listener(self._broadcast_datastore_update)
+        x.add_listener(self._broadcast_datastore_update)
+        debug.add_listener(self._broadcast_datastore_update)
+
         context.add_on_end_listener(self._context_complete)
 
     def _context_complete(self, context: Context):
@@ -113,12 +124,10 @@ class ComposerSocket:
 
                 for tool in self._tools.values():
                     try:
-                        websocket.send(
-                            json.dumps(self.__build_tool_message(tool))
-                        )
+                        tool_msg = self.__build_tool_message(tool)
+                        websocket.send(json.dumps(tool_msg))
                     except Exception as e:
                         print(f"Failed to send initial tool state: {e}")
-                        return
 
                 for context in self._contexts.values():
                     try:
@@ -170,6 +179,42 @@ class ComposerSocket:
                 "type": "event",
                 "context_id": context.id,
                 "data": event_data,
+            }
+        )
+
+    def __broadcast_datastore(self, datastore: ThreadSafeDataStore):
+        """Broadcast a datastore to all active clients"""
+        self._broadcast_to_clients(
+            {
+                "type": "datastore",
+                "data": datastore.to_json(),
+            }
+        )
+
+    def __broadcast_datastore_update(
+        self, datastore: ThreadSafeDataStore, key: str, value: Any
+    ):
+        """Broadcast a datastore update to all active clients"""
+        if hasattr(value, "to_json"):
+            value = value.to_json()
+        else:
+            try:
+                value = json.dumps(value)
+            except Exception:
+                if isinstance(value, str):
+                    value = value
+                else:
+                    value = str(value)
+
+        self._broadcast_to_clients(
+            {
+                "type": "datastore_update",
+                "data": {
+                    "context": datastore.context,
+                    "label": datastore.label,
+                    "key": key,
+                    "value": value,
+                },
             }
         )
 
