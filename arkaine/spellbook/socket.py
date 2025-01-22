@@ -13,15 +13,15 @@ from arkaine.tools.events import ToolException, ToolReturn
 from arkaine.tools.tool import Context, Event, Tool
 
 
-class ComposerSocket:
+class SpellbookSocket:
     """
-    ComposerSocket handles WebSocket connections and broadcasts context events
+    SpellbookSocket handles WebSocket connections and broadcasts context events
     to connected clients.
     """
 
     def __init__(self, port: int = 9001, max_contexts: int = 1024):
         """
-        Initialize a ComposerSocket that creates its own WebSocket endpoint.
+        Initialize a SpellbookSocket that creates its own WebSocket endpoint.
 
         Args:
             port (int): The port to run the WebSocket server on (default: 9001)
