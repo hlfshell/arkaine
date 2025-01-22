@@ -27,8 +27,8 @@ class StaticFileHandler(SimpleHTTPRequestHandler):
         return os.path.join(static_dir, path.lstrip("/"))
 
 
-class ComposerServer:
-    """Serves the static files for the Composer UI"""
+class SpellbookServer:
+    """Serves the static files for the Spellbook UI"""
 
     def __init__(self, port: int = 8080):
         self.port = port

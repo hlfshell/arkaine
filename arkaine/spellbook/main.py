@@ -6,9 +6,9 @@ import sys
 import threading
 from typing import Optional
 
-from arkaine.composer.server import ComposerServer
+from arkaine.spellbook.server import SpellbookServer
 
-_server: Optional[ComposerServer] = None
+_server: Optional[SpellbookServer] = None
 
 
 def signal_handler(signum, frame):
@@ -35,7 +35,7 @@ def main():
     signal.signal(signal.SIGTERM, signal_handler)
 
     global _server
-    _server = ComposerServer(port=args.port)
+    _server = SpellbookServer(port=args.port)
 
     # Start servers in threads
     server_thread = threading.Thread(target=_server.start)
