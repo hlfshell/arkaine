@@ -171,9 +171,15 @@ class ReActBackend(BaseBackend):
 
             if isinstance(result, InvalidArgumentException):
                 out += "encountered an error with the arguments passed"
-                out += f"for this tool:\n{result.args}\n"
+                out += f"for this tool:\n{result}\n"
+                out += "Remember the tool expects the following arguments:\n"
+                out += (
+                    "\n".join(str(arg) for arg in self.tools[name].args) + "\n"
+                )
             elif isinstance(result, ToolNotFoundException):
-                out += "No such tool exists.\n"
+                out += "\nNo such tool exists.\n"
+                out += "Remember you have access to the following tools: "
+                out += f"{','.join(self.tools.keys())}\n"
             else:
                 out += f"returned:\n{result}\n"
 
@@ -192,7 +198,7 @@ class ReActBackend(BaseBackend):
             tools_block += f"{tool}\n"
 
         if len(self.tools) > 1:
-            tool_names = f"One of {', '.join(self.tools.keys())}"
+            tool_names = f"{', '.join(self.tools.keys())}"
         else:
             tool_names = f"The tool {list(self.tools.keys())[0]}"
 
