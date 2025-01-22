@@ -8,7 +8,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from threading import Event as ThreadEvent
 from time import time
 from types import TracebackType
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from uuid import uuid4
 
 from arkaine.options.context import ContextOptions
@@ -132,9 +132,15 @@ class Context:
 
         self.__lock = threading.Lock()
 
-        self.__data: ThreadSafeDataStore = ThreadSafeDataStore()
-        self.__x: ThreadSafeDataStore = ThreadSafeDataStore()
-        self.__debug: ThreadSafeDataStore = ThreadSafeDataStore()
+        self.__data: ThreadSafeDataStore = ThreadSafeDataStore(
+            context=self.__id, label="data"
+        )
+        self.__x: ThreadSafeDataStore = ThreadSafeDataStore(
+            context=self.__id, label="x"
+        )
+        self.__debug: ThreadSafeDataStore = ThreadSafeDataStore(
+            context=self.__id, label="debug"
+        )
 
         # No max workers due to possible lock synchronization issues
         self.__executor = ThreadPoolExecutor(
@@ -213,6 +219,12 @@ class Context:
 
     def concat(self, keys: Union[str, List[str]], value: Any) -> None:
         self.__data.concat(keys, value)
+
+    @property
+    def _datastores(
+        self,
+    ) -> Tuple[ThreadSafeDataStore, ThreadSafeDataStore, ThreadSafeDataStore]:
+        return self.__data, self.__x, self.__debug
 
     @property
     def root(self) -> Context:
@@ -525,6 +537,8 @@ class Context:
         else:
             exception = None
 
+        root = self.root
+
         with self.__lock:
             history = [event.to_json() for event in self.__history]
 
@@ -541,8 +555,8 @@ class Context:
 
             data = self.__data.to_json()
 
-            if self.__parent is None:
-                x = self.__x.to_json()
+            if root.id == self.id:
+                x = root.x.to_json()
             else:
                 x = None
 
@@ -861,7 +875,7 @@ class Tool:
     def async_call(
         self, context: Optional[Context] = None, *args, **kwargs
     ) -> Context:
-        context, kwargs = self.extract_arguments(args, kwargs)
+        _, kwargs = self.extract_arguments(args, kwargs)
 
         if context is None:
             context = Context()
@@ -997,4 +1011,5 @@ class Tool:
             "description": self.description,
             "args": [arg.to_json() for arg in self.args],
             "examples": [example.to_json() for example in self.examples],
+            "result": self.result.to_json() if self.result else None,
         }
