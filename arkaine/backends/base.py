@@ -151,7 +151,6 @@ class BaseBackend(ABC):
 
         # Build prompt
         prompt = self.prepare_prompt(context, **args)
-        context.broadcast(AgentPrompt(prompt))
 
         steps = 0
 
@@ -162,6 +161,7 @@ class BaseBackend(ABC):
             if max_steps and steps > max_steps:
                 raise Exception("too many steps")
 
+            context.broadcast(AgentPrompt(prompt))
             response = self.query_model(prompt)
             context.broadcast(AgentLLMResponse(response))
 
