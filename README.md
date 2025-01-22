@@ -45,6 +45,20 @@ bash
 pip install arkaine
 ```
 
+## Spellbook
+
+Spellbook is an in-browser tool for monitoring and debugging your agents as they act in real time. To run, in your terminal do either:
+
+```bash
+spellbook
+```
+
+or
+
+```bash
+python -m arkaine.spellbook.server
+```
+
 # Creating Your Own Tools and Agents
 
 ## Creating a Tool
