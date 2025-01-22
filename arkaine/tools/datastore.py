@@ -1,4 +1,8 @@
+from __future__ import annotations
+
+import json
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, List, Optional, Union
 
 
@@ -25,10 +29,40 @@ class ThreadSafeDataStore:
         under high contention.
     """
 
-    def __init__(self, data: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self,
+        data: Optional[Dict[str, Any]] = None,
+        context: Optional[str] = None,
+        label: Optional[str] = None,
+    ):
         """Initialize an empty thread-safe data store."""
         self.__lock = threading.Lock()
         self.__data: Dict[str, Any] = data or {}
+        self.__context = context
+        self.__label = label
+        self.__threadpool = ThreadPoolExecutor()
+
+        self.__listeners: List[
+            Callable[[ThreadSafeDataStore, str, Any], None]
+        ] = []
+
+    @property
+    def context(self) -> str:
+        return self.__context
+
+    @property
+    def label(self) -> str:
+        return self.__label
+
+    def add_listener(
+        self, listener: Callable[[ThreadSafeDataStore, str, Any], None]
+    ):
+        with self.__lock:
+            self.__listeners.append(listener)
+
+    def __broadcast_update(self, key: str, value: Any):
+        for subscriber in self.__listeners:
+            self.__threadpool.submit(subscriber, self, key, value)
 
     def __getitem__(self, name: str) -> Any:
         with self.__lock:
@@ -37,6 +71,7 @@ class ThreadSafeDataStore:
     def __setitem__(self, name: str, value: Any):
         with self.__lock:
             self.__data[name] = value
+            self.__broadcast_update(name, value)
 
     def __contains__(self, name: str) -> bool:
         with self.__lock:
@@ -45,6 +80,7 @@ class ThreadSafeDataStore:
     def __delitem__(self, name: str):
         with self.__lock:
             del self.__data[name]
+            self.__broadcast_update(name, None)
 
     def __iter__(self):
         with self.__lock:
@@ -63,6 +99,9 @@ class ThreadSafeDataStore:
 
     def __repr__(self) -> str:
         return self.__str__()
+
+    def __del__(self):
+        self.__threadpool.shutdown(wait=False)
 
     def operate(
         self, keys: Union[str, List[str]], operation: Callable[[Any], Any]
@@ -99,6 +138,7 @@ class ThreadSafeDataStore:
                 raise KeyError(f"Key {path} does not exist")
 
             current[final_key] = operation(current[final_key])
+            self.__broadcast_update(final_key, current[final_key])
 
     def update(self, key: str, operation: Callable[[Any], Any]) -> Any:
         """
@@ -117,6 +157,7 @@ class ThreadSafeDataStore:
         with self.__lock:
             value = operation(self.__data[key])
             self.__data[key] = value
+            self.__broadcast_update(key, value)
             return value
 
     def items(self) -> List[tuple[str, Any]]:
@@ -161,12 +202,28 @@ class ThreadSafeDataStore:
                 if hasattr(value, "to_json"):
                     data[key] = value.to_json()
                 else:
-                    data[key] = value
+                    if isinstance(value, str) and (
+                        value.startswith("{") or value.startswith("[")
+                    ):
+                        try:
+                            json.loads(value)
+                            data[key] = value
+                            continue
+                        except:  # noqa: E722
+                            pass
+                    try:
+                        data[key] = json.dumps(value)
+                    except:  # noqa: E722
+                        data[key] = value
 
-        return data
+        return {
+            "context": self.context,
+            "label": self.label,
+            "data": data,
+        }
 
     @classmethod
     def from_json(cls, data: dict) -> "ThreadSafeDataStore":
         """Create a ThreadSafeDataStore from JSON data."""
-        store = cls(data)
+        store = cls(data.data, data.context, data.label)
         return store
