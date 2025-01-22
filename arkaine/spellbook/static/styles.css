@@ -1109,14 +1109,14 @@ pre {
 
 /* Update view toggle for dark mode */
 .dark-mode .view-toggle {
-    background: var(--bg-content);
+    /* background: var(--bg-content); */
     border: 1px solid var(--border-color);
 }
 
 .dark-mode .view-toggle button {
+    background: var(--bg-content);
+    border: 1px solid var(--border-color);
     color: var(--text-color);
-    border-color: var(--border-color);
-    background: transparent;
 }
 
 .dark-mode .view-toggle button:hover:not(.active) {
@@ -1621,4 +1621,15 @@ pre {
 .dark-mode .header-bar {
     background: #1a1a1a;
     border-bottom: 1px solid #333;
+}
+
+/* Update settings group styles for dark mode */
+.dark-mode .settings-group {
+    background: var(--bg-content);
+}
+
+/* Update floating settings panel styles for dark mode */
+.dark-mode .floating-settings-panel {
+    background: var(--bg-content);
+    border-left: 1px solid var(--border-color);
 }
