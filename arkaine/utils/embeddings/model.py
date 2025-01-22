@@ -8,7 +8,7 @@ import openai
 
 class EmbeddingModel(ABC):
 
-    def __init__(self, model: str):
+    def __init__(self):
         super().__init__()
 
     @abstractmethod
@@ -30,7 +30,7 @@ class OllamaEmbeddingModel(EmbeddingModel):
 
         for t in text:
             vectors.append(
-                ollama.embeddings(model=self.__embedding_model__, prompt=text)[
+                ollama.embeddings(model=self.__embedding_model, prompt=t)[
                     "embedding"
                 ]
             )
@@ -59,4 +59,4 @@ class OpenAIEmbeddingModel(EmbeddingModel):
             input=text,
             model=self.__embedding_model,
         )
-        return response.data[0].embedding
+        return [data.embedding for data in response.data]
