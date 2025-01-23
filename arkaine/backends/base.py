@@ -129,7 +129,7 @@ class BaseBackend(ABC):
 
         return results
 
-    def query_model(self, prompt: Prompt) -> str:
+    def query_model(self, context: Context, prompt: Prompt) -> str:
         return self.llm.completion(prompt)
 
     def estimate_tokens(self, prompt: Prompt) -> int:
@@ -161,9 +161,7 @@ class BaseBackend(ABC):
             if max_steps and steps > max_steps:
                 raise Exception("too many steps")
 
-            context.broadcast(AgentPrompt(prompt))
-            response = self.query_model(prompt)
-            context.broadcast(AgentLLMResponse(response))
+            response = self.query_model(context, prompt)
 
             tool_calls = self.parse_for_tool_calls(
                 context,

@@ -45,10 +45,7 @@ class Agent(Tool, ABC):
         if isinstance(prompt, str):
             prompt = [{"role": "system", "content": prompt}]
 
-        context.broadcast(AgentPrompt(prompt))
-        context.broadcast(AgentLLMCalled())
-        result = self.llm.completion(prompt)
-        context.broadcast(AgentLLMResponse(result))
+        result = self.llm(context, prompt)
 
         final_result = (
             self.process_answer(result) if self.process_answer else result
@@ -98,10 +95,7 @@ class IterativeAgent(Agent):
                 raise Exception("Max steps reached")
 
             prompt = self.prepare_prompt(context, **kwargs)
-            context.broadcast(AgentPrompt(prompt))
-            context.broadcast(AgentLLMCalled())
-            result = self.llm.completion(prompt)
-            context.broadcast(AgentLLMResponse(result))
+            result = self.llm(context, prompt)
 
             result = self.extract_result(context, result)
             if result is not None:

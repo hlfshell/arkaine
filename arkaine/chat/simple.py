@@ -118,7 +118,7 @@ class SimpleChat(Chat):
         )
 
         # Get response from LLM
-        raw_response = self._llm.completion(prompt)
+        raw_response = self._llm(context, prompt)
 
         # Parse the response
         tasks = []
@@ -191,7 +191,8 @@ class SimpleChat(Chat):
 
         last_message = conversation[-1].content
 
-        raw_response = self._llm.completion(
+        raw_response = self._llm(
+            context,
             PromptTemplate(prompt).render(
                 {
                     "personality": personality,
@@ -201,7 +202,7 @@ class SimpleChat(Chat):
                     "conversation": conversation_text,
                     "prior_message": last_message,
                 }
-            )
+            ),
         )
 
         # Parse the response to extract thought and response

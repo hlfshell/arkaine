@@ -5,14 +5,14 @@ import wikipedia
 from arkaine.agent import BackendAgent
 from arkaine.backends.base import BaseBackend
 from arkaine.backends.react import ReActBackend
+from arkaine.internal.store.embeddings import (
+    EmbeddingStore,
+    InMemoryEmbeddingStore,
+)
 from arkaine.llms.llm import LLM
 from arkaine.tools.tool import Argument, Result, Tool
 from arkaine.tools.wrappers.top_n import TopN
 from arkaine.utils.embeddings.model import OllamaEmbeddingModel
-from arkaine.utils.embeddings.store import (
-    EmbeddingStore,
-    InMemoryEmbeddingStore,
-)
 
 TOPIC_QUERY_TOOL_NAME = "wikipedia_search_pages"
 PAGE_CONTENT_TOOL_NAME = "wikipedia_get_page"

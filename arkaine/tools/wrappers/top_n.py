@@ -1,13 +1,13 @@
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+from arkaine.internal.store.embeddings import (
+    EmbeddingStore,
+    InMemoryEmbeddingStore,
+)
 from arkaine.tools.tool import Argument, Context, Tool
 from arkaine.tools.wrapper import Wrapper
 from arkaine.utils.documents import chunk_text_by_sentences
 from arkaine.utils.embeddings.model import OllamaEmbeddingModel
-from arkaine.utils.embeddings.store import (
-    EmbeddingStore,
-    InMemoryEmbeddingStore,
-)
 
 
 class TopN(Wrapper):
