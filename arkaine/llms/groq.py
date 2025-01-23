@@ -46,7 +46,11 @@ class Groq(LLM):
         elif model in self.CONTEXT_LENGTHS:
             self.__context_length = self.CONTEXT_LENGTHS[model]
         else:
-            raise ValueError(f"Unknown model: {model}")
+            raise ValueError(
+                f"Unknown model: {model} - must specify context length"
+            )
+
+        super().__init__(name=f"groq:{model}")
 
     @property
     def context_length(self) -> int:
@@ -67,3 +71,6 @@ class Groq(LLM):
         )
 
         return response.choices[0].message.content
+
+    def __str__(self) -> str:
+        return self.name

@@ -26,6 +26,8 @@ class Ollama(LLM):
         self.__client = Client(host=self.host)
         self.__context_length = context_length
 
+        super().__init__(name=f"ollama:{model}")
+
     @property
     def context_length(self) -> int:
         return self.__context_length

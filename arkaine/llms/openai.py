@@ -37,6 +37,8 @@ class OpenAI(LLM):
         self.__client = oaiapi.Client(api_key=api_key)
         self.__context_length = context_length
 
+        self.__name = f"openai:{model}"
+
     @property
     def context_length(self) -> int:
         return self.__context_length

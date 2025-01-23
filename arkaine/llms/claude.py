@@ -58,6 +58,8 @@ class Claude(LLM):
         else:
             raise ValueError(f"Unknown model: {model}")
 
+        super().__init__(name=f"claude:{model}")
+
     @property
     def context_length(self) -> int:
         return self.__context_length
@@ -100,7 +102,5 @@ class Claude(LLM):
             )
             if response.content:
                 break
-
-        print("CLAUDE RESPONSE", response)
 
         return response.content[0].text
