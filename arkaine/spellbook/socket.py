@@ -7,7 +7,7 @@ from typing import Any, Dict, Set
 from websockets.server import WebSocketServerProtocol
 from websockets.sync.server import serve
 
-from arkaine.registrar.registrar import Registrar
+from arkaine.internal.registrar import Registrar
 from arkaine.tools.datastore import ThreadSafeDataStore
 from arkaine.tools.events import ToolException, ToolReturn
 from arkaine.tools.tool import Context, Event, Tool

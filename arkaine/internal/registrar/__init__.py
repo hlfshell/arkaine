@@ -1,4 +1,4 @@
-from arkaine.interal.registrar.registrar import Registrar
+from arkaine.internal.registrar.registrar import Registrar
 
 __all__ = [
     "Registrar",
