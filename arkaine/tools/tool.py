@@ -102,7 +102,6 @@ class Context:
         self.__executing = False
         self.__tool = tool
         self.__parent = parent
-        self.__tool = tool
 
         self.__root: Optional[Context] = None
         # Trigger getter to hunt for root
