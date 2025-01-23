@@ -59,7 +59,7 @@ class Ollama(BaseBackend):
             },
         }
 
-    def query_model(self, prompt: Prompt):
+    def query_model(self, context: Context, prompt: Prompt):
         return self.__client.chat(
             model=self.model,
             messages=prompt,
