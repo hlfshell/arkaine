@@ -5,7 +5,7 @@ import sys
 from threading import Lock
 from typing import Any, Dict, Optional, TextIO
 
-from arkaine.registrar.registrar import Registrar
+from arkaine.internal.registrar import Registrar
 from arkaine.tools.tool import Context, Event, Tool
 
 
