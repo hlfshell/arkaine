@@ -1,10 +1,10 @@
 from typing import Any, Dict, List, Optional, Tuple
 
+from arkaine.internal.store.embeddings import InMemoryEmbeddingStore
 from arkaine.tools.tool import Argument, Context, Tool
 from arkaine.tools.wrapper import Wrapper
 from arkaine.utils.documents import cosine_distance
 from arkaine.utils.embeddings.model import OllamaEmbeddingModel
-from arkaine.utils.embeddings.store import InMemoryEmbeddingStore
 
 
 class ContentFilter(Tool):

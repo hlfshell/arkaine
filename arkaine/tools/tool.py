@@ -11,8 +11,8 @@ from types import TracebackType
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from uuid import uuid4
 
-from arkaine.options.context import ContextOptions
-from arkaine.registrar.registrar import Registrar
+from arkaine.internal.options.context import ContextOptions
+from arkaine.internal.registrar import Registrar
 from arkaine.tools.argument import Argument, InvalidArgumentException
 from arkaine.tools.datastore import ThreadSafeDataStore
 from arkaine.tools.events import (
@@ -160,9 +160,9 @@ class Context:
         if exc_type is not None:
             self.exception = exc_value
 
-        if self.exception and ContextOptions.save_on_exception():
-            pass
-        elif ContextOptions.save_on_success():
+        try:
+            ContextOptions.get_store().save(self)
+        except:  # noqa: E722
             pass
 
         return False
@@ -594,7 +594,7 @@ class Context:
 
     def save(
         self,
-        filepath: Optional[str] = None,
+        filepath: str,
         children: bool = True,
         debug: bool = True,
     ):
@@ -610,22 +610,10 @@ class Context:
         All x data is recorded only if it is the root context.
 
         Args:
-            filepath: The path to save the context to. If None, the context
-                will be saved to the default folder per ContextOptions
+            filepath: The path to save the context to
             children: Whether to expand children contexts
             debug: Whether to save debug information if present
         """
-        if filepath is None:
-            dir = ContextOptions.save_folder()
-            if self.status == "success":
-                dir = dir / ContextOptions.success_folder()
-            elif self.status == "exception":
-                dir = dir / ContextOptions.exception_folder()
-            else:
-                dir = dir / ContextOptions.running_folder()
-            dir = dir / self.id
-            filepath = dir / f"{self.id}.json"
-
         json_data = self.to_json(children=children, debug=debug)
 
         # Save the context
