@@ -1,7 +1,12 @@
+from __future__ import annotations
+
 import re
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Union
+from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
+from typing import Any, Callable, Dict, List, Optional, Union
 
+from arkaine.internal.registrar import Registrar
 from arkaine.tools.events import Event
 from arkaine.tools.tool import Context
 
@@ -24,6 +29,18 @@ class LLM(ABC):
     ):
         super().__init__()
         self.name = name
+
+        self.__on_call_listeners: List[Callable[[LLM, Context], None]] = []
+        self.__lock = Lock()
+        self.__executor = ThreadPoolExecutor(
+            thread_name_prefix=f"llm-{self.name}"
+        )
+
+        Registrar.register(self)
+
+    def add_on_call_listener(self, listener: Callable[[LLM, Context], None]):
+        with self.__lock:
+            self.__on_call_listeners.append(listener)
 
     @property
     @abstractmethod
@@ -128,6 +145,10 @@ class LLM(ABC):
 
         return context, prompt
 
+    def __broadcast_call(self, context: Context):
+        for listener in self.__on_call_listeners:
+            self.__executor.submit(listener, self, context)
+
     def _init_context_(
         self, context: Optional[Context], prompt: Prompt
     ) -> Context:
@@ -140,42 +161,22 @@ class LLM(ABC):
             ctx = context.child_context(self)
             ctx.executing = True
         else:
-            if not ctx.tool:
-                ctx.tool = self
+            if not ctx.tool != self and ctx.llm != self:
+                ctx.llm = self
             ctx.executing = True
 
         ctx.args = prompt
+
+        return ctx
 
     def __call__(self, *args, **kwargs) -> str:
         context, prompt = self.extract_arguments(args, kwargs)
 
         with self._init_context_(context, prompt) as ctx:
-            ctx.broadcast(LLMCalled(prompt))
+            self.__broadcast_call(ctx)
             response = self.completion(prompt)
-            ctx.broadcast(LLMResponse(response))
+            ctx.output = response
             return response
 
-
-class LLMCalled(Event):
-
-    def __init__(self, prompt: Union[Prompt, str]):
-        super().__init__("llm_called", prompt)
-
-    def __str__(self) -> str:
-        if isinstance(self.data, str):
-            return f"{self._get_readable_timestamp()}:\n{self.data}"
-        else:
-            out = f"{self._get_readable_timestamp()}:\n"
-            for role, content in self.data:
-                out += f"{role}:\n{content}\n"
-                out += "---\n"
-            return out
-
-
-class LLMResponse(Event):
-
-    def __init__(self, response: str):
-        super().__init__("llm_response", response)
-
-    def __str__(self) -> str:
-        return f"{self._get_readable_timestamp()}:\n{self.data}"
+    def to_json(self) -> Dict[str, Any]:
+        return {"name": self.name}

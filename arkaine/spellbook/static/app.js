@@ -11,6 +11,7 @@ const app = Vue.createApp({
     data() {
         return {
             tools: new Map(),
+            llms: new Map(),
             contextsAll: new Map(),
             ws: null,
             retryCount: 0,
@@ -124,6 +125,10 @@ const app = Vue.createApp({
             let toolData = data.data || data;
             this.tools.set(toolData.id, toolData);
         },
+        handleLLM(data) {
+            let llmData = data.data || data;
+            this.llms.set(llmData.name, llmData);
+        },
         handleContext(contextData) {
             let data = {}
             if (contextData.data && "data" in contextData.data) {
@@ -146,6 +151,7 @@ const app = Vue.createApp({
                 root_id: contextData.root_id,
                 tool_id: contextData.tool_id,
                 tool_name: contextData.tool_name,
+                llm_name: contextData.llm_name,
                 status: contextData.status,
                 args: contextData.args,
                 output: contextData.output,
@@ -211,6 +217,9 @@ const app = Vue.createApp({
             } else if (eventData.type === 'tool_exception') {
                 context.error = eventData.data;
                 context.status = 'error';
+            } else if (eventData.type == "llm_response") {
+                context.output = eventData.data;
+                context.status = 'complete';
             }
 
             // Force reactivity by updating both maps
@@ -297,6 +306,8 @@ const app = Vue.createApp({
                         this.handleEvent(data);
                     } else if (data.type === 'tool') {
                         this.handleTool(data);
+                    } else if (data.type === 'llm') {
+                        this.handleLLM(data);
                     } else if (data.type === 'datastore') {
                         this.handleDataStore(data);
                     } else if (data.type === 'datastore_update') {

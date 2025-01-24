@@ -394,7 +394,7 @@ class PythonBackend(BaseBackend):
             }
         )
 
-        raw_response = self.llm.completion(prompt)
+        raw_response = self.llm(context, prompt)
 
         response = self.__parse_judge_response(raw_response)
 

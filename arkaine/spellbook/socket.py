@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import threading
-from typing import Any, Dict, Set
+from typing import TYPE_CHECKING, Any, Dict, Set
 
 from websockets.server import WebSocketServerProtocol
 from websockets.sync.server import serve
@@ -11,6 +11,9 @@ from arkaine.internal.registrar import Registrar
 from arkaine.tools.datastore import ThreadSafeDataStore
 from arkaine.tools.events import ToolException, ToolReturn
 from arkaine.tools.tool import Context, Event, Tool
+
+if TYPE_CHECKING:
+    from arkaine.llms.llm import LLM
 
 
 class SpellbookSocket:
@@ -32,6 +35,7 @@ class SpellbookSocket:
         self.active_connections: Set[WebSocketServerProtocol] = set()
         self._contexts: Dict[str, Context] = {}
         self._tools: Dict[str, Tool] = {}
+        self._llms: Dict[str, LLM] = {}
         self._server = None
         self._server_thread = None
         self._running = False
@@ -39,20 +43,62 @@ class SpellbookSocket:
         self.__max_contexts = max_contexts
 
         Registrar.enable()
-        Registrar.add_tool_call_listener(self._on_tool_call)
 
         Registrar.add_on_tool_register(self._on_tool_register)
+        Registrar.add_on_llm_register(self._on_llm_register)
+
+        Registrar.add_tool_call_listener(self._on_tool_call)
+        Registrar.add_llm_call_listener(self._on_llm_call)
 
         with self._lock:
             tools = Registrar.get_tools()
             for tool in tools:
                 self._tools[tool.id] = tool
 
+            llms = Registrar.get_llms()
+            for llm in llms:
+                self._llms[llm.name] = llm
+
     def _on_tool_call(self, tool: Tool, context: Context):
         # Subscribe to all the context's events for this tool from
         # here on out if its a root context
         self._handle_context_creation(context)
+
+    def _on_llm_call(self, llm: LLM, context: Context):
+        self._handle_context_creation(context)
+
+    def _context_complete(self, context: Context):
+        if context.exception:
+            self._broadcast_event(context, ToolException(context.exception))
+        else:
+            self._broadcast_event(context, ToolReturn(context.output))
+
+    def _on_tool_register(self, tool: Tool):
+        with self._lock:
+            self._tools[tool.id] = tool
+        self._broadcast_tool(tool)
+
+    def _on_llm_register(self, llm: "LLM"):
+        with self._lock:
+            self._llms[llm.name] = llm
+        self._broadcast_llm(llm)
+
+    def _handle_context_creation(self, context: Context):
+        """
+        Add the context to the internal state memory and remove contexts by
+        age if over a certain threshold.
+        """
+        with self._lock:
+            if context.is_root:
+                self._contexts[context.id] = context
+                if len(self._contexts) > self.__max_contexts:
+                    oldest_context = min(
+                        self._contexts.values(), key=lambda x: x.created_at
+                    )
+                    del self._contexts[oldest_context.id]
+
         self._broadcast_context(context)
+
         context.add_event_listener(
             self._broadcast_event, ignore_children_events=True
         )
@@ -67,32 +113,6 @@ class SpellbookSocket:
         debug.add_listener(self._broadcast_datastore_update)
 
         context.add_on_end_listener(self._context_complete)
-
-    def _context_complete(self, context: Context):
-        if context.exception:
-            self._broadcast_event(context, ToolException(context.exception))
-        else:
-            self._broadcast_event(context, ToolReturn(context.output))
-
-    def _on_tool_register(self, tool: Tool):
-        with self._lock:
-            self._tools[tool.id] = tool
-        self._broadcast_tool(tool)
-
-    def _handle_context_creation(self, context: Context):
-        """
-        Add the context to the internal state memory and remove contexts by
-        age if over a certain threshold.
-        """
-        with self._lock:
-            if not context.is_root:
-                return
-            self._contexts[context.id] = context
-            if len(self._contexts) > self.__max_contexts:
-                oldest_context = min(
-                    self._contexts.values(), key=lambda x: x.created_at
-                )
-                del self._contexts[oldest_context.id]
 
     def _broadcast_to_clients(self, message: dict):
         """Helper function to broadcast a message to all active clients"""
@@ -129,6 +149,13 @@ class SpellbookSocket:
                     except Exception as e:
                         print(f"Failed to send initial tool state: {e}")
 
+                for llm in self._llms.values():
+                    try:
+                        llm_msg = self.__build_llm_message(llm)
+                        websocket.send(json.dumps(llm_msg))
+                    except Exception as e:
+                        print(f"Failed to send initial LLM state: {e}")
+
                 for context in self._contexts.values():
                     try:
                         websocket.send(
@@ -163,6 +190,13 @@ class SpellbookSocket:
     def _broadcast_tool(self, tool: Tool):
         """Broadcast a tool to all active clients"""
         self._broadcast_to_clients(self.__build_tool_message(tool))
+
+    def __build_llm_message(self, llm: LLM):
+        return {"type": "llm", "data": llm.to_json()}
+
+    def _broadcast_llm(self, llm: LLM):
+        """Broadcast a LLM to all active clients"""
+        self._broadcast_to_clients(self.__build_llm_message(llm))
 
     def __build_context_message(self, context: Context):
         return {"type": "context", "data": context.to_json()}

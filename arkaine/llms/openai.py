@@ -1,12 +1,10 @@
 import os
-from typing import Dict, List, Optional
+from typing import Optional
 
 import openai as oaiapi
-from openai.types.chat.chat_completion import ChatCompletion
 
 from arkaine.agent import Prompt
 from arkaine.llms.llm import LLM
-from arkaine.tools.tool import Tool
 
 
 class OpenAI(LLM):
@@ -38,6 +36,8 @@ class OpenAI(LLM):
         self.__context_length = context_length
 
         self.__name = f"openai:{model}"
+
+        super().__init__(name=self.__name)
 
     @property
     def context_length(self) -> int:

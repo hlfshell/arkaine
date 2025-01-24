@@ -130,7 +130,7 @@ class BaseBackend(ABC):
         return results
 
     def query_model(self, context: Context, prompt: Prompt) -> str:
-        return self.llm.completion(prompt)
+        return self.llm(context, prompt)
 
     def estimate_tokens(self, prompt: Prompt) -> int:
         return self.llm.estimate_tokens(prompt)

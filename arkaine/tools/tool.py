@@ -255,6 +255,17 @@ class Context:
         )
 
     @property
+    def llm(self) -> "LLM":
+        return self.__llm
+
+    @llm.setter
+    def llm(self, llm: "LLM"):
+        with self.__lock:
+            if self.__llm:
+                raise ValueError("LLM already set")
+            self.__llm = llm
+
+    @property
     def parent(self) -> Context:
         return self.__parent
 
@@ -268,9 +279,16 @@ class Context:
         with self.__lock:
             return self.__history
 
-    def child_context(self, tool: Tool) -> Context:
+    def child_context(self, tool_or_llm: Union[Tool, "LLM"]) -> Context:
         """Create a new child context for the given tool."""
-        ctx = Context(tool=tool, parent=self)
+        if isinstance(tool_or_llm, Tool):
+            ctx = Context(tool=tool_or_llm, parent=self)
+        elif hasattr(tool_or_llm, "completion"):
+            ctx = Context(llm=tool_or_llm, parent=self)
+        else:
+            raise ValueError(
+                f"Invalid type for child context: {type(tool_or_llm)}"
+            )
 
         with self.__lock:
             self.__children.append(ctx)
@@ -582,8 +600,9 @@ class Context:
             "id": self.__id,
             "parent_id": self.__parent.id if self.__parent else None,
             "root_id": self.root.id,
-            "tool_id": self.__tool.id,
-            "tool_name": self.__tool.name,
+            "tool_id": None if not self.__tool else self.__tool.id,
+            "tool_name": None if not self.__tool else self.__tool.name,
+            "llm_name": None if not self.__llm else self.__llm.name,
             "status": status,
             "args": args,
             "output": output,
@@ -799,7 +818,7 @@ class Tool:
             ctx = context.child_context(self)
             ctx.executing = True
         else:
-            if not ctx.tool:
+            if not ctx.tool and not ctx.llm:
                 ctx.tool = self
             ctx.executing = True
 

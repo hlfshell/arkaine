@@ -39,6 +39,14 @@
                         {{ tool.name }}
                     </button>
                 </div>
+                <div class="tools-header">
+                    <h3>LLMs</h3>
+                </div>
+                <div class="tools-list">
+                    <div class="tool-button" v-for="llm in llms.values()">
+                        {{ llm.name }}
+                    </div>
+                </div>
             </div>
         </div>
 
