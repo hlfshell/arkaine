@@ -666,11 +666,10 @@ pre {
 /* Add these new styles */
 
 .global-settings-button {
-    position: fixed;
     top: 20px;
     right: 20px;
     z-index: 1000;
-    background: white;
+    /* background: white; */
     border: none;
     border-radius: 50%;
     width: 48px;
@@ -706,12 +705,12 @@ pre {
 
 .settings-panel-overlay {
     position: fixed;
-    top: 0;
+    top: 56px;
     left: 0;
     right: 0;
     bottom: 0;
     background: rgba(0, 0, 0, 0.5);
-    z-index: 1001;
+    z-index: 998;
     opacity: 0;
     visibility: hidden;
     transition: opacity 0.3s;
@@ -724,7 +723,7 @@ pre {
 
 .floating-settings-panel {
     position: fixed;
-    top: 0;
+    top: 56px;
     right: 0;
     bottom: 0;
     width: 300px;
@@ -733,7 +732,7 @@ pre {
     box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
     transform: translateX(100%);
     transition: transform 0.3s;
-    z-index: 1002;
+    z-index: 999;
     overflow-y: auto;
 }
 
@@ -808,9 +807,7 @@ pre {
 
 /* Adjust main content padding */
 .main-content {
-    padding: 20px;
-    padding-left: 80px;
-    padding-right: 80px;
+    padding: 76px 80px 20px 80px;
     transition: padding 0.3s;
 }
 
@@ -923,7 +920,6 @@ pre {
 }
 
 .global-tools-button {
-    position: fixed;
     top: 20px;
     left: 20px;
     z-index: 1000;
@@ -938,7 +934,6 @@ pre {
     align-items: center;
     justify-content: center;
     font-size: 1.8em;
-    position: relative;
     overflow: hidden;
 }
 
@@ -971,7 +966,7 @@ pre {
 
 .tools-panel {
     position: fixed;
-    top: 0;
+    top: 56px;
     left: 0;
     bottom: 0;
     width: 300px;
@@ -980,7 +975,7 @@ pre {
     box-shadow: 2px 0 8px var(--shadow-color);
     transform: translateX(-100%);
     transition: transform 0.3s;
-    z-index: 1000;
+    z-index: 999;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
@@ -1573,65 +1568,100 @@ pre {
     opacity: 1;
 }
 
-/* Update header styles */
 .header-bar {
     background: #1a1a1a;
     color: white;
-    padding: 8px 24px;
-    margin: -20px -20px 20px -20px;
+    padding: 0 24px;
+    margin: 0;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-    position: sticky;
+    position: fixed;
     top: 0;
-    z-index: 999;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    height: 56px;
+}
+
+.header-content {
     display: flex;
     align-items: center;
-    height: 40px;
-    justify-content: space-between;
+    justify-content: flex-start;
+    height: 100%;
+    margin: 0 auto;
 }
 
 .header-bar h1 {
     margin: 0;
     font-size: 1.2em;
-    font-weight: 400;
+    font-weight: 500;
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 8px;
     color: #e0e0e0;
 }
 
-/* Update gear icon styles */
+.header-buttons {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-left: 16px;
+    /* Add margin to separate from title */
+}
+
+/* Button styles */
+.global-tools-button,
 .global-settings-button {
-    background: none;
+    background: rgba(255, 255, 255, 0.1);
     border: none;
-    color: #e0e0e0;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
     cursor: pointer;
-    padding: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 1.2em;
-    transition: transform 0.2s;
+    color: #e0e0e0;
+    transition: all 0.2s;
+    padding: 0;
 }
 
+.global-tools-button:hover,
 .global-settings-button:hover {
+    background: rgba(255, 255, 255, 0.2);
     transform: rotate(30deg);
 }
 
-/* Dark mode adjustments */
-.dark-mode .header-bar {
-    background: #1a1a1a;
-    border-bottom: 1px solid #333;
+.button-icon,
+.button-icon-hover {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
 }
 
-/* Update settings group styles for dark mode */
-.dark-mode .settings-group {
-    background: var(--bg-content);
+.global-settings-button.connection-connecting,
+.global-settings-button.connection-error {
+    color: #ffc107;
 }
 
-/* Update floating settings panel styles for dark mode */
-.dark-mode .floating-settings-panel {
-    background: var(--bg-content);
-    border-left: 1px solid var(--border-color);
+/* Media queries */
+@media (max-width: 768px) {
+    .header-bar {
+        padding: 0 16px;
+    }
+
+    .header-content {
+        gap: 12px;
+    }
+
+    .global-tools-button,
+    .global-settings-button {
+        width: 32px;
+        height: 32px;
+        font-size: 1em;
+    }
 }
 
 /* Execution Form Styles */

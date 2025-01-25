@@ -2,29 +2,30 @@
 <html>
 
 <head>
-    <title>Spellbook</title>
+    <title>&#x1f4d6; Spellbook &#x1FA84;</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
-    <div class="header-bar">
-        <h1>&#x1F4D6; Spellbook &#x1FA84;</h1>
-    </div>
-
     <div id="app">
-        <!-- Tools Toggle Button (left side) -->
-        <button class="global-tools-button" @click="showTools = !showTools" @mouseover="randomizeToolEmoji"
-            title="Tools">
-            <span class="button-icon">{{ showTools ? '&#10060;' : '&#x1F916;' }}</span>
-            <span class="button-icon-hover" v-html="currentToolEmoji"></span>
-        </button>
-
-        <!-- Settings Toggle Button (right side) -->
-        <button class="global-settings-button" :class="connectionClass" @click="showSettings = !showSettings"
-            title="Settings">
-            &#x2699;
-        </button>
+        <!-- Header Bar -->
+        <div class="header-bar">
+            <div class="header-content">
+                <h1>&#x1f4d6; Spellbook &#x1FA84;</h1>
+                <div class="header-buttons">
+                    <button class="global-tools-button" @click="showTools = !showTools" @mouseover="randomizeToolEmoji"
+                        title="Tools">
+                        <span class="button-icon">{{ showTools ? '&#x274C;' : '&#x1F916;' }}</span>
+                        <span class="button-icon-hover" v-html="currentToolEmoji"></span>
+                    </button>
+                    <button class="global-settings-button" :class="connectionClass"
+                        @click="showSettings = !showSettings" title="Settings">
+                        &#x2699;
+                    </button>
+                </div>
+            </div>
+        </div>
 
         <!-- Tools Panel (left side) -->
         <div :class="['tools-panel', { active: showTools }]">
