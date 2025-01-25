@@ -107,6 +107,10 @@ class Context:
         self.__parent = parent
         self.__llm = llm
 
+        if self.__llm is None and hasattr(tool, "completion"):
+            self.__tool = None
+            self.__llm = tool
+
         self.__root: Optional[Context] = None
         # Trigger getter to hunt for root
         self.__root
