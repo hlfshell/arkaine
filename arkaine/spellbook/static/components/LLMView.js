@@ -87,6 +87,7 @@ export const LLMView = {
                             <textarea
                                 v-model="executionForm.prompt"
                                 @input="adjustTextareaHeight"
+                                @keydown.ctrl.enter.prevent="handleExecuteLLM"
                                 class="prompt-textarea"
                                 placeholder="Enter your prompt here..."
                                 required
