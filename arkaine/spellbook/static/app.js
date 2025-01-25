@@ -404,11 +404,30 @@ const app = Vue.createApp({
             };
 
             this.ws.send(JSON.stringify(message));
-        }
+        },
+        handleOutsideClick(event) {
+            // Close tools panel if click is outside
+            if (this.showTools && !event.target.closest('.tools-panel') &&
+                !event.target.closest('.global-tools-button')) {
+                this.showTools = false;
+            }
+
+            // Close settings panel if click is outside
+            if (this.showSettings && !event.target.closest('.floating-settings-panel') &&
+                !event.target.closest('.global-settings-button')) {
+                this.showSettings = false;
+            }
+        },
     },
     mounted() {
         this.setupWebSocket();
         document.documentElement.classList.toggle('dark-mode', this.isDarkMode);
+        // Add click event listener to document
+        document.addEventListener('click', this.handleOutsideClick);
+    },
+    beforeUnmount() {
+        // Remove event listener when component is destroyed
+        document.removeEventListener('click', this.handleOutsideClick);
     }
 });
 
