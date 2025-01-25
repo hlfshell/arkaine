@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import os
-from threading import Dict, List, Lock, Optional, Thread, Union
+from threading import Lock, Thread
+from typing import Dict, List, Optional, Union
 
 from arkaine.internal.registrar.registrar import Registrar
 from arkaine.internal.store.context import Check, ContextStore, Query
