@@ -43,9 +43,10 @@
                     <h3>LLMs</h3>
                 </div>
                 <div class="tools-list">
-                    <div class="tool-button" v-for="llm in llms.values()">
+                    <button v-for="llm in llms.values()" :key="llm.name" class="tool-button"
+                        :class="{ active: selectedLLM?.name === llm.name }" @click="selectLLM(llm)">
                         {{ llm.name }}
-                    </div>
+                    </button>
                 </div>
             </div>
         </div>
@@ -123,7 +124,11 @@
             <!-- Show either contexts or tool view -->
             <template v-if="selectedTool">
                 <tool-view :tool="selectedTool" :contexts="contextsAll" :search-query="searchQuery"
-                    @back="clearSelectedTool"></tool-view>
+                    @back="clearSelectedTool" @execute-tool="executeTool"></tool-view>
+            </template>
+            <template v-else-if="selectedLLM">
+                <llm-view :llm="selectedLLM" :contexts="contextsAll" :search-query="searchQuery"
+                    @back="clearSelectedLLM" @execute-llm="executeLLM"></llm-view>
             </template>
             <template v-else>
                 <div class="contexts">

@@ -6,7 +6,24 @@ export const ToolView = {
             isDescriptionExpanded: true,
             isExamplesExpanded: true,
             isTriggersExpanded: true,
-            isArgumentsExpanded: true
+            isArgumentsExpanded: true,
+            isExecutionExpanded: false,
+            executionForm: {}
+        }
+    },
+    watch: {
+        // Add a watcher for the tool prop
+        tool: {
+            immediate: true,
+            handler(newTool) {
+                // Reset and reinitialize the execution form when tool changes
+                this.executionForm = {};
+                if (newTool?.args?.length) {
+                    newTool.args.forEach(arg => {
+                        this.executionForm[arg.name] = (arg.default !== undefined) ? arg.default : '';
+                    });
+                }
+            }
         }
     },
     computed: {
@@ -51,14 +68,36 @@ export const ToolView = {
             }));
         }
     },
+    mounted() {
+        if (this.tool?.args?.length) {
+            this.tool.args.forEach(arg => {
+                this.executionForm[arg.name] = (arg.default !== undefined) ? arg.default : '';
+            });
+        }
+    },
     methods: {
         formatTimestamp(timestamp) {
             if (!timestamp) return 'N/A';
             return new Date(timestamp * 1000).toLocaleString();
+        },
+        handleExecuteTool() {
+            // Emit event to parent with tool execution details
+            this.$emit('execute-tool', {
+                tool_id: this.tool.id,
+                args: this.executionForm
+            });
+
+            // Properly reset the form after sending
+            this.executionForm = {};
+            if (this.tool?.args?.length) {
+                this.tool.args.forEach(arg => {
+                    this.executionForm[arg.name] = (arg.default !== undefined) ? arg.default : '';
+                });
+            }
         }
     },
     template: `
-        <div class= "tool-view">
+        <div class="tool-view">
             <button class="back-button" @click="$emit('back')">&larr; Back</button>
             <div class="tool-header">
                 <h2 class="tool-title">{{ tool.name }}</h2>
@@ -72,62 +111,129 @@ export const ToolView = {
                 </div>
                 <div v-show="isDescriptionExpanded" class="section-content">
                     <p class="tool-description">{{ tool.description }}</p>
-                    
-                    <!-- Arguments -->
-                    <div class="arguments-section">
-                        <div class="section-header" @click="isArgumentsExpanded = !isArgumentsExpanded">
-                            <h4>Arguments</h4>
-                            <span class="expand-icon">{{ isArgumentsExpanded ? '−' : '+' }}</span>
-                        </div>
-                        <div v-show="isArgumentsExpanded" class="arguments-grid">
-                            <div v-for="arg in formattedArguments" :key="arg.name" class="argument-card">
-                                <div class="argument-header">
-                                    <span class="argument-name">{{ arg.name }}</span>
-                                    <span :class="['argument-badge', arg.required ? 'required' : 'optional']">
-                                        {{ arg.formattedRequired }}
-                                    </span>
-                                </div>
-                                <div class="argument-type">{{ arg.formattedType }}</div>
-                                <div class="argument-description">{{ arg.description }}</div>
-                                <div v-if="arg.default" class="argument-default">
-                                    Default: {{ arg.default }}
-                                </div>
-                            </div>
-                        </div>
-                    </div >
-                    
-                    <!--Examples -->
-                    <div v-if="tool.examples && tool.examples.length" class="examples-section">
-                        <div class="section-header" @click="isExamplesExpanded = !isExamplesExpanded">
-                            <h4>Examples</h4>
-                            <span class="expand-icon">{{ isExamplesExpanded ? '−' : '+' }}</span>
-                        </div>
-                        <div v-show="isExamplesExpanded" class="examples-list">
-                            <div v-for="(example, index) in tool.examples" :key="index" class="example-card">
-                                <div v-if="example.description" class="example-description">
-                                    {{ example.description }}
-                                </div>
-                                <div class="example-code">
-                                    <code>{{ tool.name }}({{ 
-                                        Object.entries(example.args)
-                                            .map(([key, value]) => key + ' = ' + value)
-                                            .join(', ') 
-                                    }})</code>
-                                </div>
-                                <div v-if="example.output" class="example-output">
-                                    <strong>Returns:</strong>
-                                    <pre>{{ example.output }}</pre>
-                                </div>
-                                <div v-if="example.explanation" class="example-explanation">
-                                    {{ example.explanation }}
-                                </div>
-                            </div>
-                        </div >
-                    </div >
-                </div >
-            </div >
+                </div>
+            </div>
 
-            <!--Recent Triggers Section-->
+            <!-- Arguments Section -->
+            <div class="tool-section">
+                <div class="section-header" @click="isArgumentsExpanded = !isArgumentsExpanded">
+                    <h3>Arguments</h3>
+                    <span class="expand-icon">{{ isArgumentsExpanded ? '−' : '+' }}</span>
+                </div>
+                <div v-show="isArgumentsExpanded" class="section-content">
+                    <div class="arguments-grid">
+                        <div v-for="arg in formattedArguments" :key="arg.name" class="argument-card">
+                            <div class="argument-header">
+                                <span class="argument-name">{{ arg.name }}</span>
+                                <span :class="['argument-badge', arg.required ? 'required' : 'optional']">
+                                    {{ arg.formattedRequired }}
+                                </span>
+                            </div>
+                            <div class="argument-type">{{ arg.formattedType }}</div>
+                            <div class="argument-description">{{ arg.description }}</div>
+                            <div v-if="arg.default" class="argument-default">
+                                Default: {{ arg.default }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Examples Section -->
+            <div v-if="tool.examples && tool.examples.length" class="tool-section">
+                <div class="section-header" @click="isExamplesExpanded = !isExamplesExpanded">
+                    <h4>Examples</h4>
+                    <span class="expand-icon">{{ isExamplesExpanded ? '−' : '+' }}</span>
+                </div>
+                <div v-show="isExamplesExpanded" class="examples-list">
+                    <div v-for="(example, index) in tool.examples" :key="index" class="example-card">
+                        <div v-if="example.description" class="example-description">
+                            {{ example.description }}
+                        </div>
+                        <div class="example-code">
+                            <code>{{ tool.name }}({{ 
+                                Object.entries(example.args)
+                                    .map(([key, value]) => key + ' = ' + value)
+                                    .join(', ') 
+                            }})</code>
+                        </div>
+                        <div v-if="example.output" class="example-output">
+                            <strong>Returns:</strong>
+                            <pre>{{ example.output }}</pre>
+                        </div>
+                        <div v-if="example.explanation" class="example-explanation">
+                            {{ example.explanation }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Execute Section -->
+            <div class="tool-section execution-section">
+                <div class="section-header" @click="isExecutionExpanded = !isExecutionExpanded">
+                    <h3>Execute Tool</h3>
+                    <span class="expand-icon">{{ isExecutionExpanded ? '−' : '+' }}</span>
+                </div>
+                <div v-show="isExecutionExpanded" class="section-content">
+                    <form @submit.prevent="handleExecuteTool" class="execution-form">
+                        <div class="execution-grid">
+                            <div v-for="arg in tool.args" :key="arg.name" class="execution-field">
+                                <label :for="'execution-' + arg.name">
+                                    {{ arg.name }}
+                                    <span v-if="arg.required" class="required-star">*</span>
+                                </label>
+                                
+                                <div class="input-wrapper">
+                                    <input v-if="arg.type.toLowerCase() === 'string' || arg.type.toLowerCase() === 'number'"
+                                        :type="arg.type.toLowerCase() === 'number' ? 'number' : 'text'"
+                                        :id="'execution-' + arg.name"
+                                        v-model="executionForm[arg.name]"
+                                        :required="arg.required"
+                                        :placeholder="arg.description"
+                                        class="execution-input"
+                                    />
+                                    <div v-else-if="arg.type.toLowerCase() === 'boolean'" class="boolean-input">
+                                        <label class="toggle">
+                                            <input
+                                                type="checkbox"
+                                                :id="'execution-' + arg.name"
+                                                v-model="executionForm[arg.name]"
+                                            />
+                                            <span class="slider"></span>
+                                        </label>
+                                    </div>
+                                    <textarea
+                                        v-else-if="arg.type.toLowerCase() === 'text'"
+                                        :id="'execution-' + arg.name"
+                                        v-model="executionForm[arg.name]"
+                                        :required="arg.required"
+                                        :placeholder="arg.description"
+                                        class="execution-textarea"
+                                        rows="4"
+                                    ></textarea>
+                                    <!-- Add a fallback input for any other types -->
+                                    <input v-else
+                                        type="text"
+                                        :id="'execution-' + arg.name"
+                                        v-model="executionForm[arg.name]"
+                                        :required="arg.required"
+                                        :placeholder="arg.description"
+                                        class="execution-input"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="execution-actions">
+                            <button type="submit" class="execute-button">
+                                Execute Tool
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Recent Triggers Section -->
             <div class="tool-section">
                 <div class="section-header" @click="isTriggersExpanded = !isTriggersExpanded">
                     <h3>Recent Triggers ({{ toolContexts.length }})</h3>
@@ -159,9 +265,9 @@ export const ToolView = {
                                 <pre>{{ context.error }}</pre>
                             </div>
                         </div>
-                    </div >
-                </div >
-            </div >
-        </div >
+                    </div>
+                </div>
+            </div>
+        </div>
     `
 };

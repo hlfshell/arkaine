@@ -1,12 +1,14 @@
 import { ContextView } from './components/ContextView.js';
 import { EventView } from './components/EventView.js';
+import { LLMView } from './components/LLMView.js';
 import { ToolView } from './components/ToolView.js';
 
 const app = Vue.createApp({
     components: {
-        ContextView,
-        EventView,
-        ToolView
+        'context-view': ContextView,
+        'event-view': EventView,
+        'tool-view': ToolView,
+        'llm-view': LLMView
     },
     data() {
         return {
@@ -39,6 +41,7 @@ const app = Vue.createApp({
             currentToolEmoji: '&#128296;',
             isDarkMode: localStorage.getItem('darkMode') === 'true' || false,
             selectedTool: null,
+            selectedLLM: null,
         }
     },
     watch: {
@@ -366,6 +369,41 @@ const app = Vue.createApp({
         },
         clearSelectedTool() {
             this.selectedTool = null;
+        },
+        selectLLM(llm) {
+            this.selectedLLM = llm;
+            this.selectedTool = null;
+        },
+        clearSelectedLLM() {
+            this.selectedLLM = null;
+        },
+        executeLLM(data) {
+            if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+                console.error('WebSocket is not connected');
+                return;
+            }
+
+            const message = {
+                type: 'llm_execution',
+                llm_name: data.llm_name,
+                prompt: data.prompt
+            };
+
+            this.ws.send(JSON.stringify(message));
+        },
+        executeTool(data) {
+            if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+                console.error('WebSocket is not connected');
+                return;
+            }
+
+            const message = {
+                type: 'tool_execution',
+                tool_id: data.tool_id,
+                args: data.args
+            };
+
+            this.ws.send(JSON.stringify(message));
         }
     },
     mounted() {

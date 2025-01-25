@@ -108,11 +108,17 @@ class SpellbookSocket:
         self.__broadcast_datastore(data)
         self.__broadcast_datastore(x)
         self.__broadcast_datastore(debug)
-        data.add_listener(self._broadcast_datastore_update)
-        x.add_listener(self._broadcast_datastore_update)
-        debug.add_listener(self._broadcast_datastore_update)
+        data.add_listener(self.__broadcast_datastore_update)
+        x.add_listener(self.__broadcast_datastore_update)
+        debug.add_listener(self.__broadcast_datastore_update)
 
         context.add_on_end_listener(self._context_complete)
+
+        # If the listener just got added, but the output is already
+        # set due to execution timing, we then broadcast now. This
+        # may result in a double broadcast, but this is fine.
+        if context.output is not None or context.exception is not None:
+            self._context_complete(context)
 
     def _broadcast_to_clients(self, message: dict):
         """Helper function to broadcast a message to all active clients"""
@@ -170,8 +176,19 @@ class SpellbookSocket:
             while self._running:
                 try:
                     message = websocket.recv(timeout=1)
-                    if message:  # Handle any client messages if needed
-                        pass
+                    if message:
+                        try:
+                            data = json.loads(message)
+
+                            if data["type"] == "llm_execution":
+                                self.__handle_llm_execution(data)
+                            elif data["type"] == "tool_execution":
+                                self.__handle_tool_execution(data)
+                            else:
+                                print(f"Unknown message type: {data['type']}")
+
+                        except Exception as e:
+                            print(f"Failed to parse message: {e}")
                 except TimeoutError:
                     continue
                 except Exception:
@@ -183,6 +200,26 @@ class SpellbookSocket:
             with self._lock:
                 self.active_connections.discard(websocket)
             print(f"Client disconnected from {remote_addr}")
+
+    def __handle_llm_execution(self, data: dict):
+        llm_name: str = data["llm_name"]
+        prompt: str = data["prompt"]
+
+        if llm_name not in self._llms:
+            raise ValueError(f"LLM with name {llm_name} not found")
+
+        llm = self._llms[llm_name]
+        llm(prompt)
+
+    def __handle_tool_execution(self, data: dict):
+        tool_id: str = data["tool_id"]
+        args: dict = data["args"]
+
+        if tool_id not in self._tools:
+            raise ValueError(f"Tool with id {tool_id} not found")
+
+        tool = self._tools[tool_id]
+        tool(**args)
 
     def __build_tool_message(self, tool: Tool):
         return {"type": "tool", "data": tool.to_json()}
