@@ -62,7 +62,10 @@ class OnError(Tool):
             description = tool.description
 
         self.__tool = tool
-        self.__on_error = on_error
+        if isinstance(on_error, Tool):
+            self.__on_error = on_error
+        else:
+            self.__on_error = toolify(on_error)
         self.__on_error_formatter = on_error_formatter
         self.__set_exception = set_exception
 
