@@ -62,31 +62,37 @@ class OnError(Tool):
             description = tool.description
 
         self.__tool = tool
+        self.__on_error = on_error
         self.__on_error_formatter = on_error_formatter
         self.__set_exception = set_exception
 
         super().__init__(
-            tool=tool,
             name=name,
+            args=tool.args,
             description=description,
             id=id,
-            function=self._trigger,
+            func=self._trigger,
+            examples=tool.examples,
         )
 
     def _trigger(self, context: Context, *args: Any, **kwargs: Any) -> Any:
         trigger_exception = False
+        exception = None
+
         try:
             output = self.__tool(context, *args, **kwargs)
 
             if context.exception:
                 trigger_exception = True
-        except:  # noqa: E722
+        except Exception as e:
             trigger_exception = True
+            exception = e
         finally:
             if trigger_exception:
-                if self.__set_exception:
-                    context.exception = context.exception
-
+                if not self.__set_exception:
+                    context.exception = None
+                elif self.__set_exception and exception:
+                    context.exception = exception
                 if self.__on_error_formatter:
                     on_error_input = self.__on_error_formatter(
                         context, context.exception
@@ -96,6 +102,8 @@ class OnError(Tool):
 
                 return self.__on_error(context, on_error_input)
             else:
+                # The wrapped tool has executed correctly; return its
+                # original output
                 return output
 
     def retry(self, context: Context, *args: Any, **kwargs: Any) -> Any:
