@@ -63,7 +63,28 @@ python -m arkaine.spellbook.server
 
 ## Creating a Tool
 
-To create a tool, define a class that inherits from the `Tool` class. Implement the required methods and define the arguments it will accept.
+There are several ways to create a tool. You can do this through inheritance, a function call, or a decorator. Let's cover each.
+
+### Just using `Tool`
+
+First, we can just implement a tool by calling it.
+
+```python
+from arkaine.tools.tool import Tool
+
+my_tool = Tool(
+    name="my_tool",
+    description="A custom tool",
+    args=[Argument("name", "The name of the person to greet", "str", required=True)],
+    func=lambda context, kwargs: f"Hello, {kwargs['name']}!",
+)
+
+my_tool({"name": "Jeeves"})
+```
+
+### Inheriting from `Tool`
+
+Second, we can define a class that inherits from the `Tool` class. Implement the required methods and define the arguments it will accept.
 
 ```python
 python
@@ -74,14 +95,18 @@ class MyTool(Tool):
         args = [
             Argument("input", "The input data for the tool", "str", required=True)
         ]
-        super().__init__("my_tool", "A custom tool", args)
+        super().__init__("my_tool", "A custom tool", args, self._my_func)
 
-    def invoke(self, context, kwargs):
+    def _my_func(self, context, kwargs):
         # Implement the tool's functionality here
-        return f"Processed {kwargs['input']}"
+        return f"The meaning of life is {kwargs['input']}"
+
+my_tool(42)
 ```
 
-### toolify
+By default, the model calls `invoke` internally, which in turn calls the passed `func` argument. So you can either act as above, or instead override `invoke`. You do lose some additiona parameter checking that is useful, however, and thus it is not recommended.
+
+### `toolify` decorator
 
 Since `Tool`s are essentially functions with built-in niceties for arkaine integration, you may want to simply quickly turn an existing function in your project into a `Tool`. To do this, arkaine contains `toolify`.
 
