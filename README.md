@@ -59,6 +59,8 @@ or
 python -m arkaine.spellbook.server
 ```
 
+More on how Spellbook can be integrated with your project is later in this document.
+
 # Creating Your Own Tools and Agents
 
 ## Creating a Tool
@@ -1244,6 +1246,114 @@ inbox = Inbox(
     store=CustomStore()
 )
 ```
+
+# Spellbook
+
+Spellbook provides a real-time web interface for monitoring and interacting with your arkaine tools and agents. It consists of two main components:
+
+- A WebSocket server that broadcasts tool/agent events and accepts commands. This is hosted by your agent program.
+- A web interface for visualizing execution, debugging, and triggering tools. This can be ran separately or from within your agent program.
+
+
+# `quickstart` function
+
+There are plenty of cool features that you'll commonly want to use when building arkaine AI agents. To make it easy to get set up with most of them, the `quickstart` function is provided.
+
+- Context storage configuration
+- Logging setup
+- Spellbook socket/server initialization
+- Proper cleanup on program exit
+
+## Basic Usage
+
+```python
+from arkaine import quickstart
+
+# Basic setup with in-memory context storage
+done = quickstart()
+
+# When finished
+done()
+```
+
+## Configuration Options
+
+The function accepts several optional parameters:
+
+```python
+quickstart(
+    context_store=None,  # Context storage configuration
+    logger=False,        # Enable global logging
+    spellbook_socket=False,  # Spellbook socket configuration
+    spellbook_server=False,  # Spellbook server configuration
+) -> Callable[[], None]  # Returns cleanup function
+```
+
+### Context Storage
+
+You can configure context storage in several ways:
+
+```python
+# Use in-memory storage (default)
+quickstart()
+
+# Use file-based storage with path
+quickstart(context_store="path/to/store")
+
+# Use custom context store
+from arkaine.utils.store.context import CustomContextStore
+quickstart(context_store=CustomContextStore())
+```
+
+### Logging
+
+Enable global logging for better debugging:
+
+```python
+quickstart(logger=True)
+```
+
+### Spellbook Integration
+
+Configure Spellbook socket and server:
+
+```python
+# Enable both with default ports
+quickstart(spellbook_socket=True, spellbook_server=True)
+
+# Specify custom ports
+quickstart(spellbook_socket=8001, spellbook_server=8002)
+
+# Use custom instances
+from arkaine.spellbook.socket import SpellbookSocket
+from arkaine.spellbook.server import SpellbookServer
+
+quickstart(
+    spellbook_socket=SpellbookSocket(port=8001),
+    spellbook_server=SpellbookServer(port=8002)
+)
+```
+
+## Cleanup
+
+The function returns a cleanup callable that should be called when you're done:
+
+```python
+done = quickstart(
+    context_store="path/to/store",
+    logger=True,
+    spellbook_socket=True,
+    spellbook_server=True
+)
+
+# Your code here...
+
+# Clean up when finished
+done()
+```
+
+Note that cleanup is also automatically registered for program exit and signal handlers (SIGTERM/SIGINT).
+
 
 ### Coming Soon:
 
