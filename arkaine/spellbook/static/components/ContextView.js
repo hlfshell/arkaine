@@ -46,6 +46,9 @@ export const ContextView = {
     computed: {
         showTimelineOnly() {
             return this.settings.viewMode === 'timeline';
+        },
+        showRetryButton() {
+            return !this.context.parent_id && this.context.error;
         }
     },
     methods: {
@@ -246,6 +249,10 @@ export const ContextView = {
             const hasX = this.context.x && Object.keys(this.context.x).length > 0;
             const hasDebug = this.context.debug && Object.keys(this.context.debug).length > 0;
             return hasData || hasX || hasDebug;
+        },
+        retryContext() {
+            // Emit event to be handled by parent app
+            this.$emit('retry-context', this.context.id);
         }
     },
     template: `
@@ -263,7 +270,10 @@ export const ContextView = {
                         </span>
                     </button>
                 </div>
-                <button class="copy-button" @click.stop="copyContext">📋</button>
+                <div style="display: flex; gap: 8px;">
+                    <button v-if="showRetryButton" class="retry-button" @click.stop="retryContext" title="Retry">↻</button>
+                    <button class="copy-button" @click.stop="copyContext">📋</button>
+                </div>
             </div>
 
             <!-- Arguments Section -->

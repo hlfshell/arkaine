@@ -134,7 +134,8 @@
             <template v-else>
                 <div class="contexts">
                     <context-view v-for="context in contexts.values()" :key="context.id" :context="context"
-                        :contexts="contexts" :settings="settings" :depth="0" :search-query="searchQuery">
+                        :contexts="contexts" :settings="settings" :depth="0" :search-query="searchQuery"
+                        @retry-context="handleContextRetry">
                     </context-view>
                 </div>
             </template>

@@ -418,6 +418,19 @@ const app = Vue.createApp({
                 this.showSettings = false;
             }
         },
+        handleContextRetry(contextId) {
+            // Prepare our message
+            const message = {
+                type: "context_retry",
+                context_id: contextId
+            }
+
+            // Clear the context entirely from our app memory
+            this.contextsAll.delete(contextId);
+
+            // Finally send the message
+            this.ws.send(JSON.stringify(message));
+        }
     },
     mounted() {
         this.setupWebSocket();
