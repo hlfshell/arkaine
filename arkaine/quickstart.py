@@ -1,5 +1,6 @@
 import atexit
 import signal
+from threading import Event
 from typing import Callable, Optional, Union
 
 from arkaine.internal.logging.logger import GlobalLogger
@@ -97,3 +98,30 @@ def quickstart(
             spellbook_server.stop()
 
     return done
+
+
+def keep_alive(cleanup: Optional[Callable[[], None]] = None):
+    """
+    keep_alive is a simple function that keeps the program alive until
+    a kill signal is received.
+
+    The optional cleanup function is called when a kill signal is received
+    """
+    running = Event()
+    running.set()
+
+    def handle_shutdown(signo, frame):
+        running.clear()
+
+    signal.signal(signal.SIGTERM, handle_shutdown)
+    signal.signal(signal.SIGINT, handle_shutdown)
+
+    try:
+        while running.is_set():
+            # Using a longer sleep time since we're using an event
+            running.wait(1.0)
+    except KeyboardInterrupt:
+        running.clear()
+    finally:
+        if cleanup:
+            cleanup()
