@@ -11,7 +11,7 @@ from time import sleep
 from typing import List, Optional, Union
 from uuid import uuid4
 
-from arkaine.registrar.registrar import Registrar
+from arkaine.internal.registrar import Registrar
 from arkaine.tools.tool import Context, Tool
 from arkaine.utils.interval import Interval
 from arkaine.utils.timer import Timer

@@ -10,7 +10,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from arkaine.registrar.registrar import Registrar
+from arkaine.internal.registrar import Registrar
 from arkaine.tools.tool import Context, Tool
 
 
