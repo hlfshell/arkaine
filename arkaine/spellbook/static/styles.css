@@ -275,6 +275,17 @@ pre {
     opacity: 1;
 }
 
+.retry-button {
+    float: right;
+    padding: 4px 8px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
 .event,
 .context-header {
     position: relative;
