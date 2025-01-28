@@ -17,7 +17,7 @@ class Weather(Tool):
             OPENWEATHERMAP_API_KEY environment variable
         default_location: Default location to use if none provided in query
         units: Unit system to use (metric, imperial, or standard)
-        formmated_str: Whether to return a formatted string or a dict.
+        formatted_str: Whether to return a formatted string or a dict.
             String format:
                 Current weather in San Diego: 11°C, Few clouds
                 Humidity: 72%, Wind: 3.6 km/h
