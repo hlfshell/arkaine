@@ -184,6 +184,8 @@ class SpellbookSocket:
                                 self.__handle_llm_execution(data)
                             elif data["type"] == "tool_execution":
                                 self.__handle_tool_execution(data)
+                            elif data["type"] == "context_retry":
+                                self.__handle_context_retry(data)
                             else:
                                 print(f"Unknown message type: {data['type']}")
 
@@ -220,6 +222,20 @@ class SpellbookSocket:
 
         tool = self._tools[tool_id]
         tool(**args)
+
+    def __handle_context_retry(self, data: dict):
+        context_id: str = data["context_id"]
+        if context_id not in self._contexts:
+            raise ValueError(f"Context with id {context_id} not found")
+        context = self._contexts[context_id]
+
+        if context.tool is None:
+            raise ValueError("Context has no tool")
+
+        try:
+            context.tool.retry(context)
+        except Exception as e:
+            print(f"Failed to retry context: {e}")
 
     def __build_tool_message(self, tool: Tool):
         return {"type": "tool", "data": tool.to_json()}
@@ -309,12 +325,36 @@ class SpellbookSocket:
 
     def stop(self):
         """Stop the WebSocket server"""
+        if not self._running:
+            return
+
         self._running = False
+
+        with self._lock:
+            for websocket in self.active_connections:
+                try:
+                    websocket.close()
+                except Exception:
+                    pass
+            self.active_connections.clear()
+
         if self._server:
-            self._server.shutdown()
+            try:
+                self._server.shutdown()
+                self._server.close()
+            except Exception:
+                pass
+            finally:
+                self._server = None
+
         if self._server_thread and self._server_thread.is_alive():
-            self._server_thread.join()
-        self._server_thread = None
+            try:
+                self._server_thread.join(timeout=3.0)
+            except Exception:
+                pass
+            finally:
+                self._server_thread = None
+
         print("WebSocket server stopped")
 
     def __del__(self):
