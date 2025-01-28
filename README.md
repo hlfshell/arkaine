@@ -639,6 +639,8 @@ Since arkaine is trying to be a batteries-included framework, it comes with a se
 
 - `Weather` - Get current weather information for any location using OpenWeatherMap API. Supports multiple unit systems (metric/imperial) and dict or nice readable string outputs.
 
+- `LocalSearch` - Given a query, location and radius (or hardcode the location), this tool allows for searching for local entities via Google Maps/Google Places API. Great for scanning for local businesses or locations.
+
 - `WebSearcher` - given a topic or task, generate a list of potentially relevant queries perform a web search (defaults to DuckDuckGo, but compatible with Google and Bing). Then, given the results, isolate the relevant websites that have a high potential of containing relevant information.
 
 - `Wikipedia` - Given a question, this agent will attempt to retrieve the Wikipedia page on that topic and utilize it to answer the question.
