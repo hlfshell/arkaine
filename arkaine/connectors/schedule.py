@@ -23,20 +23,25 @@ class Task:
         self,
         tool: Tool,
         args: dict,
-        trigger_at: Interval,
+        trigger_at: Union[Interval, datetime],
         paused: bool = False,
         id: Optional[str] = None,
-        history: List[float] = [],
+        history: List[float] = None,
         history_length: int = 100,
     ):
         self.__id = id or str(uuid4())
         self.__tool = tool
         self.__args = args
-        self.__interval = trigger_at
         self.__paused = paused
-        self.__history: List[float] = history
+        self.__history: List[float] = history or []
         self.__history_length = history_length
         self.__lock = Lock()
+
+        # Convert datetime to Interval if needed
+        if isinstance(trigger_at, datetime):
+            self.__interval = Interval(trigger_at)
+        else:
+            self.__interval = trigger_at
 
     @property
     def id(self) -> str:
@@ -77,8 +82,8 @@ class Task:
 
     @property
     def next(self) -> datetime:
-        with self.__lock:
-            return self.__interval.trigger_at
+        """Get the next trigger time."""
+        return self.__interval.trigger_at
 
     def trigger(self) -> datetime:
         with self.__lock:
