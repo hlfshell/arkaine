@@ -269,7 +269,6 @@ class SchedulerNL(Agent):
                     "time, tool name, and recurrence pattern"
                 ),
             ),
-            process_answer=self.__process_llm_response,
         )
 
     def prepare_prompt(self, request: str) -> Prompt:
@@ -331,7 +330,7 @@ class SchedulerNL(Agent):
             {"role": "user", "content": request},
         ]
 
-    def __process_llm_response(self, response: str) -> Dict:
+    def extract_result(self, context: Context, response: str) -> Dict:
         """Process the LLM response and schedule the task."""
         try:
             # Ensure response is a valid JSON string

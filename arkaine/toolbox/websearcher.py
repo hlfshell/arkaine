@@ -14,7 +14,7 @@ from arkaine.llms.llm import LLM
 from arkaine.toolbox.summarizer import Summarizer
 from arkaine.toolbox.webqueryer import Webqueryer
 from arkaine.toolbox.websearch import Websearch, Website
-from arkaine.tools.tool import Argument
+from arkaine.tools.tool import Argument, Context
 from arkaine.utils.templater import PromptTemplate
 
 
@@ -144,7 +144,6 @@ class SearchQueryJudge(Agent):
             ],
             llm=llm,
             examples=[],
-            process_answer=self.process_answer,
         )
 
         self.__template = PromptTemplate.from_file(
@@ -169,7 +168,7 @@ class SearchQueryJudge(Agent):
             }
         )
 
-    def process_answer(self, output: str) -> List[Website]:
+    def extract_result(self, context: Context, output: str) -> List[Website]:
         """
         Process the output. We expect it to be several lines,
         which follow the form of
@@ -259,7 +258,6 @@ class Websearcher2(Agent):
                 llm,
                 tools=[search_tool],
                 agent_explanation=description,
-                process_answer=self.process_answer,
             )
 
         self.backend = backend
@@ -292,7 +290,7 @@ class Websearcher2(Agent):
     def prepare_for_backend(self, topic: str) -> Dict[str, Any]:
         return {"task": self.__template.render({"topic": topic})}
 
-    def process_answer(self, answer: str) -> list[Website]:
+    def extract_result(self, context: Context, answer: str) -> list[Website]:
         """Process the search results into a list of Website objects.
 
         Handles various input formats including:

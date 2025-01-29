@@ -3,7 +3,7 @@ from typing import List
 
 from arkaine.agent import Agent
 from arkaine.llms.llm import LLM, Prompt
-from arkaine.tools.tool import Argument
+from arkaine.tools.tool import Argument, Context
 from arkaine.utils.templater import PromptTemplate
 
 
@@ -34,7 +34,6 @@ class Webqueryer(Agent):
                 ),
             ],
             llm=llm,
-            process_answer=self.process_answer,
         )
 
         self.__template = PromptTemplate(
@@ -56,7 +55,7 @@ class Webqueryer(Agent):
             {"topic": topic, "num_queries": num_queries}
         )
 
-    def process_answer(self, answer: str) -> List[str]:
+    def extract_result(self, context: Context, answer: str) -> List[str]:
         """
         Extract search queries from the LLM response, handling various formats.
 

@@ -17,7 +17,6 @@ class Agent(Tool, ABC):
         llm: LLM,
         examples: List[Example] = [],
         result: Optional[Result] = None,
-        process_answer: Optional[Callable[[str], Any]] = None,
     ):
         """
         An agent is a tool that utilizes an LLM. Prove an LLM model to generate
@@ -28,30 +27,61 @@ class Agent(Tool, ABC):
         the LLM and converted in whatever manner you wish. If it is not
         provided, the raw output of the LLM is simply returned instead.
         """
-        super().__init__(name, description, args, None, examples)
+        super().__init__(name, description, args, None, examples, result)
         self.llm = llm
-        self.process_answer = process_answer
 
     @abstractmethod
-    def prepare_prompt(self, **kwargs) -> Prompt:
+    def prepare_prompt(self, context: Context, **kwargs) -> Prompt:
         """
         Given the arguments for the agent, create the prompt to feed to the LLM
         for execution.
         """
         pass
 
+    @abstractmethod
+    def extract_result(self, context: Context, output: str) -> Optional[Any]:
+        """
+        Given the output of the LLM, extract the result.
+        """
+        pass
+
     def invoke(self, context: Context, **kwargs) -> Any:
-        prompt = self.prepare_prompt(**kwargs)
+        prompt = self.prepare_prompt(context, **kwargs)
         if isinstance(prompt, str):
             prompt = [{"role": "system", "content": prompt}]
 
         result = self.llm(context, prompt)
 
-        final_result = (
-            self.process_answer(result) if self.process_answer else result
-        )
+        final_result = self.extract_result(context, result)
 
         return final_result
+
+
+class SimpleAgent(Agent):
+
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        args: List[Argument],
+        llm: LLM,
+        prepare_prompt: Callable[[Context, Any], Prompt],
+        extract_result: Optional[Callable[[Context, str], Optional[Any]]],
+        examples: List[Example] = [],
+        result: Optional[Result] = None,
+    ):
+        super().__init__(name, description, args, llm, examples, result)
+
+        self.__prompt_function = prepare_prompt
+        self.__extract_result_function = extract_result
+
+    def prepare_prompt(self, context: Context, **kwargs) -> Prompt:
+        return self.__prompt_function(context, **kwargs)
+
+    def extract_result(self, context: Context, output: str) -> Optional[Any]:
+        if self.__extract_result_function:
+            return self.__extract_result_function(context, output)
+        return output
 
 
 class IterativeAgent(Agent):
@@ -67,7 +97,7 @@ class IterativeAgent(Agent):
         initial_state: Dict[str, Any] = {},
         max_steps: Optional[int] = None,
     ):
-        super().__init__(name, description, args, llm, examples)
+        super().__init__(name, description, args, llm, examples, result)
         self.__initial_state = initial_state
         self.max_steps = max_steps
 
@@ -95,9 +125,9 @@ class IterativeAgent(Agent):
                 raise Exception("Max steps reached")
 
             prompt = self.prepare_prompt(context, **kwargs)
-            result = self.llm(context, prompt)
+            output = self.llm(context, prompt)
 
-            result = self.extract_result(context, result)
+            result = self.extract_result(context, output)
             if result is not None:
                 return result
 

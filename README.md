@@ -158,14 +158,34 @@ Not only will `toolify` turn `func1/2/3` into a `Tool`, it also attempts to read
 
 ## Creating an Agent
 
-To create an agent, define a class that inherits from the `Agent` class. Implement the `prepare_prompt` method to convert arguments into a prompt for the LLM.
+To create an agent, you have several options. All agents are tools that utilize LLMs, and there are a few different ways to implement them based on your needs.
 
-Remember, that all agents are also tools!
+### Using SimpleAgent
 
+The easiest way to create an agent is to use `SimpleAgent`, which allows you to create an agent by passing functions for prompt preparation and result extraction:
+
+```python
+from arkaine.agent import SimpleAgent
+from arkaine.tools.tool import Argument
+from arkaine.llms.llm import LLM
+
+# Create agent with functions
+agent = SimpleAgent(
+    name="my_agent",
+    description="A custom agent",
+    args=[Argument("task", "The task description", "str", required=True)],
+    llm=my_llm,
+    prepare_prompt=lambda context, **kwargs: f"Perform the following task: {kwargs['task']}",
+    extract_result=lambda context, output: output.strip()
+)
+```
+
+### Inheriting from Agent
+
+For more complex agents, you can inherit from the `Agent` class. Implement the required `prepare_prompt` and `extract_result` methods:
 
 ```python
 from arkaine.agent import Agent
-from arkaine.llms.llm import LLM
 
 class MyAgent(Agent):
     def __init__(self, llm: LLM):
@@ -174,31 +194,56 @@ class MyAgent(Agent):
         ]
         super().__init__("my_agent", "A custom agent", args, llm)
         
-    def prepare_prompt(self, kwargs):
+    def prepare_prompt(self, context, **kwargs) -> Prompt:
+        """
+        Given the arguments for the agent, create the prompt to feed to the LLM
+        for execution.
+        """
         return f"Perform the following task: {kwargs['task']}"
+
+    def extract_result(self, context, output: str) -> Optional[Any]:
+        """
+        Given the output of the LLM, extract and optionally transform the result.
+        Return None if no valid result could be extracted.
+        """
+        return output.strip()
 ```
 
-## Creating IterativeAgents
+### Creating IterativeAgents
 
-`IterativeAgents` are agents that can repeatedly call an LLM to try and perform its task, where the agent can identify when it is complete with its task. To create one, inherit from the `IterativeAgent` class.
+`IterativeAgents` are agents that can repeatedly call an LLM to try and perform its task, where the agent can identify when it is complete with its task by returning a non-None value from `extract_result`. To create one, inherit from the `IterativeAgent` class:
 
 ```python
 from arkaine.agent import IterativeAgent
 
 class MyIterativeAgent(IterativeAgent):
     def __init__(self, llm: LLM):
-        super().__init__("my_meta_agent", "A custom meta agent", [], llm)
+        super().__init__(
+            name="my_iterative_agent",
+            description="A custom iterative agent",
+            args=[],
+            llm=llm,
+            initial_state={"attempts": 0},  # Optional initial state
+            max_steps=5  # Optional maximum iterations
+        )
     
-    def prepare_prompt(self, context, **kwargs):
-        return f"Perform the following task: {kwargs['task']}"
+    def prepare_prompt(self, context, **kwargs) -> Prompt:
+        attempts = context["attempts"]
+        context["attempts"] += 1
+        return f"Attempt {attempts}: Perform the following task: {kwargs['task']}"
     
-    def extract_result(self, context, output):
-        # If this function returns None, the agent will be called again
-        # with the ability to "prepare" the prompt again to include
-        # its prior call.
-        ... generate output
-        return output
+    def extract_result(self, context, output: str) -> Optional[Any]:
+        # Return None to continue iteration, or a value to complete
+        if "COMPLETE" in output:
+            return output
+        return None
 ```
+
+The key differences in `IterativeAgent` are:
+- You can provide `initial_state` to set up context variables
+- You can set `max_steps` to limit the number of iterations
+- Returning `None` from `extract_result` will cause another iteration
+- The agent continues until either a non-None result is returned or `max_steps` is reached
 
 ## Chats
 

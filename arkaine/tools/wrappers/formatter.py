@@ -143,12 +143,13 @@ class FormattingAgent(Agent):
         name: Optional[str] = None,
         description: Optional[str] = None,
         examples: Optional[List[Example]] = None,
-        process_answer: Optional[Callable[[str], Any]] = None,
+        process_answer: Optional[Callable[[Context, str], Any]] = None,
         prompt: Optional[PromptTemplate] = None,
     ):
         self._tool = tool
         self._original_format_explanation = original_format_explanation
         self._formatted_format_explanation = formatted_format_explanation
+        self._process_answer = process_answer
 
         name = name or tool.name
         description = description or tool.description
@@ -165,9 +166,7 @@ class FormattingAgent(Agent):
         else:
             self._prompt = prompt
 
-        super().__init__(
-            name, description, tool.args, llm, examples, process_answer
-        )
+        super().__init__(name, description, tool.args, llm, examples)
 
     def invoke(self, context: Context, **kwargs) -> Any:
         output = self._tool(context=context, **kwargs)
@@ -179,3 +178,8 @@ class FormattingAgent(Agent):
             formatted_format=self._formatted_format_explanation,
             output=kwargs["output"],
         )
+
+    def extract_result(self, context: Context, output: str) -> Any:
+        if self._process_answer:
+            return self._process_answer(context, output)
+        return output
