@@ -15,7 +15,8 @@ from arkaine.utils.interval import Interval
 
 class Scheduler(Tool):
     """
-    A tool for scheduling tasks to run at specific times with optional recurrence.
+    A tool for scheduling tasks to run at specific times with optional
+    recurrence.
 
     Args:
         schedule: Schedule instance to use for task management
@@ -38,7 +39,7 @@ class Scheduler(Tool):
             raise ValueError("Schedule instance is required")
 
         self.__schedule = schedule
-        self.__allow_recurrence = allow_recurrence
+        self._allow_recurrence = allow_recurrence
 
         args = [
             Argument(
@@ -82,7 +83,7 @@ class Scheduler(Tool):
 
         examples = [
             Example(
-                name="schedule",
+                name="Schedule a weather check",
                 args={
                     "tool_name": "weather_tool",
                     "tool_args": {"location": "New York,US"},
@@ -97,7 +98,7 @@ class Scheduler(Tool):
                 description="Schedule daily weather updates for New York",
             ),
             Example(
-                name="schedule",
+                name="Schedule a weekly check on restaurants at a location",
                 args={
                     "tool_name": "local_search",
                     "tool_args": {
@@ -118,7 +119,7 @@ class Scheduler(Tool):
         ]
 
         super().__init__(
-            name="Scheduler",
+            name="scheduler",
             description=(
                 "Schedule tools to run at specific times with optional "
                 "recurrence."
@@ -166,7 +167,7 @@ class Scheduler(Tool):
                 )
 
         # Create the interval
-        if self.__allow_recurrence:
+        if self._allow_recurrence:
             trigger = Interval(trigger_time, recur_every)
         else:
             trigger = trigger_time
@@ -273,8 +274,6 @@ class SchedulerNL(Agent):
 
     def prepare_prompt(self, request: str) -> Prompt:
         """Convert the natural language request into a structured prompt."""
-        from arkaine.internal.registrar import Registrar
-
         available_tools = [
             f"- {tool.name}: {tool.description}"
             for tool in Registrar.get_tools()
@@ -291,7 +290,11 @@ class SchedulerNL(Agent):
                     "1. The tool to run\n"
                     "2. The arguments for the tool\n"
                     "3. When to run it"
-                    + (" and recurrence" if self.__allow_recurrence else "")
+                    + (
+                        " and recurrence"
+                        if self.__scheduler._allow_recurrence
+                        else ""
+                    )
                     + "\n\n"
                     "Available tools:\n" + "\n".join(available_tools) + "\n\n"
                     "Output your response in JSON format with these fields:\n"
@@ -305,7 +308,7 @@ class SchedulerNL(Agent):
                         "'weekdays', 'weekly', 'fortnightly', 'monthly', "
                         "'yearly', or time-based intervals like "
                         "'30:minutes', '2:hours', '90:seconds'\n"
-                        if self.__allow_recurrence
+                        if self.__scheduler._allow_recurrence
                         else ""
                     )
                 ),
