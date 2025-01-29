@@ -3,11 +3,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from arkaine.connectors.schedule import Schedule, Task
+from arkaine.connectors.schedule import Schedule
 from arkaine.internal.registrar import Registrar
 from arkaine.toolbox.scheduler import Scheduler, SchedulerNL
 from arkaine.tools.tool import Tool
-from arkaine.utils.interval import Interval
 
 
 # Fixtures
