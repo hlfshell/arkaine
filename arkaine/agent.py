@@ -113,7 +113,7 @@ class BackendAgent(Tool, ABC):
         examples: List[Example] = [],
         result: Optional[Result] = None,
     ):
-        super().__init__(name, description, args, None, examples)
+        super().__init__(name, description, args, None, examples, result)
         self.backend = backend
 
     @abstractmethod
