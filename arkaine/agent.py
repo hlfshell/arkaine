@@ -17,6 +17,7 @@ class Agent(Tool, ABC):
         llm: LLM,
         examples: List[Example] = [],
         result: Optional[Result] = None,
+        id: Optional[str] = None,
     ):
         """
         An agent is a tool that utilizes an LLM. Prove an LLM model to generate
@@ -27,7 +28,7 @@ class Agent(Tool, ABC):
         the LLM and converted in whatever manner you wish. If it is not
         provided, the raw output of the LLM is simply returned instead.
         """
-        super().__init__(name, description, args, None, examples, result)
+        super().__init__(name, description, args, None, examples, id, result)
         self.llm = llm
 
     @abstractmethod
@@ -68,9 +69,10 @@ class SimpleAgent(Agent):
         prepare_prompt: Callable[[Context, Any], Prompt],
         extract_result: Optional[Callable[[Context, str], Optional[Any]]],
         examples: List[Example] = [],
+        id: Optional[str] = None,
         result: Optional[Result] = None,
     ):
-        super().__init__(name, description, args, llm, examples, result)
+        super().__init__(name, description, args, llm, examples, id, result)
 
         self.__prompt_function = prepare_prompt
         self.__extract_result_function = extract_result
@@ -96,8 +98,9 @@ class IterativeAgent(Agent):
         result: Optional[Result] = None,
         initial_state: Dict[str, Any] = {},
         max_steps: Optional[int] = None,
+        id: Optional[str] = None,
     ):
-        super().__init__(name, description, args, llm, examples, result)
+        super().__init__(name, description, args, llm, examples, id, result)
         self.__initial_state = initial_state
         self.max_steps = max_steps
 
@@ -142,8 +145,9 @@ class BackendAgent(Tool, ABC):
         backend: BaseBackend,
         examples: List[Example] = [],
         result: Optional[Result] = None,
+        id: Optional[str] = None,
     ):
-        super().__init__(name, description, args, None, examples, result)
+        super().__init__(name, description, args, None, examples, id, result)
         self.backend = backend
 
     @abstractmethod
