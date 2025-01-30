@@ -167,10 +167,8 @@ class SpellbookSocket:
                         websocket.send(
                             json.dumps(self.__build_context_message(context))
                         )
-
                     except Exception as e:
                         print(f"Failed to send initial context state: {e}")
-                        return
 
             # Keep connection alive until client disconnects or server stops
             while self._running:
