@@ -18,6 +18,13 @@ class OpenAI(LLM):
         "gpt-3": 2048,
         "text-davinci-003": 4096,
         "code-davinci-002": 8001,
+        "o1": 128000,
+        "o1-mini": 8192,
+        "gpt-4-turbo-preview": 128000,
+        "gpt-4-1106-preview": 128000,
+        "gpt-4-0125-preview": 128000,
+        "gpt-4-0613": 8192,
+        "gpt-4-0314": 8192,
     }
 
     def __init__(
