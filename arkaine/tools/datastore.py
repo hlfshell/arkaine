@@ -5,6 +5,8 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, List, Optional, Union
 
+from arkaine.internal.to_json import recursive_to_json
+
 
 class ThreadSafeDataStore:
     """
@@ -32,13 +34,16 @@ class ThreadSafeDataStore:
     def __init__(
         self,
         data: Optional[Dict[str, Any]] = None,
-        context: Optional[str] = None,
+        context: Optional[Union[str, "Context"]] = None,
         label: Optional[str] = None,
     ):
         """Initialize an empty thread-safe data store."""
         self.__lock = threading.Lock()
         self.__data: Dict[str, Any] = data or {}
-        self.__context = context
+        if isinstance(context, str):
+            self.__context = context
+        else:
+            self.__context = context.id
         self.__label = label
         self.__threadpool = ThreadPoolExecutor()
 
@@ -199,22 +204,7 @@ class ThreadSafeDataStore:
         with self.__lock:
             data = {}
             for key, value in self.__data.items():
-                if hasattr(value, "to_json"):
-                    data[key] = value.to_json()
-                else:
-                    if isinstance(value, str) and (
-                        value.startswith("{") or value.startswith("[")
-                    ):
-                        try:
-                            json.loads(value)
-                            data[key] = value
-                            continue
-                        except:  # noqa: E722
-                            pass
-                    try:
-                        data[key] = json.dumps(value)
-                    except:  # noqa: E722
-                        data[key] = value
+                data[key] = recursive_to_json(value)
 
         return {
             "context": self.context,
