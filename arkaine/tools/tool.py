@@ -13,6 +13,7 @@ from uuid import uuid4
 
 from arkaine.internal.options.context import ContextOptions
 from arkaine.internal.registrar import Registrar
+from arkaine.internal.to_json import recursive_to_json
 from arkaine.tools.argument import Argument, InvalidArgumentException
 from arkaine.tools.datastore import ThreadSafeDataStore
 from arkaine.tools.events import (
@@ -289,6 +290,8 @@ class Context:
             ctx = Context(tool=tool_or_llm, parent=self)
         elif hasattr(tool_or_llm, "completion"):
             ctx = Context(llm=tool_or_llm, parent=self)
+        elif hasattr(tool_or_llm, "bash"):
+            ctx = Context(tool=tool_or_llm, parent=self)
         else:
             raise ValueError(
                 f"Invalid type for child context: {type(tool_or_llm)}"
@@ -542,23 +545,6 @@ class Context:
         for listener in self.__on_end_listeners:
             self.__executor.submit(listener, self)
 
-    def __args_to_json(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        if hasattr(self.args, "to_json"):
-            args = self.args.to_json()
-        if isinstance(args, (str, int, float, bool, type(None))):
-            return args
-        elif isinstance(args, list):
-            args = [self.__args_to_json(x) for x in args]
-        elif isinstance(args, dict):
-            for key, value in args.items():
-                args[key] = self.__args_to_json(value)
-        else:
-            try:
-                args = json.dumps(args)
-            except (TypeError, ValueError):
-                args = str(args)
-        return args
-
     def to_json(self, children: bool = True, debug: bool = True) -> dict:
         """Convert Context to a JSON-serializable dictionary."""
         # We have to grab certain things prior to the lock to avoid
@@ -566,6 +552,7 @@ class Context:
         # but should be fine for most purposes for now.
         status = self.status
         output = self.output
+
         if self.exception:
             exception = f"\n{self.exception}\n\n"
 
@@ -584,16 +571,8 @@ class Context:
         with self.__lock:
             history = [event.to_json() for event in self.__history]
 
-            if hasattr(output, "to_json"):
-                output = output.to_json()
-            else:
-                try:
-                    json.dumps(output)
-                except (TypeError, ValueError):
-                    try:
-                        output = str(output)
-                    except Exception:
-                        output = "Unable to serialize output"
+            if output:
+                output = recursive_to_json(output)
 
             data = self.__data.to_json()
 
@@ -607,7 +586,7 @@ class Context:
             else:
                 debug = None
 
-        args = self.__args_to_json(self.args)
+        args = recursive_to_json(self.args)
 
         if children:
             children = [child.to_json() for child in self.__children]
