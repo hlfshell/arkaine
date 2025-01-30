@@ -1,3 +1,4 @@
+import json
 import pathlib
 import re
 import traceback
@@ -38,6 +39,14 @@ class PythonBackendResponse:
     def __repr__(self):
         return self.__str__()
 
+    def to_json(self):
+        return {
+            "plan": self.plan,
+            "code": self.code,
+            "libraries": self.libraries,
+            "answer": self.answer,
+        }
+
 
 class PythonJudgeResponse:
 
@@ -57,6 +66,14 @@ class PythonJudgeResponse:
 
     def __repr__(self):
         return self.__str__()
+
+    def to_json(self):
+        return {
+            "status": self.status,
+            "answer": self.answer,
+            "reason": self.reason,
+            "changes": self.changes,
+        }
 
 
 class PythonOutput:
@@ -78,6 +95,22 @@ class PythonOutput:
 
     def __repr__(self):
         return self.__str__()
+
+    def to_json(self):
+        if hasattr(self.output, "to_json"):
+            output = self.output.to_json()
+        else:
+            try:
+                output = json.dumps(self.output)
+            except Exception:
+                output = str(self.output)
+
+        return {
+            "output": output,
+            "exception": str(self.exception) if self.exception else None,
+            "stdout": self.stdout,
+            "stderr": self.stderr,
+        }
 
 
 class PythonBackend(BaseBackend):
@@ -430,7 +463,7 @@ class PythonBackend(BaseBackend):
                 code = None
                 code_attempts = 0
                 while not code:
-                    raw_response = self.query_model(prompt)
+                    raw_response = self.query_model(context, prompt)
 
                     response = self.parse_response(context, raw_response)
 
