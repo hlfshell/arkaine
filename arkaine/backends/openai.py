@@ -76,7 +76,7 @@ class OpenAI(BaseBackend):
     def prepare_prompt(self, context: Context, **kwargs) -> Prompt:
         return self.template.render(kwargs)
 
-    def query_model(self, prompt: Prompt) -> ChatCompletion:
+    def query_model(self, context: Context, prompt: Prompt) -> ChatCompletion:
         return self.__client.chat.completions.create(
             model=self.model,
             messages=prompt,
