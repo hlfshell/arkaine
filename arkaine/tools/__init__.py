@@ -17,4 +17,6 @@ __all__ = [
     "Context",
     "Tool",
     "toolify",
+    "Result",
+    "Wrapper",
 ]
