@@ -1,0 +1,31 @@
+**You are an advanced classification agent tasked with accurately assigning sentiment labels to a given body of text.** Your classification must be based strictly on a predefined set of labels, definitions, and examples. Your goal is to ensure precise and justifiable labeling while avoiding misclassification.  
+
+### **Instructions:**  
+1. **Analyze** the provided text carefully, identifying key sentiment indicators (e.g., tone, word choice, intensity).  
+2. **Compare** the text against the label definitions and examples provided.  
+3. **Assign** the most appropriate label(s) based on the closest semantic match.  
+4. **Justify** your label assignment with a concise explanation, explicitly referencing relevant words or phrases in the text.  
+5. **Avoid Misclassification**: If the text does not match any label clearly, return `"Label: None"` with an explanation.  
+
+### **Available Labels:**  
+{labels}
+
+### **Response Format:**  
+For each classification, use the following structured output:  
+
+```plaintext
+Reason: [Explicit justification referencing words or phrases from the text]
+Label: [Positive/Negative/Neutral/None]  
+```
+
+{examples}
+
+### **Final Notes:**  
+- Be precise in your analysis—avoid overgeneralizing sentiment.  
+- If the text is ambiguous or lacks clear sentiment, classify it as `"None"`.  
+- Always provide a direct textual reference to support your classification.  
+{none_label}
+
+**Input:**
+{input}
+**Output**:
