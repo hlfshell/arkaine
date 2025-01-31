@@ -15,6 +15,7 @@ from threading import Thread
 from typing import IO, Any, Dict, List, Optional, Tuple, Union
 from uuid import uuid4
 
+from arkaine.internal.registrar.registrar import Registrar
 from arkaine.tools.tool import Context, Tool
 from arkaine.utils.docker import BindVolume, Container, Volume
 
@@ -62,6 +63,9 @@ class PythonEnv(Container):
 
         local_code_directory (Optional[str]): The local directory on the host
             to mount in the container.
+
+        id (Optional[str]): The ID of the Python environment. If not provided,
+            a new UUID will be generated.
 
     Methods:
         execute(code: (see below) -> Tuple[Any, Exception]:
@@ -118,9 +122,15 @@ class PythonEnv(Container):
         container_code_directory: str = "/arkaine",
         socket_file: str = "arkaine_bridge.sock",
         local_code_directory: str = None,
+        id: Optional[str] = None,
     ):
+        if id is None:
+            self.__id = str(uuid4())
+        else:
+            self.__id = id
+
         if name is None:
-            name = f"arkaine-python-{uuid4()}"
+            name = f"arkaine-python-{self.__id}"
         if image is None:
             image = f"python:{version}"
 
@@ -151,6 +161,8 @@ class PythonEnv(Container):
             command=command,
         )
 
+        self.__name = f"arkaine-python-{self.__id}::{name}::{image}"
+
         self.__modules = modules
 
         self.__client_import_filename = "arkaine_bridge.py"
@@ -158,6 +170,14 @@ class PythonEnv(Container):
         self.__halt = False
 
         self.__load_bridge_functions(tools)
+
+    @property
+    def id(self):
+        return self.__id
+
+    @property
+    def name(self):
+        return self.__name
 
     def __install_modules(self):
         """
@@ -712,7 +732,8 @@ class PythonEnv(Container):
             context = Context()
 
         if context.executing:
-            context = context.child_context(None)
+            # context = context.child_context(None)
+            context = context.child_context(self)
 
         context.executing = True
 
@@ -780,6 +801,26 @@ class PythonEnv(Container):
         """
         self.__halt = True
         self.stop()
+
+    def to_json(self) -> Dict[str, Any]:
+        return {
+            "id": self.__id,
+            "name": self.__name,
+            "version": (
+                self.image.split(":")[1] if ":" in self.image else "latest"
+            ),
+            "modules": self.__modules,
+            "image": self.image,
+            "tools": [tool.to_json() for tool in self.__tools.values()],
+            "volumes": [v.to_json() for v in self.volumes],
+            "ports": self.ports,
+            "entrypoint": self.entrypoint,
+            "command": self.command,
+            "env": self.env,
+            "container_code_directory": self.__container_directory,
+            "socket_file": self.__socket_file,
+            "local_code_directory": self.__local_directory,
+        }
 
 
 class PythonExecutionException(Exception):
