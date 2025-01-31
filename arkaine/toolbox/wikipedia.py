@@ -197,10 +197,11 @@ class WikipediaSearch(BackendAgent):
             creates a ReActBackend with the specified LLM.
         compress_article (bool): If True, uses semantic search to return
             relevant sections. If False, returns full articles. Defaults to
-            True.
+            False.
         embedder (Optional[InMemoryEmbeddingStore]): Embedding store for
             semantic search when compress_article is True. If not provided and
-            needed, creates a new store default InMemoryEmbeddingStore.
+            needed, creates a new store default InMemoryEmbeddingStore using
+            an ollama embedding model.
 
     Raises:
         ValueError: If no LLM is provided when backend is not specified.
@@ -235,7 +236,7 @@ class WikipediaSearch(BackendAgent):
             backend.add_tool(WikipediaTopicQuery())
             if compress_article:
                 if embedder is None:
-                    embedder = InMemoryEmbeddingStore()
+                    embedder = InMemoryEmbeddingStore(OllamaEmbeddingModel())
                 backend.add_tool(WikipediaPageTopN(embedder=embedder))
             else:
                 backend.add_tool(WikipediaPage())
