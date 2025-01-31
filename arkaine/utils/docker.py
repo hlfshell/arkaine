@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import shutil
 import tempfile
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -91,6 +93,25 @@ class Volume:
         else:
             self.__client.volumes.get(self.__name).remove()
 
+    def to_json(self) -> Dict[str, Any]:
+        return {
+            "name": self.__name,
+            "remote": self.__remote,
+            "image": self.__image,
+            "persist_volume": self.__persist_volume,
+            "read_only": self.__read_only,
+        }
+
+    @classmethod
+    def from_json(cls, json: Dict[str, Any]) -> Volume:
+        return cls(
+            name=json["name"],
+            remote=json["remote"],
+            image=json["image"],
+            persist_volume=json["persist_volume"],
+            read_only=json["read_only"],
+        )
+
 
 class BindVolume:
     """
@@ -173,6 +194,23 @@ class BindVolume:
     def __del__(self):
         if self.__tmpdir:
             shutil.rmtree(self.__local)
+
+    def to_json(self) -> Dict[str, Any]:
+        return {
+            "name": self.__name,
+            "local": self.__local,
+            "remote": self.__remote,
+            "read_only": self.__read_only,
+        }
+
+    @classmethod
+    def from_json(cls, json: Dict[str, Any]) -> BindVolume:
+        return cls(
+            local=json["local"],
+            remote=json["remote"],
+            name=json["name"],
+            read_only=json["read_only"],
+        )
 
 
 class Container:
