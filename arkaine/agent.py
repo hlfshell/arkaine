@@ -135,6 +135,30 @@ class IterativeAgent(Agent):
                 return result
 
 
+class SimpleIterativeAgent(IterativeAgent):
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        args: List[Argument],
+        llm: LLM,
+        prepare_prompt: Callable[[Context, Any], Prompt],
+        extract_result: Optional[Callable[[Context, str], Optional[Any]]],
+        examples: List[Example] = [],
+        id: Optional[str] = None,
+        result: Optional[Result] = None,
+    ):
+        super().__init__(name, description, args, llm, examples, id, result)
+        self.__prepare_prompt = prepare_prompt
+        self.__extract_result = extract_result
+
+    def prepare_prompt(self, context: Context, **kwargs) -> Prompt:
+        return self.__prepare_prompt(context, **kwargs)
+
+    def extract_result(self, context: Context, output: str) -> Optional[Any]:
+        return self.__extract_result(context, output)
+
+
 class BackendAgent(Tool, ABC):
 
     def __init__(
