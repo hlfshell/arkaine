@@ -5,6 +5,8 @@ Empower your summoned AI agents. arkaine is a batteries-included framework built
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 
+[![Join our Discord!](https://img.shields.io/badge/Discord-7289DA?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/6k7N2sV5xA)
+
 ## Overview
 
 arkaine is built to allow individuals with a little python knowledge to easily create deployable AI agents enhanced with tools. While other frameworks are focused on scalable web-scale solutions, arkaine is focused on the smaller scale projects - the prototype, the small cron job, the weekend project. arkaine attempts to be batteries included - multiple features and tools built in to allow you to go from idea to execution rapidly.
