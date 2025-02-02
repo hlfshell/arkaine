@@ -3,18 +3,19 @@ from typing import Any
 
 
 def recursive_to_json(value: Any) -> Any:
-    if hasattr(value, "to_json"):
-        value = value.to_json()
+    # Handle primitive types directly
     if isinstance(value, (str, int, float, bool, type(None))):
         return value
-    elif isinstance(value, list):
-        value = [recursive_to_json(x) for x in value]
+
+    # Create new object/copy for everything else
+    if isinstance(value, list):
+        return [recursive_to_json(x) for x in value]
     elif isinstance(value, dict):
-        for k, v in value.items():
-            value[k] = recursive_to_json(v)
+        return {k: recursive_to_json(v) for k, v in value.items()}
+    elif hasattr(value, "to_json"):
+        return recursive_to_json(value.to_json())
     else:
         try:
-            value = json.dumps(value)
+            return json.dumps(value)
         except (TypeError, ValueError):
-            value = str(value)
-    return value
+            return str(value)
