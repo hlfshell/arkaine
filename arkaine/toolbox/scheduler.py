@@ -271,7 +271,7 @@ class SchedulerNL(Agent):
             ),
         )
 
-    def prepare_prompt(self, request: str) -> Prompt:
+    def prepare_prompt(self, context: Context, request: str) -> Prompt:
         """Convert the natural language request into a structured prompt."""
         available_tools = [
             f"- {tool.name}: {tool.description}"

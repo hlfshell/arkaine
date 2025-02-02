@@ -50,7 +50,9 @@ class Webqueryer(Agent):
             "Topic: {topic}"
         )
 
-    def prepare_prompt(self, topic: str, num_queries: int = 3) -> Prompt:
+    def prepare_prompt(
+        self, context: Context, topic: str, num_queries: int = 3
+    ) -> Prompt:
         return self.__template.render(
             {"topic": topic, "num_queries": num_queries}
         )

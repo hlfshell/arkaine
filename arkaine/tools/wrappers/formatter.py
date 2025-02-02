@@ -172,7 +172,7 @@ class FormattingAgent(Agent):
         output = self._tool(context=context, **kwargs)
         return super().invoke(context, output=output)
 
-    def prepare_prompt(self, **kwargs: Any) -> Prompt:
+    def prepare_prompt(self, context: Context, **kwargs: Any) -> Prompt:
         return self._prompt.format(
             original_format=self._original_format_explanation,
             formatted_format=self._formatted_format_explanation,

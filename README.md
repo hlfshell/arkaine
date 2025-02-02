@@ -409,12 +409,12 @@ from arkaine.agent import Agent
 llm = OpenAILLM(api_key="your-api-key")
 
 # Define a simple agent
-class SimpleAgent(Agent):
+class MyAgent(Agent):
 
     def init(self, llm):
         super().init("simple_agent", "A simple agent", [], llm)
 
-    def prepare_prompt(self, kwargs):
+    def prepare_prompt(self, ctx, kwargs):
         return "Hello, world!"
 
 # Create and use the agent
