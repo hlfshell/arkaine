@@ -155,7 +155,7 @@ class SearchQueryJudge(Agent):
         )
 
     def prepare_prompt(
-        self, query: str, sites: List[Website]
+        self, context: Context, query: str, sites: List[Website]
     ) -> List[Dict[str, str]]:
         websites_str = "\n".join(
             [f"{site.url}\n\t{site.snippet}" for site in sites]
