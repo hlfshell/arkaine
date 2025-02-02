@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from time import time
 from typing import Any
 
+from arkaine.internal.to_json import recursive_to_json
 from arkaine.tools.types import ToolArguments
 
 
@@ -37,20 +38,7 @@ class Event:
 
     def to_json(self) -> dict:
         """Convert Event to a JSON-serializable dictionary."""
-        if hasattr(self.data, "to_json"):
-            data = self.data.to_json()
-        else:
-            if isinstance(self.data, dict):
-                data = self.data
-            else:
-                try:
-                    data = json.dumps(self.data)
-                    # If it was already a string, do this to avoid
-                    # just quote enveloping the string.
-                    if data.startswith('"') or data.startswith("'"):
-                        data = self.data
-                except (TypeError, ValueError):
-                    data = str(self.data)
+        data = recursive_to_json(self.data)
 
         return {
             "type": self._event_type,
