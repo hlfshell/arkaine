@@ -1,22 +1,40 @@
-anthropic==0.45.2
-beautifulsoup4==4.12.3
-click==8.1.8
-fastapi==0.115.7
-feedparser==6.0.11
-googlemaps==4.10.0
-markdownify==0.13.1
-numpy==2.2.2
-parsedatetime==2.6
-pydantic==2.10.6
-PyJWT==2.9.0
-PyJWT==2.10.1
-pymupdf4llm==0.0.17
+# Development dependencies
 pytest==8.3.3
-pytz==2024.2
-Requests==2.32.3
-scikit_learn==1.6.1
-setuptools==65.5.0
-setuptools==75.8.0
-typing_extensions==4.12.2
+
+# Core LLM dependencies
+anthropic==0.45.2
+groq==0.11.0
+openai==1.54.3
+
+# Web/API dependencies
+fastapi==0.115.8
 uvicorn==0.34.0
 websockets==14.1
+Requests==2.32.3
+
+# Data processing
+numpy==2.2.2
+scikit_learn==1.6.1
+beautifulsoup4==4.13.1
+markdownify==0.13.1
+pydantic==2.10.6
+PyJWT==2.10.1
+
+# Utilities
+click==8.1.8
+feedparser==6.0.11
+parsedatetime==2.6
+pytz==2024.2
+typing_extensions==4.12.2
+pymupdf4llm==0.0.17
+wikipedia==1.4.0
+googlemaps==4.10.0
+setuptools==75.8.0
+
+# Additional required dependencies found in codebase
+boto3  # For AWS SNS integration
+messagebird  # For MessageBird SMS integration
+vonage  # For Vonage SMS integration
+twilio  # For Twilio SMS integration
+docker  # For Python backend docker environment
+
