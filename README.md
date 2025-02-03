@@ -167,7 +167,7 @@ To create an agent, you have several options. All agents are tools that utilize 
 The easiest way to create an agent is to use `SimpleAgent`, which allows you to create an agent by passing functions for prompt preparation and result extraction:
 
 ```python
-from arkaine.agent import SimpleAgent
+from arkaine.tools.agent import SimpleAgent
 from arkaine.tools.tool import Argument
 from arkaine.llms.llm import LLM
 
@@ -187,7 +187,7 @@ agent = SimpleAgent(
 For more complex agents, you can inherit from the `Agent` class. Implement the required `prepare_prompt` and `extract_result` methods:
 
 ```python
-from arkaine.agent import Agent
+from arkaine.tools.agent import Agent
 
 class MyAgent(Agent):
     def __init__(self, llm: LLM):
@@ -216,7 +216,7 @@ class MyAgent(Agent):
 `IterativeAgents` are agents that can repeatedly call an LLM to try and perform its task, where the agent can identify when it is complete with its task by returning a non-None value from `extract_result`. To create one, inherit from the `IterativeAgent` class:
 
 ```python
-from arkaine.agent import IterativeAgent
+from arkaine.tools.agent import IterativeAgent
 
 class MyIterativeAgent(IterativeAgent):
     def __init__(self, llm: LLM):
@@ -312,7 +312,7 @@ It does this by asking an LLM to identify from the prior message and the context
 `BackendAgents` are agents that utilize a `Backend` to perform its task. A `Backend` is a system that empowers an LLM to utilize tools and detect when it is finished with its task. To create one, inherit from the `BackendAgent` class.
 
 ```python
-from arkaine.agent import BackendAgent
+from arkaine.tools.agent import BackendAgent
 
 class MyBackendAgent(BackendAgent):
     def __init__(self, backend: Backend):
@@ -403,7 +403,7 @@ Here's a simple example of creating and using an agent:
 
 ```python
 from arkaine.llms.openai import OpenAILLM
-from arkaine.agent import Agent
+from arkaine.tools.agent import Agent
 
 # Initialize the LLM
 llm = OpenAILLM(api_key="your-api-key")
