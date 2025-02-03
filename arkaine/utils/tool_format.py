@@ -1,4 +1,5 @@
 from arkaine.tools.tool import Tool
+from google.ai.generativelanguage import FunctionDeclaration
 
 
 def python(
@@ -125,3 +126,60 @@ def openai(
             },
         },
     }
+
+
+def gemini(tool: Tool) -> FunctionDeclaration:
+    """Convert a tool into a Gemini FunctionDeclaration.
+
+    Args:
+        tool: tool obj to convert
+
+    Returns:
+        FunctionDeclaration object compatible with Gemini's function calling
+    """
+    # Create the parameters schema
+    parameters = {"type_": "OBJECT", "properties": {}, "required": []}
+
+    # Convert each argument into the Gemini format
+    for arg in tool.args:
+        type_map = {
+            "str": "STRING",
+            "string": "STRING",
+            "number": "NUMBER",
+            "float": "NUMBER",
+            "integer": "NUMBER",
+            "int": "NUMBER",
+            "boolean": "BOOLEAN",
+            "array": "ARRAY",
+            "object": "OBJECT",
+            "dict": "OBJECT",
+            "list": "ARRAY",
+            "tuple": "ARRAY",
+            "set": "ARRAY",
+            "tuple": "ARRAY",
+            "datetime": "STRING",
+            "date": "STRING",
+            "time": "STRING",
+            "timedelta": "STRING",
+        }
+
+        # Get the Gemini type, defaulting to STRING if unknown
+        gemini_type = type_map.get(arg.type_str.lower(), "STRING")
+
+        description = arg.description
+        if arg.default:
+            description += f"\nDefault: {arg.default}"
+
+        # Add the property
+        parameters["properties"][arg.name] = {
+            "type_": gemini_type,
+            "description": (arg.description),
+        }
+
+        # Add to required list if necessary
+        if arg.required:
+            parameters["required"].append(arg.name)
+
+    return FunctionDeclaration(
+        name=tool.name, description=tool.description, parameters=parameters
+    )
