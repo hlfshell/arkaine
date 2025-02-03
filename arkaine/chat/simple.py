@@ -3,7 +3,7 @@ from os import path
 from threading import Lock
 from typing import Any, List, Optional, Tuple, Union
 
-from arkaine.backends.base import BaseBackend
+from arkaine.backends.backend import Backend
 from arkaine.backends.react import ReActBackend
 from arkaine.chat.chat import Chat
 from arkaine.chat.conversation import Conversation, ConversationStore, Message
@@ -55,7 +55,7 @@ class SimpleChat(Chat):
         store: ConversationStore,
         agent_name: str = "Arkaine",
         user_name: str = "User",
-        backend: Optional[BaseBackend] = None,
+        backend: Optional[Backend] = None,
         conversation_auto_active: float = 60.0,
         personality: Optional[str] = None,
         tool_name: str = "chat_agent",

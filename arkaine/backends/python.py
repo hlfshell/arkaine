@@ -5,7 +5,7 @@ import traceback
 from os import path
 from typing import Any, Callable, Dict, List, Optional
 
-from arkaine.backends.base import BaseBackend
+from arkaine.backends.backend import Backend
 from arkaine.events import AgentBackendStep, AgentLLMResponse, AgentPrompt
 from arkaine.llms.llm import LLM, Prompt
 from arkaine.toolbox.code_envs.python import PythonEnv
@@ -113,7 +113,7 @@ class PythonOutput:
         }
 
 
-class PythonBackend(BaseBackend):
+class PythonBackend(Backend):
 
     def __init__(
         self,

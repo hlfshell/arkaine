@@ -3,14 +3,14 @@ from typing import Any, Dict, List, Optional
 import wikipedia
 
 from arkaine.tools.agent import BackendAgent
-from arkaine.backends.base import BaseBackend
+from arkaine.backends.base import Backend
 from arkaine.backends.react import ReActBackend
 from arkaine.internal.store.embeddings import (
     EmbeddingStore,
     InMemoryEmbeddingStore,
 )
 from arkaine.llms.llm import LLM
-from arkaine.tools.tool import Argument, Result, Tool
+from arkaine.tools.tool import Argument, Context, Result, Tool
 from arkaine.wrappers.top_n import TopN
 from arkaine.utils.embeddings.model import OllamaEmbeddingModel
 
@@ -211,12 +211,20 @@ class WikipediaSearch(BackendAgent):
         self,
         llm: Optional[LLM] = None,
         name: str = "wikipedia_search",
-        backend: Optional[BaseBackend] = None,
+        backend: Optional[Backend] = None,
         compress_article: bool = True,
         embedder: Optional[InMemoryEmbeddingStore] = None,
     ):
         description = (
             "Searches for an answer to the question by utilizing Wikipedia"
+        )
+
+        explanation = (
+            "You are an expert at searching Wikipedia to answer questions. "
+            "You are to search Wikipedia for the most relevant information "
+            "to the given question, possibly over multiple searches, "
+            "answering the question only after you have found relevant "
+            "information."
         )
 
         if not backend:
@@ -243,6 +251,7 @@ class WikipediaSearch(BackendAgent):
         super().__init__(
             name,
             description,
+            explanation,
             [
                 Argument(
                     "question",
@@ -258,7 +267,7 @@ class WikipediaSearch(BackendAgent):
             ),
         )
 
-    def prepare_for_backend(self, **kwargs) -> Dict[str, Any]:
-        question = f"Answer the following question: {kwargs['question']}\n"
+    def prepare_for_backend(self, context: Context, **kwargs) -> Dict[str, Any]:
+        question = f"Answer the following question:\n{kwargs['question']}\n"
 
         return {"task": question}

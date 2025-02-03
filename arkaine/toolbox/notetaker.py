@@ -28,7 +28,6 @@ class NoteTaker(IterativeAgent):
         focus_query: bool = False,
         chunk_size: Optional[int] = None,
         overlap: Optional[int] = None,
-        breakdown_markdown: bool = False,
     ):
         args = [
             Argument(

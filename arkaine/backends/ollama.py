@@ -3,13 +3,13 @@ from typing import Dict, List, Tuple
 from ollama import Client
 
 from arkaine.tools.agent import Any, Callable, Prompt
-from arkaine.backends.base import BaseBackend
+from arkaine.backends.backend import Backend
 from arkaine.backends.common import simple_tool_results_to_prompts
 from arkaine.tools.tool import Context, Tool
 from arkaine.tools.types import ToolArguments, ToolResults
 
 
-class Ollama(BaseBackend):
+class Ollama(Backend):
 
     def __init__(
         self,

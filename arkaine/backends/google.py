@@ -4,7 +4,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import google.generativeai as genai
 from google.ai.generativelanguage import GenerateContentResponse
 
-from arkaine.backends.base import BaseBackend
+from arkaine.backends.backend import Backend
 from arkaine.backends.common import simple_tool_results_to_prompts
 from arkaine.llms.google import Google as GoogleLLM
 from arkaine.llms.llm import Prompt
@@ -14,7 +14,7 @@ from arkaine.utils.templater import PromptTemplate
 from arkaine.utils.tool_format import gemini as gemini_format
 
 
-class GoogleBackend(BaseBackend):
+class GoogleBackend(Backend):
 
     CONTEXT_LENGTHS = GoogleLLM.CONTEXT_LENGTHS
 

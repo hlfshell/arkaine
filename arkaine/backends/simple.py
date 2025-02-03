@@ -5,7 +5,7 @@ import re
 from os import path
 from typing import Any, Dict, List, Tuple, Union
 
-from arkaine.backends.base import BaseBackend
+from arkaine.backends.backend import Backend
 from arkaine.backends.common import simple_tool_results_to_prompts
 from arkaine.llms.llm import LLM, Prompt
 from arkaine.tools.tool import Context, Tool
@@ -13,7 +13,7 @@ from arkaine.tools.types import ToolArguments, ToolResults
 from arkaine.utils.templater import PromptTemplate
 
 
-class SimpleBackend(BaseBackend):
+class SimpleBackend(Backend):
 
     def __init__(
         self,
