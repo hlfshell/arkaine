@@ -103,7 +103,7 @@ def openai(
             description += f"    {example}\n"
 
     for arg in tool.args:
-        arg_type = arg.type_str()
+        arg_type = arg.type_str
         if arg_type == "str":
             arg_type = "string"
 

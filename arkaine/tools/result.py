@@ -14,7 +14,8 @@ class Result:
     def __repr__(self):
         return self.__str__()
 
-    def __type_str(self) -> str:
+    @property
+    def type_str(self) -> str:
         """
         Since some might pass in the literal type instead of the str of the
         class, we should ensure we convert the type correctly to a string for
@@ -33,7 +34,7 @@ class Result:
 
     def to_json(self):
         return {
-            "type": self.__type_str(),
+            "type": self.__type_str,
             "description": self.description,
         }
 

@@ -50,7 +50,7 @@ class Argument:
         return value
 
     def __str__(self) -> str:
-        out = f"{self.name} - {self.type_str()} - Required: "
+        out = f"{self.name} - {self.type_str} - Required: "
         out += f"{self.required} - "
         if self.default:
             out += f"Default: {self.default} - "
@@ -61,6 +61,7 @@ class Argument:
     def __repr__(self) -> str:
         return self.__str__()
 
+    @property
     def type_str(self) -> str:
         """
         Since some might pass in the literal type instead of the str of the
@@ -82,7 +83,7 @@ class Argument:
         return {
             "name": self.name,
             "description": self.description,
-            "type": self.type_str(),
+            "type": self.type_str,
             "required": self.required,
             "default": self.default,
         }
