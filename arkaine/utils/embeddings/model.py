@@ -21,6 +21,10 @@ class OllamaEmbeddingModel(EmbeddingModel):
     def __init__(self, model: str = "all-minilm:latest"):
         self.__embedding_model = model
         super().__init__()
+        self.pull_model()
+
+    def pull_model(self):
+        ollama.pull(self.__embedding_model)
 
     def embed(self, text: Union[str, List[str]]) -> List[List[float]]:
         vectors: List[List[float]] = []
