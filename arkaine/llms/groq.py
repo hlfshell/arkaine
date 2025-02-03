@@ -3,7 +3,7 @@ from typing import Optional
 
 from groq import Groq as GroqAPI
 
-from arkaine.agent import Prompt
+from arkaine.tools.agent import Prompt
 from arkaine.llms.llm import LLM
 
 

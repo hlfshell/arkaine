@@ -1,4 +1,4 @@
-from arkaine.agent import Prompt
+from arkaine.tools.agent import Prompt
 from arkaine.tools.types import ToolResults
 
 

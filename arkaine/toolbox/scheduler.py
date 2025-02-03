@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 from typing import Dict, Optional, Union
 
-from arkaine.agent import Agent
+from arkaine.tools.agent import Agent
 from arkaine.connectors.schedule import Schedule, Task
 from arkaine.internal.registrar import Registrar
 from arkaine.llms.llm import LLM, Prompt

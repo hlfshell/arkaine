@@ -2,7 +2,7 @@ import pathlib
 from os import path
 from typing import List, Optional
 
-from arkaine.agent import IterativeAgent
+from arkaine.tools.agent import IterativeAgent
 from arkaine.llms.llm import LLM, Prompt
 from arkaine.tools.tool import Argument, Context
 from arkaine.utils.templater import PromptTemplate

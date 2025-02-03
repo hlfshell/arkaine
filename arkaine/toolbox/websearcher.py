@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 
 from requests.exceptions import HTTPError
 
-from arkaine.agent import Agent
+from arkaine.tools.agent import Agent
 from arkaine.backends.react import ReActBackend
 from arkaine.flow.linear import Linear
 from arkaine.flow.parallel_list import ParallelList

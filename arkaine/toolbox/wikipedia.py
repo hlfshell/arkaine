@@ -2,7 +2,7 @@ from typing import Any, Dict, List, Optional
 
 import wikipedia
 
-from arkaine.agent import BackendAgent
+from arkaine.tools.agent import BackendAgent
 from arkaine.backends.base import BaseBackend
 from arkaine.backends.react import ReActBackend
 from arkaine.internal.store.embeddings import (
@@ -11,7 +11,7 @@ from arkaine.internal.store.embeddings import (
 )
 from arkaine.llms.llm import LLM
 from arkaine.tools.tool import Argument, Result, Tool
-from arkaine.tools.wrappers.top_n import TopN
+from arkaine.wrappers.top_n import TopN
 from arkaine.utils.embeddings.model import OllamaEmbeddingModel
 
 TOPIC_QUERY_TOOL_NAME = "wikipedia_search_pages"

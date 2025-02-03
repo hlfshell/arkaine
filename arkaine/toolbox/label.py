@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
-from arkaine.agent import Agent
+from arkaine.tools.agent import Agent
 from arkaine.internal.parser import Label as ParserLabel
 from arkaine.internal.parser import Parser
 from arkaine.llms.llm import LLM, Prompt

@@ -2,7 +2,7 @@ from typing import Dict, List, Tuple
 
 from ollama import Client
 
-from arkaine.agent import Any, Callable, Prompt
+from arkaine.tools.agent import Any, Callable, Prompt
 from arkaine.backends.base import BaseBackend
 from arkaine.backends.common import simple_tool_results_to_prompts
 from arkaine.tools.tool import Context, Tool

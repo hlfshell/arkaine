@@ -1,6 +1,6 @@
 from ollama import Client
 
-from arkaine.agent import Prompt
+from arkaine.tools.agent import Prompt
 from arkaine.llms.llm import LLM
 
 

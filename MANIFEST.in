@@ -13,7 +13,7 @@ recursive-include arkaine/spellbook/static *.html
 recursive-include arkaine/spellbook/static/components *.js
 
 # Tool related files
-recursive-include arkaine/tools/wrappers/prompts *
+recursive-include arkaine/wrappers/prompts *
 
 # Python environment files
 recursive-include arkaine/toolbox/code_envs/extras/python_env *.py
