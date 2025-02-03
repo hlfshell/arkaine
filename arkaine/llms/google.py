@@ -54,22 +54,22 @@ class Google(LLM):
 
     def completion(self, prompt: Prompt) -> str:
         # Convert the chat format to Gemini's expected format
-        messages = []
+        history = []
         for message in prompt:
             role = message["role"]
             content = message["content"]
 
             # Map OpenAI roles to Gemini roles
             if role == "system":
-                messages.append({"role": "user", "parts": [content]})
+                history.append({"role": "user", "parts": [content]})
             elif role == "assistant":
-                messages.append({"role": "model", "parts": [content]})
+                history.append({"role": "model", "parts": [content]})
             elif role == "user":
-                messages.append({"role": "user", "parts": [content]})
+                history.append({"role": "user", "parts": [content]})
 
-        # Create a chat session and get response
-        chat = self.__model.start_chat()
-        response = chat.send_message(messages[-1]["parts"][0])
+        # Create a chat session and send the entire history
+        chat = self.__model.start_chat(history=history[:-1])
+        response = chat.send_message(history[-1]["parts"][0])
 
         return response.text
 
