@@ -124,6 +124,8 @@ class LLM(ABC):
         prompt = None
         if len(args) == 1:
             prompt = args[0]
+        elif len(args) == 2:
+            prompt = args[1]
         elif "prompt" in kwargs:
             prompt = kwargs.pop("prompt")
         else:
@@ -134,7 +136,8 @@ class LLM(ABC):
             if context is not None:
                 raise ValueError("context passed twice")
             context = kwargs.pop("context")
-
+        elif len(args) == 2:
+            context = args[0]
         if kwargs:
             raise TypeError(
                 f"Unexpected keyword arguments: {', '.join(kwargs.keys())}"
