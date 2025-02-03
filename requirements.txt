@@ -5,6 +5,7 @@ pytest==8.3.3
 anthropic==0.45.2
 groq==0.11.0
 openai==1.54.3
+google-generativeai==0.8.4
 
 # Web/API dependencies
 fastapi==0.115.8
