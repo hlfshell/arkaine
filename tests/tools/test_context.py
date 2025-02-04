@@ -6,8 +6,8 @@ from typing import List
 
 import pytest
 
-from arkaine.options.context import ContextOptions
-from arkaine.tools.tool import Context, Event, Tool
+from arkaine.tools.tools import Event, Tool
+from arkaine.tools.context import Context
 
 
 @pytest.fixture

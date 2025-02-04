@@ -1,7 +1,8 @@
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, List, Optional
 
-from arkaine.tools.tool import Context, Tool
+from arkaine.tools.context import Context
+from arkaine.tools.tool import Tool
 from arkaine.utils.clustering import find_optimal_cluster_representative
 
 

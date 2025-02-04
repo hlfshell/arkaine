@@ -12,7 +12,8 @@ from typing import List, Optional, Union
 from uuid import uuid4
 
 from arkaine.internal.registrar import Registrar
-from arkaine.tools.tool import Context, Tool
+from arkaine.tools.context import Context
+from arkaine.tools.tool import Tool
 from arkaine.utils.interval import Interval
 from arkaine.utils.timer import Timer
 

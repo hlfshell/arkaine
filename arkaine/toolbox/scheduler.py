@@ -2,14 +2,15 @@ import json
 from datetime import datetime
 from typing import Dict, Optional, Union
 
-from arkaine.tools.agent import Agent
 from arkaine.connectors.schedule import Schedule, Task
 from arkaine.internal.registrar import Registrar
 from arkaine.llms.llm import LLM, Prompt
+from arkaine.tools.agent import Agent
 from arkaine.tools.argument import Argument
+from arkaine.tools.context import Context
 from arkaine.tools.example import Example
 from arkaine.tools.result import Result
-from arkaine.tools.tool import Context, Tool
+from arkaine.tools.tool import Tool
 from arkaine.utils.interval import Interval
 
 

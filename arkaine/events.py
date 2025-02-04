@@ -1,7 +1,7 @@
 from typing import Any, List, Tuple
 
 from arkaine.llms.llm import Prompt
-from arkaine.tools.tool import Event
+from arkaine.tools.events import Event
 from arkaine.tools.types import ToolArguments
 
 

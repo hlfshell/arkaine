@@ -1,8 +1,9 @@
+from collections import Counter
+from typing import List
+
 import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
-from collections import Counter
-from typing import List
 
 
 def find_optimal_cluster_representative(vectors: List[List[float]]) -> int:

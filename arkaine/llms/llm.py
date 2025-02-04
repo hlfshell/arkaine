@@ -7,8 +7,7 @@ from threading import Lock
 from typing import Any, Callable, Dict, List, Optional, Union
 
 from arkaine.internal.registrar import Registrar
-from arkaine.tools.events import Event
-from arkaine.tools.tool import Context
+from arkaine.tools.context import Context
 
 # A RolePrompt is a dict specifying a role, and a string specifying the
 # content. An example of this would be:

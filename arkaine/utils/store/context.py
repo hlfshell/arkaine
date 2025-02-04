@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Union
 
 from arkaine.internal.registrar import Registrar
 from arkaine.internal.store.context import Check, ContextStore, Query
-from arkaine.tools.tool import Context
+from arkaine.tools.context import Context
 
 
 class GlobalContextStore(ContextStore):

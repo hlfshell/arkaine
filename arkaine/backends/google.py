@@ -8,7 +8,8 @@ from arkaine.backends.backend import Backend
 from arkaine.backends.common import simple_tool_results_to_prompts
 from arkaine.llms.google import Google as GoogleLLM
 from arkaine.llms.llm import Prompt
-from arkaine.tools.tool import Context, Tool
+from arkaine.tools.context import Context
+from arkaine.tools.tool import Tool
 from arkaine.tools.types import ToolCalls, ToolResults
 from arkaine.utils.templater import PromptTemplate
 from arkaine.utils.tool_format import gemini as gemini_format

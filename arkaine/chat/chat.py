@@ -6,8 +6,9 @@ from typing import Any, Dict, List, Tuple, Union
 from arkaine.chat.conversation import Conversation, ConversationStore, Message
 from arkaine.llms.llm import LLM
 from arkaine.tools.argument import Argument
+from arkaine.tools.context import Context
 from arkaine.tools.result import Result
-from arkaine.tools.tool import Context, Tool
+from arkaine.tools.tool import Tool
 from arkaine.tools.types import ToolCalls, ToolResults
 
 

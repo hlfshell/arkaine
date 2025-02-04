@@ -7,7 +7,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, List, Optional, Union
 
 if TYPE_CHECKING:
-    from arkaine.tools.tool import Context
+    from arkaine.tools.context import Context
 
 
 @dataclass

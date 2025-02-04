@@ -9,7 +9,8 @@ from arkaine.backends.backend import Backend
 from arkaine.events import AgentBackendStep, AgentLLMResponse, AgentPrompt
 from arkaine.llms.llm import LLM, Prompt
 from arkaine.toolbox.code_envs.python import PythonEnv
-from arkaine.tools.tool import Context, Tool
+from arkaine.tools.context import Context
+from arkaine.tools.tool import Tool
 from arkaine.tools.types import ToolCalls, ToolResults
 from arkaine.utils.templater import PromptTemplate
 from arkaine.utils.tool_format import python as python_func

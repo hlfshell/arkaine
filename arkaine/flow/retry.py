@@ -1,7 +1,8 @@
 import time
 from typing import Any, List, Optional, Tuple, Type, Union
 
-from arkaine.tools.tool import Context, Tool
+from arkaine.tools.context import Context
+from arkaine.tools.tool import Tool
 
 
 class Retry(Tool):

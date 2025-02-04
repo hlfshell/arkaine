@@ -15,8 +15,8 @@ from threading import Thread
 from typing import IO, Any, Dict, List, Optional, Tuple, Union
 from uuid import uuid4
 
-from arkaine.internal.registrar.registrar import Registrar
-from arkaine.tools.tool import Context, Tool
+from arkaine.tools.context import Context
+from arkaine.tools.tool import Tool
 from arkaine.utils.docker import BindVolume, Container, Volume
 
 

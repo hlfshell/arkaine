@@ -11,7 +11,8 @@ from arkaine.events import (
     AgentToolCalls,
 )
 from arkaine.llms.llm import LLM, Prompt
-from arkaine.tools.tool import Context, Tool
+from arkaine.tools.context import Context
+from arkaine.tools.tool import Tool
 from arkaine.tools.types import ToolArguments, ToolCalls, ToolResults
 
 

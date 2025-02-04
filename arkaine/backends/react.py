@@ -10,7 +10,8 @@ from pydantic import BaseModel
 from arkaine.backends.backend import Backend, ToolNotFoundException
 from arkaine.llms.llm import LLM, Prompt
 from arkaine.tools.argument import InvalidArgumentException
-from arkaine.tools.tool import Context, Tool
+from arkaine.tools.context import Context
+from arkaine.tools.tool import Tool
 from arkaine.tools.types import ToolArguments, ToolResults
 from arkaine.utils.templater import PromptTemplate
 

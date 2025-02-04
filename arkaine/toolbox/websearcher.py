@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Optional
 
 from requests.exceptions import HTTPError
 
-from arkaine.tools.agent import Agent
 from arkaine.backends.react import ReActBackend
 from arkaine.flow.linear import Linear
 from arkaine.flow.parallel_list import ParallelList
@@ -14,6 +13,7 @@ from arkaine.llms.llm import LLM
 from arkaine.toolbox.summarizer import Summarizer
 from arkaine.toolbox.webqueryer import Webqueryer
 from arkaine.toolbox.websearch import Websearch, Website
+from arkaine.tools.agent import Agent
 from arkaine.tools.tool import Argument, Context
 from arkaine.utils.templater import PromptTemplate
 

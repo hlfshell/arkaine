@@ -4,7 +4,8 @@ from typing import TYPE_CHECKING, Callable, Dict, List, Union
 
 if TYPE_CHECKING:
     from arkaine.llms.llm import LLM
-    from arkaine.tools.tool import Context, Tool
+    from arkaine.tools.context import Context
+    from arkaine.tools.tool import Tool
 
 
 class Registrar:

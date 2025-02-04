@@ -1,6 +1,7 @@
 from typing import Any, Callable, Optional, Union
 
-from arkaine.tools.tool import Context, Tool
+from arkaine.tools.context import Context
+from arkaine.tools.tool import Tool
 from arkaine.tools.toolify import toolify
 
 

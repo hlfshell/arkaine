@@ -8,9 +8,10 @@ from websockets.server import WebSocketServerProtocol
 from websockets.sync.server import serve
 
 from arkaine.internal.registrar import Registrar
+from arkaine.tools.context import Context
 from arkaine.tools.datastore import ThreadSafeDataStore
-from arkaine.tools.events import ToolException, ToolReturn
-from arkaine.tools.tool import Context, Event, Tool
+from arkaine.tools.events import Event, ToolException, ToolReturn
+from arkaine.tools.tool import Tool
 
 if TYPE_CHECKING:
     from arkaine.llms.llm import LLM

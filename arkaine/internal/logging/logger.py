@@ -6,7 +6,9 @@ from threading import Lock
 from typing import Any, Dict, Optional, TextIO
 
 from arkaine.internal.registrar import Registrar
-from arkaine.tools.tool import Context, Event, Tool
+from arkaine.tools.context import Context
+from arkaine.tools.events import Event
+from arkaine.tools.tool import Tool
 
 
 class Colors:

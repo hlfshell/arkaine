@@ -3,8 +3,8 @@ from typing import Optional
 
 from anthropic import Anthropic
 
-from arkaine.tools.agent import Prompt
 from arkaine.llms.llm import LLM
+from arkaine.tools.agent import Prompt
 
 
 class Claude(LLM):

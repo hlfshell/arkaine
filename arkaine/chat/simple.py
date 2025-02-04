@@ -8,7 +8,8 @@ from arkaine.backends.react import ReActBackend
 from arkaine.chat.chat import Chat
 from arkaine.chat.conversation import Conversation, ConversationStore, Message
 from arkaine.llms.llm import LLM
-from arkaine.tools.tool import Context, Tool
+from arkaine.tools.context import Context
+from arkaine.tools.tool import Tool
 from arkaine.utils.templater import PromptTemplate
 
 
