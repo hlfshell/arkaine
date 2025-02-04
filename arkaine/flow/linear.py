@@ -90,13 +90,13 @@ class Linear(Tool):
         Retry the tool call. This attempts to pick up where the linear flow
         left off.
         """
-        if context.tool is None:
+        if context.attached is None:
             raise ValueError("no tool assigned to context")
 
-        if context.tool != self:
+        if context.attached != self:
             raise ValueError(
                 f"context is not for {self.name}, is instead for "
-                f"{context.tool.name}"
+                f"{context.attached.name}"
             )
 
         context.clear(executing=True)

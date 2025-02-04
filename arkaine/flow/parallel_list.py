@@ -234,12 +234,12 @@ class ParallelList(Tool):
         failed items from the previous execution.
         """
         # Ensure that the context passed is in fact a context for this tool
-        if context.tool is None:
+        if context.attached is None:
             raise ValueError("no tool assigned to context")
-        if context.tool != self:
+        if context.attached != self:
             raise ValueError(
                 f"context is not for {self.name}, is instead for "
-                f"{context.tool.name}"
+                f"{context.attached.name}"
             )
 
         # Get the original args and clear the context for re-running

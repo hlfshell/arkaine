@@ -163,13 +163,18 @@ class Branch(Tool):
         Retry the branch execution. This attempts to retry only the failed
         branches from the previous execution.
         """
-        if context.tool is None:
+        if context.attached is None:
             raise ValueError("no tool assigned to context")
+        elif not isinstance(context.attached, Tool):
+            raise ValueError(
+                "context.attached must be an instance of Tool, got "
+                f"{type(context.attached)}"
+            )
 
-        if context.tool != self:
+        if context.attached != self:
             raise ValueError(
                 f"context is not for {self.name}, is instead for "
-                f"{context.tool.name}"
+                f"{context.attached.name}"
             )
 
         original_args = context.args
@@ -209,7 +214,7 @@ class Branch(Tool):
             for idx in failed_indices:
                 child_ctx = context.children[idx]
                 try:
-                    result = child_ctx.tool.retry(child_ctx)
+                    result = child_ctx.attached.retry(child_ctx)
                     context["results"][idx] = result
                     completed += 1
                     context.increment("completed")

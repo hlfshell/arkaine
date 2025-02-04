@@ -60,12 +60,17 @@ class Conditional(Tool):
             return self.otherwise(context, kwargs) if self.otherwise else None
 
     def retry(self, context: Context) -> Any:
-        if context.tool is None:
+        if context.attached is None:
             raise ValueError("no tool assigned to context")
-        if context.tool != self:
+        elif not isinstance(context.attached, Tool):
+            raise ValueError(
+                "context.attached must be an instance of Tool, got "
+                f"{type(context.attached)}"
+            )
+        if context.attached != self:
             raise ValueError(
                 f"context is not for {self.name}, is instead for "
-                f"{context.tool.name}"
+                f"{context.attached.name}"
             )
 
         original_args = context.args
@@ -82,7 +87,7 @@ class Conditional(Tool):
             context.executing = True
             with context:
                 child_ctx = context.children[0]
-                output = child_ctx.tool.retry(child_ctx)
+                output = child_ctx.attached.retry(child_ctx)
 
                 context.output = output
                 context.broadcast(ToolReturn(output))
@@ -147,12 +152,13 @@ class MultiConditional(Tool):
         return self.default(context, kwargs) if self.default else None
 
     def retry(self, context: Context) -> Any:
-        if context.tool is None:
+        if context.attached is None:
             raise ValueError("no tool assigned to context")
-        if context.tool != self:
+
+        if context.attached != self:
             raise ValueError(
                 f"context is not for {self.name}, is instead for "
-                f"{context.tool.name}"
+                f"{context.attached.name}"
             )
 
         original_args = context.args
@@ -169,7 +175,7 @@ class MultiConditional(Tool):
             context.executing = True
             with context:
                 child_ctx = context.children[0]
-                output = child_ctx.tool.retry(child_ctx)
+                output = child_ctx.attached.retry(child_ctx)
 
                 context.output = output
                 context.broadcast(ToolReturn(output))

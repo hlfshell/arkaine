@@ -81,13 +81,13 @@ class FireAndForget(Tool):
         if not self.__allow_retry:
             return
 
-        if context.tool is None:
+        if context.attached is None:
             raise ValueError("no tool assigned to context")
 
-        if context.tool != self:
+        if context.attached != self:
             raise ValueError(
                 f"context is not for {self.name}, is instead for "
-                f"{context.tool.name}"
+                f"{context.attached.name}"
             )
 
         output = context.output

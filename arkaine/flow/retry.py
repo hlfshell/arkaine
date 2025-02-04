@@ -102,13 +102,13 @@ class Retry(Tool):
         raise last_exception
 
     def retry(self, context: Context) -> Any:
-        if context.tool is None:
+        if context.attached is None:
             raise ValueError("no tool assigned to context")
 
-        if context.tool != self:
+        if context.attached != self:
             raise ValueError(
                 f"context is not for {self.name}, is instead for "
-                f"{context.tool.name}"
+                f"{context.attached.name}"
             )
 
         if context.children is None:

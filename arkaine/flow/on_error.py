@@ -111,12 +111,12 @@ class OnError(Tool):
                 return output
 
     def retry(self, context: Context, *args: Any, **kwargs: Any) -> Any:
-        if context.tool is None:
+        if context.attached is None:
             raise ValueError("no tool assigned to context")
-        if context.tool != self:
+        if context.attached != self:
             raise ValueError(
                 f"context is not for {self.name}, is instead for "
-                f"{context.tool.name}"
+                f"{context.attached.name}"
             )
 
         args = context.args
@@ -125,5 +125,5 @@ class OnError(Tool):
         if len(context.children) > 1:
             context.children.pop()
 
-        if context.children[0].tool:
-            context.children[0].tool.retry(context.children[0], args)
+        if context.children[0].attached:
+            context.children[0].attached.retry(context.children[0], args)
