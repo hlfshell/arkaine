@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
-from typing import TYPE_CHECKING, Callable, Dict, List, Union
+from typing import TYPE_CHECKING, Callable, Dict, List
+from arkaine.tools.attachable import Attachable
 
 if TYPE_CHECKING:
     from arkaine.llms.llm import LLM
@@ -13,109 +14,94 @@ class Registrar:
     _enabled = False
     __executor = ThreadPoolExecutor()
 
-    _tools: 'Dict[str, "Tool"]' = {}
-    _llms: 'Dict[str, "LLM"]' = {}
+    _producers: Dict[str, Dict[str, Attachable]] = {}
 
-    __on_tool_listeners: List[Callable[["Tool"], None]] = []
-    __on_tool_call_listeners: List[Callable[["Tool", "Context"], None]] = []
-    __on_llm_listeners: List[Callable[["LLM"], None]] = []
-    __on_llm_call_listeners: List[Callable[["LLM", "Context"], None]] = []
+    _on_producer_listeners: List[Callable[[Attachable], None]] = []
+    _on_producer_call_listeners: List[
+        Callable[[Attachable, "Context"], None]
+    ] = []
 
     def __new__(cls):
         raise ValueError("Registrar cannot be instantiated")
 
     @classmethod
-    def register(cls, item: Union["Tool", "LLM"]):
+    def register(cls, item: Attachable):
+        if not isinstance(item, Attachable):
+            raise ValueError(f"Invalid class to register: {type(item)}")
+
         with cls._lock:
-            if hasattr(item, "tname"):
-                if item.id in cls._tools:
-                    pass
-                cls._tools[item.id] = item
+            if item.type not in cls._producers:
+                cls._producers[item.type] = {}
+            cls._producers[item.type][item.id] = item
 
-                for listener in cls.__on_tool_listeners:
-                    cls.__executor.submit(listener, item)
+            for listener in cls._on_producer_listeners:
+                cls.__executor.submit(listener, item)
 
-                item.add_on_call_listener(cls._on_tool_call)
-            elif hasattr(item, "completion"):
-                cls._llms[item.name] = item
-
-                for listener in cls.__on_llm_listeners:
-                    cls.__executor.submit(listener, item)
-
-                item.add_on_call_listener(cls._on_llm_call)
-            else:
-                raise ValueError(f"Invalid class to register: {type(item)}")
+            if hasattr(item, "on_call_listener"):
+                item.add_on_call_listener(cls._on_producer_call)
 
     @classmethod
-    def _on_tool_call(cls, tool: "Tool", ctx: "Context"):
+    def _on_producer_call(cls, producer: Attachable, ctx: "Context"):
         """
-        Whenever a tool we are aware of is called, notify the listener
+        Whenever a producer we are aware of is called, notify the listener
         """
         with cls._lock:
             if cls._enabled:
-                for listener in cls.__on_tool_call_listeners:
-                    cls.__executor.submit(listener, tool, ctx)
+                for listener in cls.__on_producer_call_listeners:
+                    cls.__executor.submit(listener, producer, ctx)
 
     @classmethod
-    def _on_llm_call(cls, llm: "LLM", ctx: "Context"):
-        """
-        Whenever a LLM we are aware of is called, notify the listener
-        """
+    def add_on_producer_register(cls, listener: Callable[[Attachable], None]):
         with cls._lock:
-            if cls._enabled:
-                for listener in cls.__on_llm_call_listeners:
-                    cls.__executor.submit(listener, llm, ctx)
+            cls._on_producer_listeners.append(listener)
 
     @classmethod
-    def add_on_tool_register(cls, listener: Callable[["Tool"], None]):
+    def add_on_producer_call(
+        cls, listener: Callable[[Attachable, "Context"], None]
+    ):
         with cls._lock:
-            cls.__on_tool_listeners.append(listener)
+            cls._on_producer_call_listeners.append(listener)
 
     @classmethod
-    def add_on_llm_register(cls, listener: Callable[["LLM"], None]):
+    def get_producers(cls):
         with cls._lock:
-            cls.__on_llm_listeners.append(listener)
+            return cls._producers
 
     @classmethod
     def get_tools(cls):
         with cls._lock:
-            return list(cls._tools.values())
+            if "tool" not in cls._producers:
+                return []
+            return list(cls._producers["tool"].values())
+
+    @classmethod
+    def get_producer_by_type(cls, identifier: str, type: str) -> Attachable:
+        error = ValueError(f"{type} with identifier {identifier} not found")
+
+        with cls._lock:
+            if type not in cls._producers:
+                raise error
+            for producer in cls._producers[type].values():
+                if producer.id == identifier:
+                    return producer
+                if producer.name == identifier:
+                    return producer
+            raise error
 
     @classmethod
     def get_tool(cls, identifier: str) -> "Tool":
-        with cls._lock:
-            for tool in cls._tools.values():
-                if tool.id == identifier:
-                    return tool
-                if tool.name == identifier:
-                    return tool
-            raise ValueError(f"Tool with identifier {identifier} not found")
+        return cls.get_producer_by_type(identifier, "tool")
 
     @classmethod
     def get_llms(cls):
         with cls._lock:
-            return list(cls._llms.values())
+            if "llm" not in cls._producers:
+                return []
+            return list(cls._producers["llm"].values())
 
     @classmethod
     def get_llm(cls, name: str) -> "LLM":
-        with cls._lock:
-            if name in cls._llms:
-                return cls._llms[name]
-            raise ValueError(f"LLM with identifier {name} not found")
-
-    @classmethod
-    def add_tool_call_listener(
-        cls, listener: Callable[["Tool", "Context"], None]
-    ):
-        with cls._lock:
-            cls.__on_tool_call_listeners.append(listener)
-
-    @classmethod
-    def add_llm_call_listener(
-        cls, listener: Callable[["LLM", "Context"], None]
-    ):
-        with cls._lock:
-            cls.__on_llm_call_listeners.append(listener)
+        return cls.get_producer_by_type(name, "llm")
 
     @classmethod
     def enable(cls):

@@ -12,8 +12,7 @@ const app = Vue.createApp({
     },
     data() {
         return {
-            tools: new Map(),
-            llms: new Map(),
+            producers: new Map(),
             contextsAll: new Map(),
             ws: null,
             retryCount: 0,
@@ -40,8 +39,7 @@ const app = Vue.createApp({
             ],
             currentToolEmoji: '&#128296;',
             isDarkMode: localStorage.getItem('darkMode') === 'true' || false,
-            selectedTool: null,
-            selectedLLM: null,
+            selectedProducer: null,
         }
     },
     watch: {
@@ -112,11 +110,17 @@ const app = Vue.createApp({
 
             return contextMap;
         },
-        // Sort tools alphabetically by name
-        sortedTools() {
-            return Array.from(this.tools.values())
-                .sort((a, b) => a.name.localeCompare(b.name));
-        }
+        sortedProducers() {
+            const sorted = {};
+
+            for (const [type, producersMap] of this.producers) {
+                const sortedProducers = Array.from(producersMap.values())
+                    .sort((a, b) => a.name.localeCompare(b.name));
+                sorted[type] = sortedProducers;
+            }
+
+            return sorted;
+        },
     },
     methods: {
         formatTimestamp(timestamp) {
@@ -124,13 +128,20 @@ const app = Vue.createApp({
             const date = new Date(timestamp * 1000);
             return date.toLocaleTimeString();
         },
-        handleTool(data) {
-            let toolData = data.data || data;
-            this.tools.set(toolData.id, toolData);
-        },
-        handleLLM(data) {
-            let llmData = data.data || data;
-            this.llms.set(llmData.name, llmData);
+        handleProducer(data) {
+            const producerData = data.data || data;
+
+            // If this producer type doesn't exist in the Map, create a new Map for it
+            if (!this.producers.has(producerData.type)) {
+                this.producers.set(producerData.type, new Map());
+            }
+
+            // Get the type's Map and set the producer
+            const typeMap = this.producers.get(producerData.type);
+            typeMap.set(producerData.id, producerData);
+
+            // Force Vue reactivity by creating a new Map
+            this.producers = new Map(this.producers);
         },
         handleContext(contextData) {
             let data = {}
@@ -152,9 +163,9 @@ const app = Vue.createApp({
                 id: contextData.id,
                 parent_id: contextData.parent_id,
                 root_id: contextData.root_id,
-                tool_id: contextData.tool_id,
-                tool_name: contextData.tool_name,
-                llm_name: contextData.llm_name,
+                attached_id: contextData.attached_id,
+                attached_type: contextData.attached_type,
+                attached_name: contextData.attached_name,
                 status: contextData.status,
                 args: contextData.args,
                 output: contextData.output,
@@ -200,11 +211,14 @@ const app = Vue.createApp({
 
             // We don't show update events, we just adopt its change
             if (eventData.type === 'context_update') {
-                if (eventData.data.tool_id) {
-                    context.tool_id = eventData.data.tool_id;
+                if (eventData.data.attached_id) {
+                    context.attached_id = eventData.data.attached_id;
                 }
-                if (eventData.data.tool_name) {
-                    context.tool_name = eventData.data.tool_name;
+                if (eventData.data.attached_name) {
+                    context.attached_name = eventData.data.attached_name;
+                }
+                if (eventData.data.attached_type) {
+                    context.attached_type = eventData.data.attached_type;
                 }
                 this.contextsAll.set(contextId, { ...context });
                 return;
@@ -307,10 +321,8 @@ const app = Vue.createApp({
                         this.handleContext(data.data);
                     } else if (data.type === 'event') {
                         this.handleEvent(data);
-                    } else if (data.type === 'tool') {
-                        this.handleTool(data);
-                    } else if (data.type === 'llm') {
-                        this.handleLLM(data);
+                    } else if (data.type === 'producer') {
+                        this.handleProducer(data);
                     } else if (data.type === 'datastore') {
                         this.handleDataStore(data);
                     } else if (data.type === 'datastore_update') {
@@ -364,42 +376,22 @@ const app = Vue.createApp({
             this.isDarkMode = !this.isDarkMode;
             document.documentElement.classList.toggle('dark-mode', this.isDarkMode);
         },
-        selectTool(tool) {
-            this.selectedTool = tool;
+        selectProducer(producer) {
+            this.selectedProducer = producer;
         },
-        clearSelectedTool() {
-            this.selectedTool = null;
+        clearSelectedProducer() {
+            this.selectedProducer = null;
         },
-        selectLLM(llm) {
-            this.selectedLLM = llm;
-            this.selectedTool = null;
-        },
-        clearSelectedLLM() {
-            this.selectedLLM = null;
-        },
-        executeLLM(data) {
+        executeProducer(data) {
             if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
                 console.error('WebSocket is not connected');
                 return;
             }
 
             const message = {
-                type: 'llm_execution',
-                llm_name: data.llm_name,
-                prompt: data.prompt
-            };
-
-            this.ws.send(JSON.stringify(message));
-        },
-        executeTool(data) {
-            if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-                console.error('WebSocket is not connected');
-                return;
-            }
-
-            const message = {
-                type: 'tool_execution',
-                tool_id: data.tool_id,
+                type: 'execution',
+                producer_id: data.attached_id,
+                producer_type: data.attached_type,
                 args: data.args
             };
 

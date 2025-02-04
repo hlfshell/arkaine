@@ -59,7 +59,9 @@ export const ContextView = {
 
             const contextData = {
                 id: this.context.id,
-                tool_name: this.context.tool_name,
+                attached_id: this.context.attached_id,
+                attached_name: this.context.attached_name,
+                attached_type: this.context.attached_type,
                 parent_id: this.context.parent_id,
                 status: this.context.status,
                 output: this.context.output,
@@ -262,9 +264,8 @@ export const ContextView = {
                 <div class="context-id-section">
                     <button class="collapse-button" @click="isExpanded = !isExpanded">
                         <span class="collapse-icon"><b>{{ isExpanded ? '−' : '+' }}</b></span>
-                        <span class="tool-name" v-if="context.tool_name">{{ context.tool_name }}</span>
-                        <span class="tool-name" v-else-if="context.llm_name">{{ context.llm_name }}</span>
-                        <span class="context-id" >Context {{ context.id }}</span>
+                        <span class="tool-name" v-if="context.attached_name">{{ context.attached_name }}</span>
+                        <span class="context-id" v-else>Context {{ context.id }}</span>
                         <span class="context-timestamps">
                             Created: {{ formatTimestamp(context.created_at) }}
                         </span>
@@ -319,9 +320,9 @@ export const ContextView = {
                 </div>
 
                 <!-- Child contexts section - only show in separate view -->
-                <div v-if="!showTimelineOnly && context.children && context.children.filter(child => child.tool_id && !child.llm_name).length > 0" class="context-section">
+                <div v-if="!showTimelineOnly && context.children && context.children.filter(child => child.attached_type === 'tool').length > 0" class="context-section">
                     <div class="section-header" @click="isToolsExpanded = !isToolsExpanded" style="cursor: pointer;">
-                        <span>Tools Used ({{ context.children.filter(child => child.tool_id && !child.llm_name).length }})</span>
+                        <span>Children ({{ context.children.filter(child => child.attached_type === 'tool').length }})</span>
                         <div style="display: flex; gap: 10px;">
                             <button @click.stop="isToolsExpanded = true" class="action-button" style="padding: 2px 8px;"><b>+</b></button>
                             <button @click.stop="isToolsExpanded = false" class="action-button" style="padding: 2px 8px;"><b>−</b></button>
@@ -329,7 +330,7 @@ export const ContextView = {
                     </div>
                     <div v-show="isToolsExpanded" class="child-contexts">
                         <context-view
-                            v-for="childContext in context.children.filter(child => child.tool_id && !child.llm_name)"
+                            v-for="childContext in context.children.filter(child => child.attached_type === 'tool')"
                             :key="childContext.id"
                             :context="childContext"
                             :contexts="contexts"
@@ -341,9 +342,9 @@ export const ContextView = {
                 </div>
 
                 <!-- LLM Calls section - only show in separate view -->
-                <div v-if="!showTimelineOnly && context.children && context.children.filter(child => !child.tool_id && child.llm_name).length > 0" class="context-section">
+                <div v-if="!showTimelineOnly && context.children && context.children.filter(child => child.attached_type === 'llm').length > 0" class="context-section">
                     <div class="section-header" @click="isLLMsExpanded = !isLLMsExpanded" style="cursor: pointer;">
-                        <span>LLM Calls ({{ context.children.filter(child => !child.tool_id && child.llm_name).length }})</span>
+                        <span>LLM Calls ({{ context.children.filter(child => child.attached_type === 'llm').length }})</span>
                         <div style="display: flex; gap: 10px;">
                             <button @click.stop="isLLMsExpanded = true" class="action-button" style="padding: 2px 8px;"><b>+</b></button>
                             <button @click.stop="isLLMsExpanded = false" class="action-button" style="padding: 2px 8px;"><b>−</b></button>
@@ -351,7 +352,7 @@ export const ContextView = {
                     </div>
                     <div v-show="isLLMsExpanded" class="child-contexts">
                         <context-view
-                            v-for="childContext in context.children.filter(child => !child.tool_id && child.llm_name)"
+                            v-for="childContext in context.children.filter(child => child.attached_type === 'llm')"
                             :key="childContext.id"
                             :context="childContext"
                             :contexts="contexts"

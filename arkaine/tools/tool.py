@@ -37,6 +37,7 @@ class Tool:
         self._on_call_listeners: List[Callable[[Tool, Context], None]] = []
         self.result = result
         self._executor = ThreadPoolExecutor()
+        self.__type = "tool"
 
         Registrar.register(self)
 
@@ -47,6 +48,10 @@ class Tool:
     @property
     def id(self) -> str:
         return self.__id
+
+    @property
+    def type(self) -> str:
+        return self.__type
 
     @property
     def tname(self) -> str:
@@ -72,12 +77,13 @@ class Tool:
             ctx = context.child_context(self)
             ctx.executing = True
         else:
-            if not ctx.tool and not ctx.llm:
-                ctx.tool = self
+            if not ctx.attached:
+                ctx.attached = self
             ctx.executing = True
 
         ctx.args = kwargs
         ctx.broadcast(ToolCalled(kwargs))
+
         for listener in self._on_call_listeners:
             self._executor.submit(listener, self, ctx)
 
@@ -171,12 +177,12 @@ class Tool:
         """
 
         # Ensure that the context passed is in fact a context for this tool
-        if context.tool is None:
+        if context.attached is None:
             raise ValueError(f"no tool assigned to context")
-        if context.tool != self:
+        elif context.attached != self:
             raise ValueError(
                 f"context is not for {self.name}, is instead for "
-                f"{context.tool.name}"
+                f"{context.attached.name}"
             )
 
         # Clear the context for re-running.
@@ -273,6 +279,7 @@ class Tool:
             "id": self.__id,
             "name": self.name,
             "description": self.description,
+            "type": self.__type,
             "args": [arg.to_json() for arg in self.args],
             "examples": [example.to_json() for example in self.examples],
             "result": self.result.to_json() if self.result else None,

@@ -129,6 +129,8 @@ class PythonEnv(Container):
         else:
             self.__id = id
 
+        self.__type = "python_env"
+
         if name is None:
             name = f"arkaine-python-{self.__id}"
         if image is None:
@@ -174,6 +176,10 @@ class PythonEnv(Container):
     @property
     def id(self):
         return self.__id
+
+    @property
+    def type(self):
+        return self.__type
 
     @property
     def name(self):
@@ -806,6 +812,7 @@ class PythonEnv(Container):
         return {
             "id": self.__id,
             "name": self.__name,
+            "type": self.__type,
             "version": (
                 self.image.split(":")[1] if ":" in self.image else "latest"
             ),

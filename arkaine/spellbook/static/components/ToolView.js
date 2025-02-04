@@ -31,7 +31,7 @@ export const ToolView = {
         toolContexts() {
             if (!this.contexts) return [];
             let contexts = Array.from(this.contexts.values())
-                .filter(context => context.tool_id === this.tool.id)
+                .filter(context => context.attached_id === this.tool.id && context.attached_type === 'tool')
                 .sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
 
             // Apply search filter if there's a search query
@@ -81,14 +81,14 @@ export const ToolView = {
             return new Date(timestamp * 1000).toLocaleString();
         },
         handleExecuteTool() {
-            // Emit event to parent with tool execution details
-            this.$emit('execute-tool', {
-                tool_id: this.tool.id,
+            // Emit execute event to parent with tool execution details
+            this.$emit('execute', {
+                attached_id: this.tool.id,
+                attached_type: 'tool',
                 args: this.executionForm
             });
 
-            // Properly reset the form after sending
-            this.executionForm = {};
+            // Clear the form after sending
             if (this.tool?.args?.length) {
                 this.tool.args.forEach(arg => {
                     this.executionForm[arg.name] = (arg.default !== undefined) ? arg.default : '';
@@ -176,54 +176,16 @@ export const ToolView = {
                 </div>
                 <div v-show="isExecutionExpanded" class="section-content">
                     <form @submit.prevent="handleExecuteTool" class="execution-form">
-                        <div class="execution-grid">
-                            <div v-for="arg in tool.args" :key="arg.name" class="execution-field">
-                                <label :for="'execution-' + arg.name">
-                                    {{ arg.name }}
-                                    <span v-if="arg.required" class="required-star">*</span>
-                                </label>
-                                
-                                <div class="input-wrapper">
-                                    <input v-if="arg.type.toLowerCase() === 'string' || arg.type.toLowerCase() === 'number'"
-                                        :type="arg.type.toLowerCase() === 'number' ? 'number' : 'text'"
-                                        :id="'execution-' + arg.name"
-                                        v-model="executionForm[arg.name]"
-                                        :required="arg.required"
-                                        :placeholder="arg.description"
-                                        class="execution-input"
-                                    />
-                                    <div v-else-if="arg.type.toLowerCase() === 'boolean'" class="boolean-input">
-                                        <label class="toggle">
-                                            <input
-                                                type="checkbox"
-                                                :id="'execution-' + arg.name"
-                                                v-model="executionForm[arg.name]"
-                                            />
-                                            <span class="slider"></span>
-                                        </label>
-                                    </div>
-                                    <textarea
-                                        v-else-if="arg.type.toLowerCase() === 'text'"
-                                        :id="'execution-' + arg.name"
-                                        v-model="executionForm[arg.name]"
-                                        :required="arg.required"
-                                        :placeholder="arg.description"
-                                        class="execution-textarea"
-                                        rows="4"
-                                    ></textarea>
-                                    <!-- Add a fallback input for any other types -->
-                                    <input v-else
-                                        type="text"
-                                        :id="'execution-' + arg.name"
-                                        v-model="executionForm[arg.name]"
-                                        :required="arg.required"
-                                        :placeholder="arg.description"
-                                        class="execution-input"
-                                    />
-                                </div>
-                            </div>
+                        <div v-for="arg in tool.args" :key="arg.name" class="argument-field">
+                            <label :for="arg.name">{{ arg.name }}</label>
+                            <input 
+                                :id="arg.name"
+                                v-model="executionForm[arg.name]"
+                                :type="arg.type === 'number' ? 'number' : 'text'"
+                                :placeholder="arg.description"
+                                :required="arg.required"
+                            >
                         </div>
-                        
                         <div class="execution-actions">
                             <button type="submit" class="execute-button">
                                 Execute Tool

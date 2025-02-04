@@ -6,7 +6,7 @@ from threading import Lock
 from typing import Any, Dict, Optional, TextIO
 
 from arkaine.internal.registrar import Registrar
-from arkaine.tools.context import Context
+from arkaine.tools.context import Attachable, Context
 from arkaine.tools.events import Event
 from arkaine.tools.tool import Tool
 
@@ -74,7 +74,7 @@ class Logger:
         """
         tool.add_on_call_listener(self.on_tool_call)
 
-    def on_tool_call(self, tool: Tool, context: Context):
+    def on_producer_call(self, producer: Attachable, context: Context):
         # Subscribe to the context events
         context.add_event_listener(self.log_event, ignore_children_events=True)
 
@@ -131,7 +131,7 @@ class Logger:
         header = f"{timestamp} - {event_type}"
 
         # Add tool name for tool-related events
-        header += f" [{context.tool.name} | {context.tool.id}]"
+        header += f" [{context.attached.name} | {context.attached.id}]"
 
         # Format the event data
         if event.data:
@@ -206,7 +206,7 @@ class GlobalLogger:
     def enable(cls):
         Registrar.enable()
         instance = cls.get_instance()
-        Registrar.add_tool_call_listener(instance.on_tool_call)
+        Registrar.add_on_producer_call(instance.on_producer_call)
 
     @classmethod
     def disable(cls):

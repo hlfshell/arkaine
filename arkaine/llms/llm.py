@@ -5,9 +5,11 @@ from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from typing import Any, Callable, Dict, List, Optional, Union
+from uuid import uuid4
 
 from arkaine.internal.registrar import Registrar
 from arkaine.tools.context import Context
+
 
 # A RolePrompt is a dict specifying a role, and a string specifying the
 # content. An example of this would be:
@@ -25,6 +27,7 @@ class LLM(ABC):
     def __init__(
         self,
         name: str = None,
+        id: Optional[str] = None,
     ):
         super().__init__()
         self.name = name
@@ -34,12 +37,22 @@ class LLM(ABC):
         self.__executor = ThreadPoolExecutor(
             thread_name_prefix=f"llm-{self.name}"
         )
+        self.__type = "llm"
+        self.__id = id if id else str(uuid4())
 
         Registrar.register(self)
 
     def add_on_call_listener(self, listener: Callable[[LLM, Context], None]):
         with self.__lock:
             self.__on_call_listeners.append(listener)
+
+    @property
+    def id(self) -> str:
+        return self.__id
+
+    @property
+    def type(self) -> str:
+        return self.__type
 
     @property
     @abstractmethod
@@ -163,8 +176,8 @@ class LLM(ABC):
             ctx = context.child_context(self)
             ctx.executing = True
         else:
-            if not ctx.tool != self and ctx.llm != self:
-                ctx.llm = self
+            if not ctx.attached:
+                ctx.attached = self
             ctx.executing = True
 
         ctx.args = prompt
@@ -181,4 +194,8 @@ class LLM(ABC):
             return response
 
     def to_json(self) -> Dict[str, Any]:
-        return {"name": self.name}
+        return {
+            "name": self.name,
+            "id": self.id,
+            "type": self.type,
+        }

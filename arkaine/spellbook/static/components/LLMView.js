@@ -16,7 +16,7 @@ export const LLMView = {
         llmContexts() {
             if (!this.contexts) return [];
             let contexts = Array.from(this.contexts.values())
-                .filter(context => context.llm_name === this.llm.name)
+                .filter(context => context.attached_id === this.llm.id && context.attached_type === 'llm')
                 .sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
 
             // Apply search filter if there's a search query
@@ -47,10 +47,13 @@ export const LLMView = {
             return new Date(timestamp * 1000).toLocaleString();
         },
         handleExecuteLLM() {
-            // Emit event to parent with LLM execution details
-            this.$emit('execute-llm', {
-                llm_name: this.llm.name,
-                prompt: this.executionForm.prompt
+            // Emit a simpler event name
+            this.$emit('execute', {
+                attached_id: this.llm.id,
+                attached_type: 'llm',
+                args: {
+                    prompt: this.executionForm.prompt
+                }
             });
 
             // Clear the form after sending

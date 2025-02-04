@@ -7,12 +7,21 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from threading import Event as ThreadEvent
 from time import time
 from types import TracebackType
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    Union,
+)
 from uuid import uuid4
 
 from arkaine.internal.options.context import ContextOptions
 from arkaine.internal.registrar import Registrar
 from arkaine.internal.to_json import recursive_to_json
+from arkaine.tools.attachable import Attachable
 from arkaine.tools.datastore import ThreadSafeDataStore
 from arkaine.tools.events import (
     ChildContextCreated,
@@ -42,10 +51,12 @@ class Context:
         - "cancelled" TODO
         - "error"
     3. output - what the final output of the tool was, if any
-    4. history - a temporally ordered list of events that occurred during the
-       execution of that specific tool/agent
-    5. name - a human readable name for the tool/agent
+    4. exception - what the final exception of the tool was, if any
+    5. name - a human readable name for the associated tool
     6. args - the arguments passed to the tool/agent for this execution
+    7. type - the type of the context, specifically referring to the type
+      of the object that is attached to the context
+    8. attached - the object that is attached to the context
 
     Contexts also have a controlled set of data features meant for potential
     debugging or passing of state information throughout a tool's lifetime. To
@@ -93,19 +104,20 @@ class Context:
 
     def __init__(
         self,
-        tool: Optional["Tool"] = None,
+        attach: Optional[Attachable] = None,
         parent: Optional[Context] = None,
-        llm: Optional["LLM"] = None,
+        id: Optional[str] = None,
     ):
-        self.__id = str(uuid4())
+        self.__id = id or str(uuid4())
         self.__executing = False
-        self.__tool = tool
         self.__parent = parent
-        self.__llm = llm
 
-        if self.__llm is None and hasattr(tool, "completion"):
-            self.__tool = None
-            self.__llm = tool
+        if attach is not None and not isinstance(attach, Attachable):
+            raise ValueError(
+                "Object must implement id, name, and type properties, got "
+                f"{type(attach)}"
+            )
+        self.__attachable = attach
 
         self.__root: Optional[Context] = None
         # Trigger getter to hunt for root
@@ -240,30 +252,20 @@ class Context:
             return self.__root
 
     @property
-    def tool(self) -> "Tool":
-        return self.__tool
+    def attached(self) -> Attachable:
+        return self.__attachable
 
-    @tool.setter
-    def tool(self, tool: "Tool"):
+    @attached.setter
+    def attached(self, attach: Attachable):
+        if not isinstance(attach, Attachable):
+            raise ValueError(
+                "Attachable must be an instance of Attachable, got "
+                f"{type(attach)}"
+            )
         with self.__lock:
-            if self.__tool:
-                raise ValueError("Tool already set")
-            self.__tool = tool
-
-        self.broadcast(
-            ContextUpdate(tool_id=self.tool.id, tool_name=self.tool.name)
-        )
-
-    @property
-    def llm(self) -> "LLM":
-        return self.__llm
-
-    @llm.setter
-    def llm(self, llm: "LLM"):
-        with self.__lock:
-            if self.__llm:
-                raise ValueError("LLM already set")
-            self.__llm = llm
+            if self.__attachable:
+                raise ValueError("Attachable already set")
+            self.__attachable = attach
 
     @property
     def parent(self) -> Context:
@@ -279,18 +281,16 @@ class Context:
         with self.__lock:
             return self.__history
 
-    def child_context(self, tool_or_llm: Union["Tool", "LLM"]) -> Context:
+    def child_context(self, attachable: Attachable) -> Context:
         """Create a new child context for the given tool."""
-        if hasattr(tool_or_llm, "completion"):
-            ctx = Context(llm=tool_or_llm, parent=self)
-        elif hasattr(tool_or_llm, "bash"):
-            ctx = Context(tool=tool_or_llm, parent=self)
-        elif hasattr(tool_or_llm, "tname"):
-            ctx = Context(tool=tool_or_llm, parent=self)
-        else:
+
+        if not isinstance(attachable, Attachable):
             raise ValueError(
-                f"Invalid type for child context: {type(tool_or_llm)}"
+                "Attachable must be an instance of Attachable, got "
+                f"{type(attachable)}"
             )
+
+        ctx = Context(attach=attachable, parent=self)
 
         with self.__lock:
             self.__children.append(ctx)
@@ -592,9 +592,9 @@ class Context:
             "id": self.__id,
             "parent_id": self.__parent.id if self.__parent else None,
             "root_id": self.root.id,
-            "tool_id": None if not self.__tool else self.__tool.id,
-            "tool_name": None if not self.__tool else self.__tool.name,
-            "llm_name": None if not self.__llm else self.__llm.name,
+            "attached_id": self.__attachable.id,
+            "attached_name": self.__attachable.name,
+            "attached_type": self.__attachable.type,
             "status": status,
             "args": args,
             "output": output,
@@ -661,10 +661,14 @@ class Context:
     def __load_from_json(cls, data: dict) -> Context:
         """Create a context object from JSON data."""
         # Find the associated tool
-        tool = cls._find_tool(data.get("tool_id"), data.get("tool_name"))
+        attached = cls._find_attached(
+            data.get("attached_id"),
+            data.get("attached_name"),
+            data.get("attached_type"),
+        )
 
         # Create the base context
-        context = cls(tool=tool)
+        context = cls(attached=attached)
 
         # Load the basic properties
         context.__id = data["id"]
@@ -706,25 +710,20 @@ class Context:
         return context
 
     @staticmethod
-    def _find_tool(
-        tool_id: Optional[str], tool_name: Optional[str]
-    ) -> Optional["Tool"]:
+    def _find_attached(
+        attached_id: Optional[str],
+        attached_name: Optional[str],
+        attached_type: Optional[str],
+    ) -> Optional[Attachable]:
         """Find a tool by ID or name from the Registrar."""
-        tools = Registrar.get_tools()
+        if not attached_id and not attached_name:
+            raise ValueError("No attached ID or name provided")
 
-        # Try finding by ID first
-        if tool_id:
-            for tool in tools:
-                if tool.id == tool_id:
-                    return tool
+        attached = Registrar.get_producer_by_type(
+            attached_id or attached_name, attached_type
+        )
 
-        # Try finding by name if ID search failed
-        if tool_name:
-            for tool in tools:
-                if tool.name == tool_name:
-                    return tool
-
-        return None
+        return attached
 
     @staticmethod
     def __load_history(history_data: List[dict]) -> List[Event]:

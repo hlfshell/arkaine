@@ -8,13 +8,9 @@ from websockets.server import WebSocketServerProtocol
 from websockets.sync.server import serve
 
 from arkaine.internal.registrar import Registrar
-from arkaine.tools.context import Context
+from arkaine.tools.context import Attachable, Context
 from arkaine.tools.datastore import ThreadSafeDataStore
 from arkaine.tools.events import Event, ToolException, ToolReturn
-from arkaine.tools.tool import Tool
-
-if TYPE_CHECKING:
-    from arkaine.llms.llm import LLM
 
 
 class SpellbookSocket:
@@ -35,8 +31,7 @@ class SpellbookSocket:
         self.port = port
         self.active_connections: Set[WebSocketServerProtocol] = set()
         self._contexts: Dict[str, Context] = {}
-        self._tools: Dict[str, Tool] = {}
-        self._llms: Dict[str, LLM] = {}
+        self._producers: Dict[str, Dict[str, Attachable]] = {}
         self._server = None
         self._server_thread = None
         self._running = False
@@ -45,27 +40,22 @@ class SpellbookSocket:
 
         Registrar.enable()
 
-        Registrar.add_on_tool_register(self._on_tool_register)
-        Registrar.add_on_llm_register(self._on_llm_register)
-
-        Registrar.add_tool_call_listener(self._on_tool_call)
-        Registrar.add_llm_call_listener(self._on_llm_call)
+        Registrar.add_on_producer_register(self._on_producer_register)
+        Registrar.add_on_producer_call(self._on_producer_call)
 
         with self._lock:
-            tools = Registrar.get_tools()
-            for tool in tools:
-                self._tools[tool.id] = tool
+            producers = Registrar.get_producers()
+            for type in producers:
+                self._producers[type] = {}
+                for producer in producers[type]:
+                    self._producers[type][producer.id] = producer
 
-            llms = Registrar.get_llms()
-            for llm in llms:
-                self._llms[llm.name] = llm
+                    # Add our context creation listener to the producer
+                    producer.add_on_call_listener(self._on_producer_call)
 
-    def _on_tool_call(self, tool: Tool, context: Context):
+    def _on_producer_call(self, producer: Attachable, context: Context):
         # Subscribe to all the context's events for this tool from
         # here on out if its a root context
-        self._handle_context_creation(context)
-
-    def _on_llm_call(self, llm: LLM, context: Context):
         self._handle_context_creation(context)
 
     def _context_complete(self, context: Context):
@@ -74,15 +64,17 @@ class SpellbookSocket:
         else:
             self._broadcast_event(context, ToolReturn(context.output))
 
-    def _on_tool_register(self, tool: Tool):
+    def _on_producer_register(self, producer: Attachable):
+        """Called when a new producer (tool/llm) is registered"""
         with self._lock:
-            self._tools[tool.id] = tool
-        self._broadcast_tool(tool)
+            if producer.type not in self._producers:
+                self._producers[producer.type] = {}
+            self._producers[producer.type][producer.id] = producer
 
-    def _on_llm_register(self, llm: "LLM"):
-        with self._lock:
-            self._llms[llm.name] = llm
-        self._broadcast_llm(llm)
+            # Add our context creation listener to the producer
+            producer.add_on_call_listener(self._on_producer_call)
+
+        self._broadcast_producer(producer)
 
     def _handle_context_creation(self, context: Context):
         """
@@ -149,19 +141,20 @@ class SpellbookSocket:
                 self.active_connections.add(websocket)
                 # Send initial context states and their events immediately
 
-                for tool in self._tools.values():
-                    try:
-                        tool_msg = self.__build_tool_message(tool)
-                        websocket.send(json.dumps(tool_msg))
-                    except Exception as e:
-                        print(f"Failed to send initial tool state: {e}")
-
-                for llm in self._llms.values():
-                    try:
-                        llm_msg = self.__build_llm_message(llm)
-                        websocket.send(json.dumps(llm_msg))
-                    except Exception as e:
-                        print(f"Failed to send initial LLM state: {e}")
+                for producer_type in self._producers:
+                    for producer in self._producers[producer_type].values():
+                        try:
+                            websocket.send(
+                                json.dumps(
+                                    self.__build_producer_message(producer)
+                                )
+                            )
+                        except Exception as e:
+                            print(
+                                "Failed to send initial producer state for "
+                                f"{producer.id} ({producer.type}) - "
+                                f"{producer.name}:\n{e}"
+                            )
 
                 for context in self._contexts.values():
                     try:
@@ -179,10 +172,8 @@ class SpellbookSocket:
                         try:
                             data = json.loads(message)
 
-                            if data["type"] == "llm_execution":
-                                self.__handle_llm_execution(data)
-                            elif data["type"] == "tool_execution":
-                                self.__handle_tool_execution(data)
+                            if data["type"] == "execution":
+                                self.__handle_producer_execution(data)
                             elif data["type"] == "context_retry":
                                 self.__handle_context_retry(data)
                             else:
@@ -202,25 +193,17 @@ class SpellbookSocket:
                 self.active_connections.discard(websocket)
             print(f"Client disconnected from {remote_addr}")
 
-    def __handle_llm_execution(self, data: dict):
-        llm_name: str = data["llm_name"]
-        prompt: str = data["prompt"]
-
-        if llm_name not in self._llms:
-            raise ValueError(f"LLM with name {llm_name} not found")
-
-        llm = self._llms[llm_name]
-        llm(prompt)
-
-    def __handle_tool_execution(self, data: dict):
-        tool_id: str = data["tool_id"]
+    def __handle_producer_execution(self, data: dict):
+        producer_id: str = data["producer_id"]
+        producer_type: str = data["producer_type"]
         args: dict = data["args"]
 
-        if tool_id not in self._tools:
-            raise ValueError(f"Tool with id {tool_id} not found")
+        if producer_type not in self._producers:
+            raise ValueError(f"Producer type {producer_type} not found")
 
-        tool = self._tools[tool_id]
-        tool(**args)
+        producer = Registrar.get_producer_by_type(producer_id, producer_type)
+
+        producer.async_call(**args)
 
     def __handle_context_retry(self, data: dict):
         context_id: str = data["context_id"]
@@ -228,34 +211,33 @@ class SpellbookSocket:
             raise ValueError(f"Context with id {context_id} not found")
         context = self._contexts[context_id]
 
-        if context.tool is None:
+        if context.attached is None:
             raise ValueError("Context has no tool")
 
         try:
-            context.tool.retry(context)
+            context.attached.retry(context)
         except Exception as e:
             print(f"Failed to retry context: {e}")
 
-    def __build_tool_message(self, tool: Tool):
-        return {"type": "tool", "data": tool.to_json()}
+    def __build_producer_message(self, producer: Attachable):
+        return {
+            "type": "producer",
+            "data": producer.to_json(),
+        }
 
-    def _broadcast_tool(self, tool: Tool):
-        """Broadcast a tool to all active clients"""
-        self._broadcast_to_clients(self.__build_tool_message(tool))
-
-    def __build_llm_message(self, llm: LLM):
-        return {"type": "llm", "data": llm.to_json()}
-
-    def _broadcast_llm(self, llm: LLM):
-        """Broadcast a LLM to all active clients"""
-        self._broadcast_to_clients(self.__build_llm_message(llm))
+    def _broadcast_producer(self, producer: Attachable):
+        self._broadcast_to_clients(self.__build_producer_message(producer))
 
     def __build_context_message(self, context: Context):
         return {"type": "context", "data": context.to_json()}
 
     def _broadcast_context(self, context: Context):
         """Broadcast a context to all active clients"""
-        self._broadcast_to_clients(self.__build_context_message(context))
+        try:
+            print(self.__build_context_message(context))
+            self._broadcast_to_clients(self.__build_context_message(context))
+        except Exception as e:
+            print(f"Failed to broadcast context: {e}")
 
     def _broadcast_event(self, context: Context, event: Event):
         """Broadcasts an event to all active WebSocket connections."""
