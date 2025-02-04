@@ -162,6 +162,11 @@ Not only will `toolify` turn `func1/2/3` into a `Tool`, it also attempts to read
 
 To create an agent, you have several options. All agents are tools that utilize LLMs, and there are a few different ways to implement them based on your needs.
 
+In order to create an agent, you generally need to provide:
+
+1. An explanation for what the overall goal of the agent is (and how to accomplish it) and...
+2. A method to take the output from the LLM and extract a result from it.
+
 ### Using SimpleAgent
 
 The easiest way to create an agent is to use `SimpleAgent`, which allows you to create an agent by passing functions for prompt preparation and result extraction:
@@ -247,6 +252,8 @@ The key differences in `IterativeAgent` are:
 - Returning `None` from `extract_result` will cause another iteration
 - The agent continues until either a non-None result is returned or `max_steps` is reached
 
+You can optionally pass an initial state when implementing your `IterativeAgent`. This is a dictionary of key-value pairs that will be used to initialize the context of the agent, allowing you to utilize the context to handle state throughout the `prepare_prompt` and `extract_result` methods.
+
 ## Chats
 
 Chats are assumed to inherit from the `Chat` abstract class. They follow some pattern of interaction with the user. Chats create `Conversation`s - these are histories of messages shared between 2 or more entities - typically the user or the agent, but not necessarily limited to this scope. The `Chat` class includes the ability to determine whether an incoming message is a new conversation, or a continuation of the previous conversation.
@@ -311,6 +318,19 @@ It does this by asking an LLM to identify from the prior message and the context
 
 `BackendAgents` are agents that utilize a `Backend` to perform its task. A `Backend` is a system that empowers an LLM to utilize tools and detect when it is finished with its task. To create one, inherit from the `BackendAgent` class.
 
+You need two things for a BackendAgent:
+
+1. An agent_explanation, which is fed to the LLM through the backend's prompt to tell the LLM what it is expected to be.
+2. A method that, given the arguments, returns a dictionary of arguments for the backend. Almost always (unless the backend specifies otherwise) the expected format is:
+
+```python
+{
+    "task": "..."
+}
+```
+
+...wherein `task` is a text that describes the individual task at hand.
+
 ```python
 from arkaine.tools.agent import BackendAgent
 
@@ -322,9 +342,17 @@ class MyBackendAgent(BackendAgent):
         # Given the arguments for the agent, transform them
         # (if needed) for the backend's format. These will be
         # passed to the backend as arguments.
-        ...
-        return kwargs
+        
+        question = kwargs["question"]
+
+        return {
+            "task": f"Answer the following question: {question}",
+        }
 ```
+
+Note that the `prepare_for_backend` method is optional. If you do not implement it, the backend agent will pass the arguments as-is to the backend.
+
+### Creating a Custom Backend
 
 If you wish to create a custom backend, you have to implement several functions.
 
@@ -343,7 +371,7 @@ class MyBackend(BaseBackend):
         # Given a response from a model, isolate any result. If a result
         # is provided, the backend will continue calling itself.
         ...
-        return None
+        return ?
     
     def tool_results_to_prompts(self, context: Context, prompt: Prompt, results: ToolResults) -> List[Prompt]:
         # Given the results of a tool call, transform them into a prompt
@@ -363,8 +391,9 @@ class MyBackend(BaseBackend):
 When in doubt, trial and error works. You have the following backends available:
 
 - `OpenAI` - utilizes OpenAI's built in tool calling API
-- `Simple` - a simple scanner to see if the model's response starts a line with a tool call. Nothing fancy.
-- `REACT` - a backend that utilizes the Thought/Action/Answer paradigm to call tools and think through tasks.
+- `Google` - utilizes Google Gemini's built in tool calling API
+- `Ollama` - utilizes Ollama's built in tool calling API for models that support it - be sure to check the Ollama docs for more information.
+- `ReAct` - a backend that utilizes the Thought/Action/Answer paradigm to call tools and think through tasks.
 - `Python` - utilize python coding within a docker environment to safely execute LLM code with access to your tools to try and solve problems.
 
 
@@ -374,8 +403,9 @@ Arkaine supports multiple integrations with different LLM interfaces:
 
 - **OpenAI**
 - **Anthropic Claude**
-- **Groq**
+- **Groq** - cheap hosted offering of multiple open sourced models
 - **Ollama** - local offline models supported!
+- **Google** - utilizes Google's Gemini API
 
 ### Expanding to other LLMs
 
@@ -397,16 +427,18 @@ class MyLLM(LLM):
         return self.call_llm(prompt)
 ```
 
+Often it is necessary to include the context limits of models so the context_length can be properly set.
+
 # Quick Start
 
 Here's a simple example of creating and using an agent:
 
 ```python
-from arkaine.llms.openai import OpenAILLM
+from arkaine.llms.openai import OpenAI
 from arkaine.tools.agent import Agent
 
 # Initialize the LLM
-llm = OpenAILLM(api_key="your-api-key")
+llm = OpenAI(api_key="your-api-key")
 
 # Define a simple agent
 class MyAgent(Agent):

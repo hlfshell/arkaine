@@ -8,7 +8,7 @@ import openai as oaiapi
 from openai.types.chat.chat_completion import ChatCompletion
 
 from arkaine.tools.agent import Prompt
-from arkaine.backends.base import BaseBackend
+from arkaine.backends.backend import Backend
 from arkaine.backends.common import simple_tool_results_to_prompts
 from arkaine.tools.tool import Context, Tool
 from arkaine.tools.types import ToolArguments, ToolResults
@@ -16,7 +16,7 @@ from arkaine.utils.templater import PromptTemplate
 from arkaine.utils.tool_format import openai as openai_tool_format
 
 
-class OpenAI(BaseBackend):
+class OpenAI(Backend):
 
     def __init__(
         self,

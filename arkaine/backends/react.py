@@ -7,7 +7,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from pydantic import BaseModel
 
-from arkaine.backends.base import BaseBackend, ToolNotFoundException
+from arkaine.backends.backend import Backend, ToolNotFoundException
 from arkaine.llms.llm import LLM, Prompt
 from arkaine.tools.argument import InvalidArgumentException
 from arkaine.tools.tool import Context, Tool
@@ -22,7 +22,7 @@ class ReActResponse(BaseModel):
     Answer: Optional[str] = None
 
 
-class ReActBackend(BaseBackend):
+class ReActBackend(Backend):
 
     def __init__(
         self,

@@ -15,7 +15,7 @@ from arkaine.tools.tool import Context, Tool
 from arkaine.tools.types import ToolArguments, ToolCalls, ToolResults
 
 
-class BaseBackend(ABC):
+class Backend(ABC):
 
     def __init__(
         self,

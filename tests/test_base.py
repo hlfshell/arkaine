@@ -2,7 +2,7 @@ from typing import Any, List, Optional, Tuple
 
 import pytest
 
-from arkaine.backends.base import BaseBackend, ToolNotFoundException
+from arkaine.backends.backend import Backend, ToolNotFoundException
 from arkaine.llms.llm import LLM, Prompt, RolePrompt
 from arkaine.tools.tool import Tool
 from arkaine.tools.types import ToolArguments, ToolResults
@@ -32,7 +32,7 @@ class MockTool(Tool):
         return f"Result from {self.name}"
 
 
-class MockBackend(BaseBackend):
+class MockBackend(Backend):
     def parse_for_tool_calls(
         self, text: str, stop_at_first_tool: bool = False
     ) -> List[Tuple[str, ToolArguments]]:
