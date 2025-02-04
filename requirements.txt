@@ -4,14 +4,18 @@ pytest==8.3.3
 # Core LLM dependencies
 anthropic==0.45.2
 groq==0.11.0
-openai==1.54.3
+openai==1.61.0
 google-generativeai==0.8.4
+ollama==0.4.7
 
 # Web/API dependencies
 fastapi==0.115.8
 uvicorn==0.34.0
 websockets==14.1
 Requests==2.32.3
+
+# Code execution
+docker==7.1.0
 
 # Data processing
 numpy==2.2.2
@@ -32,10 +36,9 @@ wikipedia==1.4.0
 googlemaps==4.10.0
 setuptools==75.8.0
 
-# Additional required dependencies found in codebase
-boto3  # For AWS SNS integration
-messagebird  # For MessageBird SMS integration
-vonage  # For Vonage SMS integration
-twilio  # For Twilio SMS integration
-docker  # For Python backend docker environment
+# SMS
+boto3==1.36.12  # For AWS SNS integration
+messagebird==2.2.0  # For MessageBird SMS integration
+vonage==4.3.0  # For Vonage SMS integration
+twilio==9.4.4  # For Twilio SMS integration
 
