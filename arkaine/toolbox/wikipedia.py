@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 import wikipedia
 
 from arkaine.tools.agent import BackendAgent
-from arkaine.backends.base import Backend
+from arkaine.backends.backend import Backend
 from arkaine.backends.react import ReActBackend
 from arkaine.internal.store.embeddings import (
     EmbeddingStore,
