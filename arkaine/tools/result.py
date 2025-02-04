@@ -34,7 +34,7 @@ class Result:
 
     def to_json(self):
         return {
-            "type": self.__type_str,
+            "type": self.type_str,
             "description": self.description,
         }
 
