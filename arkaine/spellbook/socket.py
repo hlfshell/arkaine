@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import threading
-from typing import TYPE_CHECKING, Any, Dict, Set
+from typing import Any, Dict, Set
 
 from websockets.server import WebSocketServerProtocol
 from websockets.sync.server import serve
