@@ -203,7 +203,10 @@ class SpellbookSocket:
 
         producer = Registrar.get_producer_by_type(producer_id, producer_type)
 
-        producer.async_call(**args)
+        if hasattr(producer, "async_call"):
+            producer.async_call(**args)
+        else:
+            producer(**args)
 
     def __handle_context_retry(self, data: dict):
         context_id: str = data["context_id"]
@@ -234,7 +237,6 @@ class SpellbookSocket:
     def _broadcast_context(self, context: Context):
         """Broadcast a context to all active clients"""
         try:
-            print(self.__build_context_message(context))
             self._broadcast_to_clients(self.__build_context_message(context))
         except Exception as e:
             print(f"Failed to broadcast context: {e}")
