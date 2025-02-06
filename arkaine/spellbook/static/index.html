@@ -29,11 +29,23 @@
 
         <!-- Tools Panel (left side) -->
         <div :class="['tools-panel', { active: showTools }]">
-            <div class="tools-header">
+            <!-- <div class="tools-header">
                 <h3>Tools and Agents</h3>
-                <button class="close-button" @click="showTools = false">&#10060;</button>
-            </div>
+            </div> -->
             <div class="tools-content">
+                <!-- <button class="close-button" @click="showTools = false">&#10060;</button> -->
+                <div class="tools-header">
+                    <h3>&#x1F4AC; Chatbots</h3>
+                </div>
+                <div class="tools-content">
+                    <div class="tools-list">
+                        <button v-for="chat in sortedProducers.chat" :key="chat.id" class="tool-button"
+                            :class="{ active: selectedProducer?.id === chat.id }" @click="selectProducer(chat)">
+                            {{ chat.name }}
+                        </button>
+                    </div>
+                </div>
+                <h3>&#x1F527; Tools and Agents &#x1F916;</h3>
                 <div class="tools-list">
                     <button v-for="tool in sortedProducers.tool" :key="tool.id" class="tool-button"
                         :class="{ active: selectedProducer?.id === tool.id }" @click="selectProducer(tool)">
@@ -41,7 +53,7 @@
                     </button>
                 </div>
                 <div class="tools-header">
-                    <h3>LLMs</h3>
+                    <h3>&#x1F4C4; LLMs</h3>
                 </div>
                 <div class="tools-list">
                     <button v-for="llm in sortedProducers.llm" :key="llm.id" class="tool-button"
@@ -130,6 +142,9 @@
             <template v-else-if="selectedProducer?.type === 'llm'">
                 <llm-view :llm="selectedProducer" :contexts="contextsAll" :search-query="searchQuery"
                     @back="clearSelectedProducer" @execute="executeProducer"></llm-view>
+            </template>
+            <template v-else-if="selectedProducer?.type === 'chat'">
+                <chat-view :chat="selectedProducer" @back="clearSelectedProducer" @send-message="executeProducer" />
             </template>
             <template v-else>
                 <div class="contexts">

@@ -2,13 +2,15 @@ import { ContextView } from './components/ContextView.js';
 import { EventView } from './components/EventView.js';
 import { LLMView } from './components/LLMView.js';
 import { ToolView } from './components/ToolView.js';
+import { ChatView } from './components/ChatView.js';
 
 const app = Vue.createApp({
     components: {
         'context-view': ContextView,
         'event-view': EventView,
         'tool-view': ToolView,
-        'llm-view': LLMView
+        'llm-view': LLMView,
+        'chat-view': ChatView
     },
     data() {
         return {
