@@ -24,7 +24,6 @@ class Attachable(Protocol):
         """Type of the attachable object"""
         ...
 
-    @property
     def to_json(self) -> Dict[str, Any]:
         """JSON representation of the attachable object"""
         ...
