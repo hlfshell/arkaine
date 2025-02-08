@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from typing import Any
 
 
@@ -14,6 +15,8 @@ def recursive_to_json(value: Any) -> Any:
         return {k: recursive_to_json(v) for k, v in value.items()}
     elif hasattr(value, "to_json"):
         return recursive_to_json(value.to_json())
+    elif isinstance(value, datetime):
+        return value.isoformat()
     else:
         try:
             return json.dumps(value)
