@@ -83,12 +83,19 @@ class LLM(ABC):
         potential tokenization of their formatting symbols.
         """
         # Convert the content to a list of strings for counting.
-        if isinstance(content, Prompt):
-            content = [content]
-        elif isinstance(content, List[Prompt]):
-            content = [item for sublist in content for item in sublist]
-        elif isinstance(content, List[str]):
-            pass
+        if (
+            isinstance(content, list)
+            and content
+            and isinstance(content[0], dict)
+        ):
+            # Handle Prompt (List[RolePrompt]) case
+            content = [item["content"] for item in content]
+        elif isinstance(content, List):
+            if all(isinstance(sublist, list) for sublist in content):
+                # Handle List[Prompt] case
+                content = [
+                    item["content"] for sublist in content for item in sublist
+                ]
         elif isinstance(content, str):
             content = [content]
         else:
@@ -190,6 +197,10 @@ class LLM(ABC):
         with self._init_context_(context, prompt) as ctx:
             self.__broadcast_call(ctx)
             response = self.completion(prompt)
+            ctx["estimated_tokens"] = {
+                "prompt": self.estimate_tokens(prompt),
+                "response": self.estimate_tokens(response),
+            }
             ctx.output = response
             return response
 
