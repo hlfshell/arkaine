@@ -10,8 +10,7 @@ from arkaine.tools.agent import Prompt
 class OpenAI(LLM):
 
     CONTEXT_LENGTHS = {
-        "gpt-4o": 128000,
-        "gpt-4o-mini": 8192,
+        "gpt-4o-realtime-preview": 128000,
         "gpt-3.5-turbo": 4096,
         "gpt-4": 8192,
         "gpt-4-32k": 32768,
@@ -19,12 +18,9 @@ class OpenAI(LLM):
         "text-davinci-003": 4096,
         "code-davinci-002": 8001,
         "o1": 128000,
-        "o1-mini": 8192,
-        "gpt-4-turbo-preview": 128000,
-        "gpt-4-1106-preview": 128000,
-        "gpt-4-0125-preview": 128000,
-        "gpt-4-0613": 8192,
-        "gpt-4-0314": 8192,
+        "o1-mini": 128000,
+        "o3-mini": 128000,
+        "gpt-4-turbo": 128000,
     }
 
     def __init__(
