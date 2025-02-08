@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import heapq
 import json
 import pathlib
@@ -7,18 +8,21 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from os import path
 from threading import Lock
-from typing import Dict, List, Literal, Optional
+from typing import Callable, Dict, List, Literal, Optional
 from uuid import uuid4
 
+from arkaine.chat.participant import Participant
+from arkaine.internal.registrar.registrar import Update, Registrar
 from arkaine.llms.llm import LLM
 from arkaine.utils.templater import PromptTemplate
+from arkaine.internal.to_json import recursive_to_json
 
 
 class Message:
 
     def __init__(
         self,
-        author: str,
+        author: Participant,
         content: str,
         on: Optional[datetime] = None,
         id: Optional[str] = None,
@@ -34,8 +38,8 @@ class Message:
 
     def to_json(self):
         return {
-            "id": self.__id,
-            "author": self.author,
+            "id": self.id,
+            "author": recursive_to_json(self.author),
             "content": self.content,
             "on": self.on.isoformat(),
         }
@@ -44,7 +48,7 @@ class Message:
     def from_json(cls, json: Dict[str, str]) -> Message:
         return cls(
             id=json["id"],
-            author=json["author"],
+            author=Participant.from_json(json["author"]),
             content=json["content"],
             on=datetime.fromisoformat(json["on"]),
         )
@@ -82,24 +86,37 @@ class Conversation:
     ):
         self.__id = id if id else str(uuid4())
         self.__messages: List[Message] = []
+        for msg in messages:
+            heapq.heappush(self.__messages, msg)
         self.__name = name
         self.__description = description
         self.__lock = Lock()
 
-        for message in messages:
-            self.add_message(message)
+        self.__update()
+
+    def __update(self):
+        Registrar.broadcast_update(
+            Update(
+                target=self.__id,
+                type="conversation",
+                data=self.to_json(),
+            )
+        )
 
     @property
     def id(self) -> str:
-        return self.__id
+        with self.__lock:
+            return self.__id
 
     @property
     def name(self) -> str:
-        return self.__name
+        with self.__lock:
+            return self.__name
 
     @property
     def description(self) -> str:
-        return self.__description
+        with self.__lock:
+            return self.__description
 
     @property
     def participants(self) -> List[str]:
@@ -114,12 +131,14 @@ class Conversation:
     def add_message(self, message: Message):
         with self.__lock:
             heapq.heappush(self.__messages, message)
+        self.__update()
 
     def to_json(self) -> Dict[str, str]:
         return {
-            "id": self.__id,
-            "name": self.__name,
-            "description": self.__description,
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "participants": recursive_to_json(self.participants),
             "messages": [m.to_json() for m in self.__messages],
         }
 
@@ -129,12 +148,9 @@ class Conversation:
             messages=[Message.from_json(m) for m in json["messages"]],
             name=json["name"],
             description=json["description"],
+            participants=json["participants"],
             id=json["id"],
         )
-
-    def append(self, message: Message):
-        with self.__lock:
-            self.__messages.append(message)
 
     def label(self, llm: LLM):
         prompt = PromptTemplate(_ConversationPrompts.label())
@@ -168,7 +184,8 @@ class Conversation:
                     with self.__lock:
                         self.__name = title
                         self.__description = description
-                        return
+                    self.__update()
+                    return
                 else:
                     raise ValueError(
                         "Could not parse title and description from response"
@@ -253,6 +270,27 @@ class ConversationStore(ABC):
 
     def __init__(self):
         super().__init__()
+
+        self.__listener_lock = Lock()
+        self.__on_conversation_listeners: List[
+            Callable[[Conversation], None]
+        ] = []
+        self.__executor = ThreadPoolExecutor()
+
+    def __del__(self):
+        if self.__executor:
+            self.__executor.shutdown(wait=False)
+
+    def add_on_conversation_listener(
+        self, listener: Callable[[Conversation], None]
+    ):
+        with self.__listener_lock:
+            self.__on_conversation_listeners.append(listener)
+
+    def broadcast_conversation(self, conversation: Conversation):
+        with self.__listener_lock:
+            for listener in self.__on_conversation_listeners:
+                self.__executor.submit(listener, conversation)
 
     @abstractmethod
     def get_conversation(self, id: str) -> Optional[Conversation]:

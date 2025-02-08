@@ -7,6 +7,7 @@ from arkaine.backends.backend import Backend
 from arkaine.backends.react import ReActBackend
 from arkaine.chat.chat import Chat
 from arkaine.chat.conversation import Conversation, ConversationStore, Message
+from arkaine.chat.participant import Participant
 from arkaine.llms.llm import LLM
 from arkaine.tools.context import Context
 from arkaine.tools.tool import Tool
@@ -54,25 +55,48 @@ class SimpleChat(Chat):
         llm: LLM,
         tools: List[Tool],
         store: ConversationStore,
-        agent_name: str = "Arkaine",
-        user_name: str = "User",
+        name: str = "simple_chat_agent",
+        agent_identity: Optional[Participant] = None,
         backend: Optional[Backend] = None,
         conversation_auto_active: float = 60.0,
         personality: Optional[str] = None,
-        tool_name: str = "chat_agent",
+        tool_timeout: float = 30.0,
+        id: Optional[str] = None,
+        default_user: Optional[Union[str, Participant]] = None,
     ):
+        if default_user is None:
+            default_user = Participant(
+                name="User",
+                is_human=True,
+            )
+        self.__default_user = default_user
+
+        if agent_identity is None:
+            self.__agent_identity = Participant(
+                name="Arkaine",
+                is_human=False,
+            )
+        elif isinstance(agent_identity, str):
+            self.__agent_identity = Participant(
+                name=agent_identity,
+                is_human=False,
+            )
+        else:
+            self.__agent_identity = agent_identity
+
         super().__init__(
+            name=name,
             llm=llm,
             store=store,
             tools=tools,
-            agent_name=agent_name,
-            user_name=user_name,
             conversation_auto_active=conversation_auto_active,
-            name=tool_name,
+            tool_timeout=tool_timeout,
+            id=id,
         )
 
         self.__tools = tools
         self.__personality = personality
+
         if backend is None:
             self._backend = ReActBackend(
                 llm=self._llm,
@@ -84,6 +108,19 @@ class SimpleChat(Chat):
             )
         else:
             self._backend = backend
+
+    def get_user_name(self, conversation: Conversation) -> str:
+        name = None
+        if conversation:
+            for msg in conversation:
+                if msg.author != self.__agent_identity.name:
+                    name = msg.author
+                    break
+
+        if name is None:
+            name = self.__default_user.name
+
+        return name
 
     def _identify_tasks(
         self,
@@ -197,8 +234,8 @@ class SimpleChat(Chat):
             PromptTemplate(prompt).render(
                 {
                     "personality": personality,
-                    "agent_name": self._agent_name,
-                    "user_name": self._user_name,
+                    "agent_name": self.__agent_identity.name,
+                    "user_name": self.get_user_name(conversation),
                     "tool_information": tool_information,
                     "conversation": conversation_text,
                     "prior_message": last_message,
@@ -246,16 +283,10 @@ class SimpleChat(Chat):
 
     def chat(
         self,
-        message: Union[str, Message],
+        message: Message,
         conversation: Conversation,
         context: Optional[Context] = None,
     ) -> Message:
-        if isinstance(message, str):
-            message = Message(
-                author=self._user_name,
-                content=message,
-            )
-
         tasks = self._identify_tasks(context, conversation)
 
         results = []
@@ -265,7 +296,7 @@ class SimpleChat(Chat):
         response = self._generate_response(context, conversation, results)
 
         return Message(
-            author=self._agent_name,
+            author=self.__agent_identity,
             content=response,
         )
 

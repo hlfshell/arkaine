@@ -17,13 +17,11 @@ class Chat(ABC):
 
     def __init__(
         self,
+        name: str,
         llm: LLM,
         store: ConversationStore,
         tools: List[Tool] = [],
-        agent_name: str = "Arkaine",
-        user_name: str = "User",
         conversation_auto_active: float = 60.0,
-        name: str = "chat_agent",
         tool_timeout: float = 30.0,
         id: Optional[str] = None,
     ):
@@ -35,13 +33,10 @@ class Chat(ABC):
         self.__id = id
         self.__name = name
         self.__type = "chat"
-
-        self.description = f"A chat agent between {agent_name} and {user_name}"
+        self.description = "A chat agent"
 
         self._llm = llm
         self._store = store
-        self._agent_name = agent_name
-        self._user_name = user_name
         self._conversation_auto_active = conversation_auto_active
         self._tool_timeout = tool_timeout
         self._tools = {tool.tname: tool for tool in tools}
@@ -81,12 +76,15 @@ class Chat(ABC):
     ) -> Union[str, Message]:
         pass
 
-    def _get_active_conversation(self, new_message: Message) -> Conversation:
+    def _get_active_conversation(
+        self, new_message: Message, conversation: Optional[Conversation] = None
+    ) -> Conversation:
         try:
+            participants = conversation.participants if conversation else []
             conversations = self._store.get_conversations(
                 order="newest",
                 limit=1,
-                participants=[self._agent_name, new_message.author],
+                participants=participants + [new_message.author],
             )
             last_conversation = (
                 None if len(conversations) == 0 else conversations[0]
@@ -115,28 +113,23 @@ class Chat(ABC):
     def _chat_func(
         self,
         context: Context,
-        message: Union[str, Message],
+        message: Message,
         conversation: Optional[Conversation] = None,
     ) -> str:
-        if isinstance(message, str):
-            message = Message(
-                author=self._user_name,
-                content=message,
-            )
-
         if conversation is None:
             # Load the last conversation
-            conversation = self._get_active_conversation(message)
+            conversation = self._get_active_conversation(message, conversation)
 
-        conversation.append(message)
+        conversation.add_message(message)
+        context["conversation"] = conversation
 
         response = self.chat(message, conversation, context=context)
         if response is None:
             response = ""
         if isinstance(response, str):
-            response = Message(author=self._agent_name, content=response)
+            response = Message(author=self._agent_identity, content=response)
 
-        conversation.append(response)
+        conversation.add_message(response)
         conversation.label(self._llm)
 
         self._store.save_conversation(conversation)
@@ -232,15 +225,13 @@ class Chat(ABC):
             if message is None:
                 raise ValueError("message is required")
 
-            if not isinstance(message, str) and not isinstance(
-                message, Message
-            ):
-                raise ValueError("message must be a string or a Message")
+            if not isinstance(message, Message):
+                raise ValueError("message must be a Message")
 
             if conversation is not None and not isinstance(
                 conversation, Conversation
             ):
-                raise ValueError("conversation must be a Conversation")
+                raise ValueError("conversation must be of type  Conversation")
 
             ctx.args = {
                 "message": message,
