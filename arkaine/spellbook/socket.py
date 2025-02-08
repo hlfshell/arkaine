@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import json
 import threading
-from typing import Any, Dict, Set
+from typing import Any, Dict, List, Set
 
 from websockets.server import WebSocketServerProtocol
 from websockets.sync.server import serve
 
+from arkaine.chat.conversation import Conversation
 from arkaine.internal.registrar import Registrar
+from arkaine.internal.registrar.registrar import Update
 from arkaine.tools.context import Attachable, Context
 from arkaine.tools.datastore import ThreadSafeDataStore
 from arkaine.tools.events import Event, ToolException, ToolReturn
@@ -32,16 +34,21 @@ class SpellbookSocket:
         self.active_connections: Set[WebSocketServerProtocol] = set()
         self._contexts: Dict[str, Context] = {}
         self._producers: Dict[str, Dict[str, Attachable]] = {}
+        self._conversations: Dict[str, Conversation] = {}
+        self._updates: Dict[str, Update] = {}
+        self._update_ids: List[str] = []
         self._server = None
         self._server_thread = None
         self._running = False
         self._lock = threading.Lock()
         self.__max_contexts = max_contexts
+        self.__max_updates = 1024
 
         Registrar.enable()
 
         Registrar.add_on_producer_register(self._on_producer_register)
         Registrar.add_on_producer_call(self._on_producer_call)
+        Registrar.add_on_update_listener("all", self._broadcast_update)
 
         with self._lock:
             producers = Registrar.get_producers()
@@ -73,6 +80,11 @@ class SpellbookSocket:
 
             # Add our context creation listener to the producer
             producer.add_on_call_listener(self._on_producer_call)
+
+            if producer.type == "chat":
+                producer.add_on_conversation_listener(
+                    self._broadcast_conversation
+                )
 
         self._broadcast_producer(producer)
 
@@ -163,6 +175,14 @@ class SpellbookSocket:
                         )
                     except Exception as e:
                         print(f"Failed to send initial context state: {e}")
+
+                for update in self._updates.values():
+                    try:
+                        websocket.send(
+                            json.dumps({"type": "update", "data": update})
+                        )
+                    except Exception as e:
+                        print(f"Failed to send update: {e}")
 
             # Keep connection alive until client disconnects or server stops
             while self._running:
@@ -287,6 +307,25 @@ class SpellbookSocket:
                 },
             }
         )
+
+    def _broadcast_update(self, update: Update):
+        with self._lock:
+            json = update.to_json()
+
+            if update.target not in self._updates:
+                self._updates[update.target] = json
+            else:
+                old_update = self._updates[update.target]
+                update_time = old_update["time"]
+                if json["time"] > update_time:
+                    self._updates[update.target] = json
+
+            self.__update_ids.append(update.target)
+            if len(self._updates_ids) > self.__max_updates:
+                id = self._updates_ids.pop(0)
+                del self._updates[id]
+
+        self._broadcast_to_clients({"type": "update", "data": json})
 
     def start(self):
         """Start the WebSocket server in a background thread"""

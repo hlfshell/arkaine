@@ -144,7 +144,8 @@
                     @back="clearSelectedProducer" @execute="executeProducer"></llm-view>
             </template>
             <template v-else-if="selectedProducer?.type === 'chat'">
-                <chat-view :chat="selectedProducer" @back="clearSelectedProducer" @send-message="executeProducer" />
+                <chat-view :chat="selectedProducer" :conversations="sortedConversations" @back="clearSelectedProducer"
+                    @send-message="executeProducer" />
             </template>
             <template v-else>
                 <div class="contexts">

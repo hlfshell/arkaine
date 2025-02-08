@@ -16,6 +16,7 @@ const app = Vue.createApp({
         return {
             producers: new Map(),
             contextsAll: new Map(),
+            conversationsAll: new Map(),
             ws: null,
             retryCount: 0,
             settings: {
@@ -123,6 +124,27 @@ const app = Vue.createApp({
 
             return sorted;
         },
+        sortedConversations() {
+            if (!this.selectedProducer) {
+                console.log("No producer selected");
+                return [];
+            }
+            console.log("Conversations all", this.conversationsAll);
+            console.log("Selected producer", this.selectedProducer);
+
+            // Filter conversations that contain messages from the selected producer
+            const filteredConversations = Array.from(this.conversationsAll.values())
+                .filter(conv => conv.messages.some(msg => msg.author.id === this.selectedProducer.id));
+
+            console.log("Filtered conversations", filteredConversations);
+
+            // Sort by most recent message
+            return filteredConversations.sort((a, b) => {
+                const aLastMessage = a.messages[a.messages.length - 1];
+                const bLastMessage = b.messages[b.messages.length - 1];
+                return (bLastMessage?.timestamp || 0) - (aLastMessage?.timestamp || 0);
+            });
+        }
     },
     methods: {
         formatTimestamp(timestamp) {
@@ -243,6 +265,25 @@ const app = Vue.createApp({
 
             // Force reactivity by updating both maps
             this.contextsAll.set(contextId, { ...context });
+
+            // If this is a chat message event, update the conversation
+            if (eventData.type === 'chat_message') {
+                const conversationId = eventData.data.conversation_id;
+                const conversation = this.conversationsAll.get(conversationId) || {
+                    id: conversationId,
+                    producer_id: data.producer_id,
+                    messages: []
+                };
+
+                conversation.messages.push({
+                    sender: eventData.data.sender,
+                    content: eventData.data.content,
+                    timestamp: eventData.timestamp
+                });
+
+                this.conversationsAll.set(conversationId, conversation);
+                this.conversationsAll = new Map(this.conversationsAll);
+            }
         },
         handleDataStore(data) {
             const contextId = data.data.context;  // Note: Changed from data.context to data.data.context
@@ -329,6 +370,18 @@ const app = Vue.createApp({
                         this.handleDataStore(data);
                     } else if (data.type === 'datastore_update') {
                         this.handleDataStoreUpdate(data);
+                    } else if (data.type === 'update') {
+                        let update;
+                        if (data.data) {
+                            update = data.data;
+                        } else {
+                            update = data;
+                        }
+                        const subtype = update.type;
+                        if (subtype === "conversation") {
+                            let timestamp = new Date(update.time).getTime() / 1000;
+                            this.handleConversation(update.data, timestamp);
+                        }
                     }
                 };
 
@@ -380,6 +433,8 @@ const app = Vue.createApp({
         },
         selectProducer(producer) {
             this.selectedProducer = producer;
+            this.showTools = false;
+            this.searchQuery = '';
         },
         clearSelectedProducer() {
             this.selectedProducer = null;
@@ -394,7 +449,10 @@ const app = Vue.createApp({
                 type: 'execution',
                 producer_id: data.attached_id,
                 producer_type: data.attached_type,
-                args: data.args
+                args: {
+                    ...data.args,
+                    conversation_id: data.conversation_id // Add conversation ID if present
+                }
             };
 
             this.ws.send(JSON.stringify(message));
@@ -424,6 +482,21 @@ const app = Vue.createApp({
 
             // Finally send the message
             this.ws.send(JSON.stringify(message));
+        },
+        handleConversation(data, timestamp) {
+            let conversation = data;
+            conversation.timestamp = timestamp;
+            const exists = this.conversationsAll.has(conversation.id)
+            if (
+                !exists ||
+                (exists &&
+                    conversation.timestamp > this.conversationsAll.get(conversation.id).timestamp)
+            ) {
+                this.conversationsAll.set(conversation.id, conversation);
+            }
+
+            // Force Vue reactivity
+            this.conversationsAll = new Map(this.conversationsAll);
         }
     },
     mounted() {

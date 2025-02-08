@@ -2011,7 +2011,7 @@ input:checked+.slider:before {
 
 .chat-message {
     margin-bottom: 12px;
-    max-width: 70%;
+    max-width: 60%;
     padding: 8px 12px;
     border-radius: 6px;
     line-height: 1.4;
@@ -2068,3 +2068,80 @@ input:checked+.slider:before {
 .chat-send-button:hover {
     background: #218838;
 }
+
+/* Make the back button narrower & aligned */
+.chat-view .back-button {
+    display: inline-block;
+    /* so it doesn't stretch full width */
+    width: auto;
+    margin-bottom: 8px;
+}
+
+/* You might also want to tweak some spacing in chat messages
+   to further refine the look, or set a max overall width, e.g.: */
+.chat-view {
+    max-width: 800px;
+    /* optional: keep chat from stretching too wide */
+    margin-right: auto;
+    margin-left: auto;
+}
+
+/* The container that holds the conversation list + the main chat */
+.chat-view-container {
+    display: flex;
+    flex-direction: row;
+    gap: 16px;
+    width: 100%;
+    max-width: 1200px;
+    /* or some desired max */
+    margin: 0 auto;
+    /* center horizontally if you like */
+}
+
+/* The left conversation panel */
+.conversation-list {
+    width: 200px;
+    background-color: var(--bg-content);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.conversation-list ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.conversation-list li {
+    padding: 8px;
+    margin-bottom: 4px;
+    border-radius: 4px;
+    cursor: pointer;
+    background: var(--hover-bg);
+}
+
+.conversation-list li.active {
+    background: #007bff;
+    color: white;
+    font-weight: bold;
+}
+
+/* The main chat column is .chat-view (same as before).
+   Because we wrap it in .chat-view-container, we can keep it
+   narrower, or let it fill the rest. */
+.chat-view {
+    flex: 1;
+    /* fill remaining space */
+    max-width: 800px;
+    /* or remove if you prefer */
+}
+
+/* Make sure the .chat-message max-width is a bit smaller for neatness */
+.chat-message {
+    max-width: 60%;
+}
+
+/* The rest of your existing chat styles remain as is. */
