@@ -66,7 +66,7 @@ class OpenAI(LLM):
         self,
         model: str = "gpt-3.5-turbo",
         temperature: float = 0.7,
-        max_tokens: int = 1024,
+        max_tokens: Optional[int] = None,
         api_key: Optional[str] = None,
         context_length: Optional[int] = None,
         tokens_param: Optional[str] = None,
@@ -90,9 +90,10 @@ class OpenAI(LLM):
 
         # Handle tokens_param
         if tokens_param is None:
-            if self.model not in self.MODELS:
+            if self.model not in self.MODELS and self.max_tokens is None:
                 raise ValueError(
-                    f"Model {self.model} not found, tokens_param must be provided"
+                    f"Model {self.model} not found, tokens_param must be "
+                    "provided"
                 )
             self.__tokens_param = self.MODELS[self.model]["tokens_param"]
         elif tokens_param not in ["max_tokens", "max_completion_tokens"]:
@@ -130,7 +131,8 @@ class OpenAI(LLM):
             params["temperature"] = self.temperature
 
         # Use the appropriate tokens parameter based on the model
-        params[self.__tokens_param] = self.max_tokens
+        if self.max_tokens is not None:
+            params[self.__tokens_param] = self.max_tokens
 
         return (
             self.__client.chat.completions.create(**params)
