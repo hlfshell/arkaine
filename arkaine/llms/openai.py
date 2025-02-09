@@ -82,7 +82,8 @@ class OpenAI(LLM):
         if context_length is None:
             if self.model not in self.MODELS:
                 raise ValueError(
-                    f"Model {self.model} not found, context_length must be provided"
+                    f"Model {self.model} not found, context_length must be "
+                    "provided"
                 )
             self.__context_length = self.MODELS[self.model]["context_length"]
         else:
