@@ -9,12 +9,11 @@ from arkaine.tools.agent import Prompt
 
 class Google(LLM):
 
-    CONTEXT_LENGTHS = {
-        "gemini-pro": 30720,
-        "gemini-1.0-pro": 30720,
-        "gemini-1.0-pro-latest": 30720,
-        "gemini-1.0-pro-vision": 12288,
-        "gemini-1.0-pro-vision-latest": 12288,
+    MODELS = {
+        "gemini-pro": {"context_length": 30720},
+        "gemini-1.0-pro": {"context_length": 30720},
+        "gemini-2.0-flash-001": {"context_length": 1_000_000},
+        "gemini-2.0-pro-exp-02-05": {"context_length": 2_000_000},
     }
 
     def __init__(
@@ -39,8 +38,8 @@ class Google(LLM):
 
         if context_length:
             self.__context_length = context_length
-        elif model in self.CONTEXT_LENGTHS:
-            self.__context_length = self.CONTEXT_LENGTHS[model]
+        elif model in Google.MODELS:
+            self.__context_length = Google.MODELS[model]["context_length"]
         else:
             raise ValueError(
                 f"Unknown model: {model} - must specify context length"

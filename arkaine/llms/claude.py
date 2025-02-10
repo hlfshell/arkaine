@@ -12,13 +12,12 @@ class Claude(LLM):
     Claude implements the LLM interface for Anthropic's Claude models.
     """
 
-    CONTEXT_LENGTHS = {
-        "claude-3-opus-20240229": 4096,
-        "claude-3-sonnet-20240229": 4096,
-        "claude-3-haiku-20240307": 4096,
-        "claude-2.1": 4096,
-        "claude-2.0": 4096,
-        "claude-instant-1.2": 4096,
+    MODELS = {
+        "claude-3-opus-20240229": {"context_length": 4096},
+        "claude-3-sonnet-20240229": {"context_length": 4096},
+        "claude-3-haiku-20240307": {"context_length": 4096},
+        "claude-2.1": {"context_length": 4096},
+        "claude-2.0": {"context_length": 4096},
     }
 
     def __init__(
@@ -53,8 +52,8 @@ class Claude(LLM):
 
         if context_length:
             self.__context_length = context_length
-        elif model in self.CONTEXT_LENGTHS:
-            self.__context_length = self.CONTEXT_LENGTHS[model]
+        elif model in Claude.MODELS:
+            self.__context_length = Claude.MODELS[model]["context_length"]
         else:
             raise ValueError(f"Unknown model: {model}")
 
@@ -74,7 +73,7 @@ class Claude(LLM):
         Returns:
             The generated completion text
         """
-        # Convert the messages format if needed
+        # Convert system messages to user messages as per Anthropic's format
         messages = []
         for msg in prompt:
             if msg["role"] == "system":
@@ -82,25 +81,22 @@ class Claude(LLM):
             else:
                 messages.append(msg)
 
-        messages.append(
-            {
-                "role": "assistant",
-                "content": "I understand. I will follow these instructions.",
-            }
-        )
-
         attempts = 0
         while True:
             attempts += 1
             if attempts > 3:
                 raise Exception("Failed to get a response from Claude")
-            response = self.__client.messages.create(
-                model=self.__model,
-                messages=messages,
-                temperature=self.default_temperature,
-                max_tokens=self.context_length,
-            )
-            if response.content:
-                break
 
-        return response.content[0].text
+            try:
+                response = self.__client.messages.create(
+                    model=self.__model,
+                    messages=messages,
+                    temperature=self.default_temperature,
+                    max_tokens=self.context_length,
+                )
+                # The response content is now directly accessible
+                return response.content[0].text
+            except Exception as e:
+                if attempts == 3:
+                    raise e
+                continue
