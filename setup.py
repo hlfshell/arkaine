@@ -1,4 +1,20 @@
 from setuptools import find_packages, setup
+from typing import List
+
+
+def read_requirements(filename: str) -> List[str]:
+    """Read requirements from file, cleaning up formatting."""
+    with open(filename) as f:
+        requirements = []
+        for line in f:
+            line = line.strip()
+            # Skip empty lines, comments, and section headers
+            if not line or line.startswith("#") or line.startswith("["):
+                continue
+            # Keep version specifiers to ensure reproducible builds
+            requirements.append(line)
+        return requirements
+
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
@@ -13,16 +29,10 @@ setup(
     long_description_content_type="text/markdown",
     url="https://github.com/hlfshell/arkaine",
     packages=find_packages(),
-    install_requires=[],
+    install_requires=read_requirements("requirements.txt"),
     extras_require={
         "dev": [
             "pytest",
-        ],
-        "sms": [
-            "twilio",
-            "boto3",
-            "messagebird",
-            "vonage",
         ],
     },
     python_requires=">=3.8",  # Specify minimum Python version
