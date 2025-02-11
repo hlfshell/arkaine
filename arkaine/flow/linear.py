@@ -1,8 +1,7 @@
-import inspect
 from typing import Any, Callable, List, Optional, Union
 
 from arkaine.tools.events import ToolReturn
-from arkaine.tools.tool import Argument, Context, Example, Tool
+from arkaine.tools.tool import Argument, Context, Example, Result, Tool
 from arkaine.tools.toolify import toolify
 
 
@@ -53,6 +52,8 @@ class Linear(Tool):
         arguments: Optional[List[Argument]],
         steps: List[Union[Tool, Callable[[Context, Any], Any]]],
         examples: List[Example] = [],
+        result: Optional[Result] = None,
+        id: Optional[str] = None,
     ):
         self.steps = [
             step if isinstance(step, Tool) else toolify(step) for step in steps
@@ -67,6 +68,8 @@ class Linear(Tool):
             description=description,
             func=self.invoke,
             examples=examples,
+            result=result,
+            id=id,
         )
 
     def invoke(self, context: Context, **kwargs) -> Any:

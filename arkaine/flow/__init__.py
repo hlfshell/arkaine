@@ -5,6 +5,7 @@ from arkaine.flow.linear import Linear
 from arkaine.flow.on_error import OnError
 from arkaine.flow.parallel_list import ParallelList
 from arkaine.flow.retry import Retry
+from arkaine.flow.dowhile import DoWhile
 
 __all__ = [
     "Linear",
@@ -14,4 +15,5 @@ __all__ = [
     "Retry",
     "OnError",
     "FireAndForget",
+    "DoWhile",
 ]
