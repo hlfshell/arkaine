@@ -1,0 +1,21 @@
+Given the following contents from web search query of:
+
+```${query}```
+
+...generate a list of learnings from the content listed below. Return a maximum of ${max_learnings} learnings, but feel free to return less if the contents are clear. It is crucial that each learning is unique and not similar to each other. The learnings should be approximately one to two paragraphs, to the point, detailed, and information dense. Whenever possible, explain further. You **MUST** include any entities like people, places, companies, products, things, etc in the learnings, as well as any exact metrics, numbers, dates, or equations. Wrap any code in proper markdown, and equations in markdown friendly LaTeX. The learnings will be used to research the topic further and thus must represent all we learned from the given sources. Consider that everything the user requested to learn about must be explained from sources and thus you must include important facts in your findings.
+
+Findings should be output in the following format:
+
+```
+SUMMARY: A one sentence summary of the finding
+FINDING:
+The body of your finding, paragraph(s) of detailed, information dense facts.
+
+SUMMARY: A one sentence summary of the next finding
+The body of our second finding
+```
+
+Contents:
+{content}
+
+Your findings:

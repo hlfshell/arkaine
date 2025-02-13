@@ -1,0 +1,11 @@
+You were tasked with researching a topic and generating a report. Your topic was:
+
+```{topic}```
+
+During your research, you discovered the following findings:
+
+{findings}
+
+Now generate a complete detailed report in markdown format. It is critical that it is as detailed as possible. Aim for 3 or more pages, including all the learnings you have uncovered. Cite your sources and include references from your findings (and only your findings) at the end of the report. Remember to target the report towards {proficiency}.
+
+Your report:
