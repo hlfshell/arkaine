@@ -90,6 +90,10 @@ class Parser:
         return patterns
 
     def parse(self, text: str) -> Dict:
+        """
+        Parses the text into a structure of lists (one list per label).
+        This original parse method lumps together values for each label into arrays.
+        """
         text = self._clean_text(text)
         lines = [line.rstrip() for line in text.split("\n")]
 
@@ -117,6 +121,71 @@ class Parser:
 
         return self._process_results(raw_data)
 
+    def parse_blocks(self, text: str, block_label: str) -> List[Dict]:
+        """
+        Parses the text into multiple blocks. Each block starts whenever the specified
+        'block_label' is encountered. The label definitions and validations still apply,
+        but the result is now a list of dictionaries (one per block).
+
+        Example:
+            blocks = parser.parse_blocks(text, 'resource')
+            # => [
+            #     {"resource": "...", "reason": "...", "recommended": "..."},
+            #     {"resource": "...", "reason": "...", "recommended": "..."},
+            #     ...
+            # ]
+
+        Args:
+            text (str): The text to parse.
+            block_label (str): The label that signifies the start of a new block.
+
+        Returns:
+            List[Dict]: A list of parsed blocks, where each block is
+                        a dict of label -> list-of-values or single value
+        """
+        text = self._clean_text(text)
+        lines = [line.rstrip() for line in text.split("\n")]
+        block_label_lower = block_label.lower()
+
+        blocks = []
+        raw_data = {label.name: [] for label in self.__labels}
+        current_label = None
+        current_entry = ""
+        have_any_data = False
+
+        for line in lines:
+            label_name, value = self._parse_line(line)
+
+            if label_name:
+                # (1) First finalize the previous label for the "old" block
+                if current_label is not None:
+                    self._finalize_entry(raw_data, current_label, current_entry)
+
+                # (2) If it's a new block label and we already have data, finalize the old block
+                if label_name.lower() == block_label_lower and have_any_data:
+                    # Debug: see raw_data for the old block
+                    blocks.append(self._process_results(raw_data))
+                    raw_data = {label.name: [] for label in self.__labels}
+
+                # (3) Now set up the new label
+                current_label = label_name
+                current_entry = value
+                have_any_data = True
+            else:
+                # no label => treat as continuation
+                if current_label:
+                    current_entry += (
+                        "\n" + line.strip() if current_entry else line.strip()
+                    )
+
+        # end of loop: finalize the last label in the last block
+        if current_label:
+            self._finalize_entry(raw_data, current_label, current_entry)
+        if have_any_data:
+            blocks.append(self._process_results(raw_data))
+
+        return blocks
+
     def _clean_text(self, text):
         # First, handle any code blocks
         def extract_content(match):
@@ -136,37 +205,32 @@ class Parser:
         return text.strip()
 
     def _parse_line(self, line):
+        # 1) Try pattern list
         for label_name, pattern in self.__patterns:
             if match := pattern.match(line):
-                # Check to see if this is indeed a seperator
-                # or if it is a continuation of the previous label
                 value_start = match.end()
                 value = line[value_start:].strip()
                 return label_name, value
 
-        # Check if the line starts with a label name but is not a valid entry
+        # 2) Fallback
         for label_name in self.__label_map:
-            if line.strip().startswith(label_name):
-                # Check if the line has a valid separator
-                if not re.search(r"[:~\-]", line):
-                    return (
-                        None,
-                        line.strip(),
-                    )  # Treat as continuation, return the line
+            if line.strip().lower().startswith(label_name.lower()):
+                remain = line.strip()[len(label_name) :]
+                if re.match(r"^\s*[:~\-]+", remain):
+                    # returns label
+                    content = re.sub(r"^\s*[:~\-]+", "", remain).strip()
+                    return label_name, content
+                else:
+                    # treat as continuation
+                    return None, line.strip()
 
-                # Return label and value
-                return (
-                    label_name,
-                    line[len(label_name) :].strip(),
-                )
-
+        # No match; treat as continuation
         return None, None
 
     def _finalize_entry(self, data, label_name, entry):
         if entry is None:
             entry = ""
         content = entry.strip()
-        # label_def = self.__label_map[label_name.lower()]
 
         if content:
             if label_name not in data:
