@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import inspect
 import json
+import pathlib
 import re
+from threading import Lock
 from typing import Any, Dict, List, Optional, Tuple
 
 
@@ -116,3 +119,46 @@ class PromptTemplate:
         variables."""
         template = "{agent_explanation}\n\n{task}"
         return cls(template)
+
+
+class PromptLoader:
+    """
+    PromptLoader is a class designed to load prompts from a directory relative
+    to the caller's file. It assumes that prompts:
+
+    A) Are in the "prompts" directory
+    B) Have the extension of ".prompt".
+
+    PromptLoader is thread safe and will cache prompts in memory, preventing
+    multiple loads, but also only loading prompts when needed.
+
+    Note: This class is not meant to be instantiated.
+    """
+
+    _lock = Lock()
+    _prompts: Dict[str, PromptTemplate] = {}
+
+    def __new__(cls, *args, **kwargs):
+        raise TypeError(
+            "PromptLoader may not be instantiated. "
+            "Please use its class methods directly."
+        )
+
+    @classmethod
+    def load_prompt(cls, name: str) -> str:
+        """
+        Loads a report prompt from a file in the "prompts" directory relative
+        to the caller's file and caches it.
+        """
+        # Get the caller's frame info
+        caller_frame = inspect.stack()[1]
+        caller_filepath = caller_frame.filename
+        caller_directory = pathlib.Path(caller_filepath).parent
+
+        # Construct the file path relative to the caller's file
+        filepath = caller_directory / "prompts" / f"{name}.prompt"
+
+        with cls._lock:
+            if filepath not in cls._prompts:
+                cls._prompts[filepath] = PromptTemplate.from_file(filepath)
+            return cls._prompts[filepath]
