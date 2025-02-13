@@ -1,10 +1,9 @@
-import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Callable, Dict, Iterable, List, Optional
+from typing import Any, Callable, Iterable, List, Optional, Union
 
+from arkaine.tools.toolify import toolify
 from arkaine.tools.events import ToolReturn
 from arkaine.tools.tool import Argument, Context, Tool
-from arkaine.tools.wrapper import Wrapper
 
 
 class ParallelList(Tool):
@@ -56,7 +55,7 @@ class ParallelList(Tool):
 
     def __init__(
         self,
-        tool: Tool,
+        tool: Union[Tool, Callable[[Context, Any], Any]],
         arguments: Optional[List[Argument]] = None,
         item_formatter: Optional[Callable[[Any], Any]] = None,
         result_formatter: Optional[Callable[[List[Any]], Any]] = None,
@@ -67,6 +66,11 @@ class ParallelList(Tool):
         name: Optional[str] = None,
         description: Optional[str] = None,
     ):
+        if isinstance(tool, Tool):
+            self.tool = tool
+        else:
+            self.tool = toolify(tool)
+
         if completion_strategy not in ["all", "any", "n", "majority"]:
             raise ValueError(
                 "completion_strategy must be one of: all, any, n, majority"
@@ -87,19 +91,17 @@ class ParallelList(Tool):
         self._error_strategy = error_strategy
         self._threadpool = ThreadPoolExecutor(
             max_workers=max_workers,
-            thread_name_prefix=f"{name or tool.name}::parallel",
+            thread_name_prefix=f"{name or self.tool.name}::parallel",
         )
 
         if not name:
-            name = f"{tool.name}::parallel_list"
+            name = f"{self.tool.name}::parallel_list"
 
         if not description:
             description = (
-                f"Executes {tool.name} in parallel across a list of inputs. "
-                f"{tool.name} is:\n{tool.description}"
+                f"Executes {self.tool.name} in parallel across a list of "
+                f"inputs. {self.tool.name} is:\n{self.tool.description}"
             )
-
-        self.tool = tool
 
         # Build the list of arguments argument based on the tool's
         # argument's descriptions
@@ -109,7 +111,7 @@ class ParallelList(Tool):
         if arguments:
             target_args = arguments
         else:
-            target_args = tool.args
+            target_args = self.tool.args
 
         for arg in target_args:
             list_arg_description += f"\n- {arg.name} ({arg.type})"
@@ -133,7 +135,7 @@ class ParallelList(Tool):
             description=description,
             args=args,
             func=self.parallelize,
-            examples=tool.examples,
+            examples=self.tool.examples,
         )
 
     def parallelize(self, context: Context, **kwargs) -> List[Any]:
@@ -149,8 +151,7 @@ class ParallelList(Tool):
 
         # Fire off the tool in parallel with the executor for each input
         futures = {
-            # self._threadpool.submit(self.tool.invoke, context, **kwargs): idx
-            self._threadpool.submit(self.tool, context, **kwargs): idx
+            self._threadpool.submit(self.tool, context, kwargs): idx
             for idx, kwargs in enumerate(input)
         }
 
