@@ -84,7 +84,11 @@ class Linear(Tool):
                 continue
             context["step"] = index
 
-            output = step(context, output)
+            try:
+                output = step(context, output)
+            except Exception as e:
+                name = f"Step Index {index}" + " - " + step.name
+                raise type(e)(f"Error in {name}: {str(e)}") from e
 
         return output
 
