@@ -16,9 +16,9 @@ from arkaine.tools.argument import Argument
 from arkaine.tools.context import Context
 from arkaine.tools.result import Result
 from arkaine.tools.tool import Tool
+from arkaine.utils.resource import Resource
 from arkaine.utils.templater import PromptTemplate
 from arkaine.utils.website import Website
-from arkaine.utils.resource import Resource
 
 
 def get_base_prompt() -> Prompt:
@@ -34,92 +34,6 @@ def get_base_prompt() -> Prompt:
             "now": datetime.now().strftime("%Y-%m-%d"),
         }
     )
-
-
-def is_query_generator(tool: Tool) -> bool:
-    if not isinstance(tool, Tool):
-        return False
-    elif len(tool.args) == 1 or len(tool.args) == 2:
-        if len(tool.args) == 1:
-            return tool.args[0].name == "topic"
-        else:
-            for arg in tool.args:
-                if arg.name == "topic":
-                    continue
-                elif arg.name == "num_queries":
-                    continue
-                else:
-                    return False
-
-            return True
-    else:
-        return False
-
-
-def is_generator(tool: Tool) -> bool:
-    if not isinstance(tool, Tool):
-        return False
-    elif len(tool.args) == 1 or len(tool.args) == 2:
-        # If there is one arg, it must be the name of topic
-        # If there are two args, the second arg must be findings
-        if len(tool.args) == 1:
-            return tool.args[0].name == "topic"
-        else:
-            for arg in tool.args:
-                if arg.name == "topic":
-                    continue
-                elif arg.name == "findings":
-                    continue
-                else:
-                    return False
-
-            return True
-    else:
-        return False
-
-
-def is_resource_judge(tool: Tool) -> bool:
-    if not isinstance(tool, Tool):
-        return False
-    elif len(tool.args) == 1 or len(tool.args) == 2:
-        if len(tool.args) == 1:
-            return tool.args[0].name == "topic"
-        else:
-            for arg in tool.args:
-                if arg.name == "topic":
-                    continue
-                elif arg.name == "resources":
-                    continue
-                else:
-                    return False
-            return True
-    else:
-        return False
-
-
-class Finding:
-
-    def __init__(self, source: str, summary: str, content: str):
-        self.source = source
-        self.summary = summary
-        self.content = content
-
-    def to_json(self):
-        return {
-            "source": self.source,
-            "content": self.content,
-            "summary": self.summary,
-        }
-
-    @classmethod
-    def from_json(cls, json: dict):
-        return cls(json["source"], json["summary"], json["content"])
-
-    def __str__(self):
-        return f"{self.source}\n{self.summary}\n{self.content}"
-
-    def __repr__(self):
-        return self.__str__()
 
 
 class DeepWebResearcher(DoWhile):
@@ -261,7 +175,7 @@ def save(resources):
     raise "dead"
 
 
-class Research(Linear):
+class Research_good(Linear):
     def __init__(
         self,
         llm: LLM,
@@ -461,91 +375,6 @@ class Research(Linear):
     #     return self._llm(context, prompt)
 
 
-class GenerateFinding(Agent):
-
-    def __init__(self, llm: LLM, max_learnings: int = 5):
-        super().__init__(
-            name="generate_findings",
-            description="Generate findings from a given content and query",
-            args=[
-                Argument(
-                    "topic",
-                    "The topic to research",
-                    "str",
-                ),
-                Argument(
-                    "resource",
-                    "The content to generate findings from",
-                    "Resource",
-                ),
-            ],
-            llm=llm,
-        )
-
-        self.__max_learnings = max_learnings
-        self.__parser = Parser(
-            [
-                Label(name="summary", required=True),
-                Label(name="finding", required=True),
-            ]
-        )
-        self.__findings_template = PromptTemplate.from_file(
-            os.path.join(
-                pathlib.Path(__file__).parent,
-                "prompts",
-                "generate_findings.prompt",
-            )
-        )
-
-    def prepare_prompt(
-        self, context: Context, topic: str, resource: Resource
-    ) -> Prompt:
-        try:
-            website: Website = Website(
-                resource.source, resource.name, snippet=resource.description
-            )
-            markdown = website.get_markdown()
-            markdown = markdown[
-                0:25_000
-            ]  # TODO read through the whole document and paginate
-            content = (
-                f"URL: {website.url}\nTitle: {website.title}\n\n{markdown}---"
-            )
-        except Exception as e:
-            print(f"Error getting markdown from {resource.source}: {e}")
-            raise e
-
-        prompt = get_base_prompt()
-
-        prompt.extend(
-            self.__findings_template.render(
-                {
-                    "content": content,
-                    "query": topic,
-                    "max_learnings": self.__max_learnings,
-                }
-            )
-        )
-
-    def extract_result(self, context: Context, output: str) -> List[Finding]:
-        labels = self.__parser.parse_blocks(output, "summary")
-
-        resource: Resource = context.args["resource"]
-        # TODO use resource directly
-        source = f"{resource.name} - {resource.source}"
-
-        findings: List[Finding] = []
-        for label in labels:
-            if label["errors"]:
-                continue
-
-            summary = label["data"]["summary"]
-            content = label["data"]["finding"]
-            findings.append(Finding(source, summary, content))
-
-        return findings
-
-
 class ReportGenerator(Agent):
     def __init__(self, llm: LLM):
         super().__init__(
@@ -591,6 +420,18 @@ class ReportGenerator(Agent):
     def extract_result(self, context: Context, output: str) -> str:
         return output
 
+
+
+class WebResearcher(???):
+                    
+    def _fetch_site_content(self, site: Website) -> Optional[str]:
+        try:
+            markdown = site.get_markdown()
+            markdown = markdown[0:25_000]
+            return f"URL: {site.url}\nTitle: {site.title}\n\n{markdown}---"
+        except Exception as e:
+            print(f"Error getting markdown from {site.url}: {e}")
+            return None
 
 class WebResearcher2(Tool):
     def __init__(
