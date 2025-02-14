@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 from arkaine.llms.llm import LLM
 from arkaine.tools.agent import Agent
@@ -23,10 +23,14 @@ class AbstractTool(Tool, ABC):
     """
 
     # Class variable to store argument rules
-    _rules: Dict[str, List[str]] = {
-        "required_args": [],  # List of required argument names
-        "allowed_args": [],  # List of allowed argument names
-        "required_result_types": [],
+    _rules: Dict[str, Dict[str, List[Union[str, Argument]]]] = {
+        "args": {
+            "required": [],
+            "allowed": [],
+        },
+        "result": {
+            "required": None,
+        },
     }
 
     def __init__(self, *args, **kwargs):
@@ -62,36 +66,59 @@ class AbstractTool(Tool, ABC):
         provided_args = {arg.name: arg for arg in args}
 
         # Check required arguments
-        for required_arg in self._rules["required_args"]:
-            if required_arg.name not in provided_args:
-                raise ValueError(
-                    f"Required argument '{required_arg.name} - "
-                    f"{required_arg.type_str}' is missing for "
-                    f"{self.__class__.__name__}"
-                )
-            # Check that the provided argument has the expected type.
-            provided = provided_args[required_arg.name]
-            if required_arg.type_str.lower() != provided.type_str.lower():
-                raise ValueError(
-                    f"Required argument '{required_arg.name}' is of type "
-                    f"{required_arg.type_str} but provided argument is of "
-                    f"type {provided.type_str}"
-                )
+        for required_arg in self._rules["args"]["required"]:
+            if isinstance(required_arg, Argument):
+                if required_arg.name not in provided_args:
+                    raise ValueError(
+                        f"Required argument '{required_arg.name} - "
+                        f"{required_arg.type_str}' is missing for "
+                        f"{self.__class__.__name__}"
+                    )
+                # Check that the provided argument has the expected type.
+                provided = provided_args[required_arg.name]
+                if required_arg.type_str.lower() != provided.type_str.lower():
+                    raise ValueError(
+                        f"Required argument '{required_arg.name}' is of type "
+                        f"{required_arg.type_str} but provided argument is of "
+                        f"type {provided.type_str}"
+                    )
+            else:
+                # Argument is a string, so just check the name
+                if required_arg not in provided_args:
+                    raise ValueError(
+                        f"Required argument '{required_arg}' is missing for "
+                        f"{self.__class__.__name__}"
+                    )
 
         # If allowed_args is specified, verify that any provided argument is
         # allowed.
         if self._rules.get("allowed_args"):
-            allowed_arg_names = {
-                arg.name for arg in self._rules["allowed_args"]
-            }
+            allowed_arg_names = {}
+            for arg in self._rules["args"]["allowed"]:
+                if isinstance(arg, Argument):
+                    allowed_arg_names[arg.name] = arg.type_str
+                else:
+                    allowed_arg_names[arg] = None
+
             for name in provided_args.keys():
                 if name not in allowed_arg_names and name not in {
-                    arg.name for arg in self._rules["required_args"]
+                    arg.name for arg in self._rules["args"]["required"]
                 }:
                     raise ValueError(
                         f"Argument '{name}' is not in the allowed arguments "
                         f"list for {self.__class__.__name__}"
                     )
+
+                if allowed_arg_names[name] is not None:
+                    if (
+                        provided_args[name].type_str.lower()
+                        != allowed_arg_names[name]
+                    ):
+                        raise ValueError(
+                            f"Argument '{name}' is of type "
+                            f"{provided_args[name].type_str} but must be of "
+                            f"type {allowed_arg_names[name]}"
+                        )
 
     def _validate_result(self):
         """
@@ -99,18 +126,18 @@ class AbstractTool(Tool, ABC):
         Result and the types match one of the allowed/required types.
         """
         self._ensure_rule_keys(self._rules)
-        if self._rules["required_result_types"]:
+        if self._rules["result"]["required"]:
             if self.result is None:
                 raise ValueError(
                     f"{self.__class__.__name__} requires a result but none "
                     "was provided."
                 )
-            if self.result.type_str not in self._rules["required_result_types"]:
+            if self.result.type_str not in self._rules["result"]["required"]:
                 raise ValueError(
                     f"{self.__class__.__name__} result type "
                     f"{self.result.type_str} does not match one of the "
                     "required types: "
-                    f"{self._rules['required_result_types']}"
+                    f"{self._rules['result']['required']}"
                 )
 
     def _ensure_rule_keys(
@@ -126,14 +153,22 @@ class AbstractTool(Tool, ABC):
         Returns:
             Dictionary with all required keys present
         """
-        required_keys = [
-            "required_args",
-            "allowed_args",
-            "required_result_types",
-        ]
+        required_keys = ["args", "result"]
+        required_args_keys = ["required", "allowed"]
+        required_result_keys = ["required"]
+
         for key in required_keys:
             if key not in rules:
-                rules[key] = []
+                rules[key] = {}
+
+        for key in required_args_keys:
+            if key not in rules["args"]:
+                rules["args"][key] = []
+
+        for key in required_result_keys:
+            if key not in rules["result"]:
+                rules["result"][key] = []
+
         self._rules = rules
 
 
