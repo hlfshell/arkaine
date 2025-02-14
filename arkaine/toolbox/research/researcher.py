@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 from arkaine.flow.linear import Linear
 from arkaine.flow.parallel_list import ParallelList
@@ -17,16 +17,36 @@ from arkaine.utils.templater import PromptLoader
 class QueryGenerator(AbstractAgent):
 
     _rules = {
-        "required_args": ["topic"],
-        "required_result_types": ["list[str]"],
+        "args": {
+            "required": [
+                Argument(
+                    name="topic",
+                    description="The topic to research",
+                    type="str",
+                    required=True,
+                )
+            ],
+        },
+        "result": {
+            "required": ["list[str]"],
+        },
     }
 
 
 class ResourceJudge(AbstractAgent):
 
     _rules = {
-        "required_args": ["topic", "resources"],
-        "required_result_types": ["list[Resource]"],
+        "args": {
+            "required": [
+                Argument(
+                    name="topic",
+                    description="The topic to research",
+                    type="str",
+                    required=True,
+                ),
+                "resources",
+            ],
+        },
     }
 
 
@@ -132,8 +152,19 @@ class DefaultResourceJudge(ResourceJudge):
 class ResourceSearch(AbstractAgent):
 
     _rules = {
-        "required_args": ["topic"],
-        "required_result_types": ["list[Resource]"],
+        "args": {
+            "required": [
+                Argument(
+                    name="topic",
+                    description="The topic to research",
+                    type="str",
+                    required=True,
+                )
+            ],
+        },
+        "result": {
+            "required": ["list[Resource]"],
+        },
     }
 
 
@@ -198,7 +229,6 @@ class GenerateFinding(Agent):
         labels = self.__parser.parse_blocks(output, "summary")
 
         resource: Resource = context.args["resource"]
-        # TODO use resource directly
         source = f"{resource.name} - {resource.source}"
 
         findings: List[Finding] = []
@@ -213,7 +243,7 @@ class GenerateFinding(Agent):
         return findings
 
 
-class Research(Linear):
+class Researcher(Linear):
     def __init__(
         self,
         llm: LLM,
@@ -221,13 +251,17 @@ class Research(Linear):
         name: str = "researcher",
         query_generator: QueryGenerator = None,
         search_resources: ResourceSearch = None,
-        judge_resources: ResourceJudge = None,
+        judge_resources: Optional[ResourceJudge] = None,
         max_learnings: int = 5,
         max_workers: int = 10,
         id: str = None,
     ):
         self._llm = llm
         self._query_generator = query_generator
+
+        if judge_resources is None:
+            judge_resources = DefaultResourceJudge(llm)
+
         self._resource_search = ParallelList(
             search_resources,
             max_workers=max_workers,
@@ -260,27 +294,15 @@ class Research(Linear):
             arguments=args,
             examples=[],
             steps=[
-                self._generate_queries,
+                self._query_generator,
                 self._resource_search,
                 # We are breaking down the resources into smaller chunks
                 # to avoid overloading the LLM with too much; too many entries
                 # degrades performance.
-                lambda context, resources: [
-                    {
-                        "topic": context.x["init_input"]["topic"],
-                        "resources": resources[i : i + 10],
-                    }
-                    for i in range(0, len(resources), 10)
-                ],
+                self._group_resources,
                 self._resource_judge,
                 # Again - batching resources
-                lambda context, resources: [
-                    {
-                        "topic": context.x["init_input"]["topic"],
-                        "resources": resources[i : i + 10],
-                    }
-                    for i in range(0, len(resources), 10)
-                ],
+                self._group_resources,
                 self._finding_generation,
             ],
             id=id,
@@ -289,32 +311,27 @@ class Research(Linear):
                     "A list of findings, which gives a source and "
                     "important information found within."
                 ),
-                type="list",
+                type="list[Finding]",
             ),
         )
 
     def _generate_queries(self, context: Context, topic: str) -> List[str]:
         return self._query_generator(
-            context, topic, num_queries=self._queries_to_generate
+            context, topic, num_queries=self._generate_queries
         )
 
-    def _generate_finding(
-        self, context: Context, resource: Resource
-    ) -> Finding:
-        content = resource.content
-        # Get the original topic from the execution context data
-        topic = context.x["init_input"]["topic"]
+    def _group_resources(
+        self, context: Context, resources: List[List[Resource]]
+    ) -> List[List[Resource]]:
+        seen_resources: Set[str] = set()
+        for group in resources:
+            for r in group:
+                if r.id in seen_resources:
+                    continue
+                else:
+                    seen_resources.add(r.id)
 
-        prompt = self.__findings_template.render(
-            {
-                "content": content,
-                "query": topic,
-                "max_learnings": self._max_learnings,
-            }
-        )
-        try:
-            output = self._llm(context, prompt)
-            return Finding(resource.source, resource.name, output)
-        except Exception as e:
-            print(f"Error generating finding for {site.url}: {e}")
-            raise e
+        return [
+            seen_resources[i : i + 10]
+            for i in range(0, len(seen_resources), 10)
+        ]

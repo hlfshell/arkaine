@@ -19,21 +19,8 @@ from arkaine.tools.tool import Tool
 from arkaine.utils.resource import Resource
 from arkaine.utils.templater import PromptTemplate
 from arkaine.utils.website import Website
-
-
-def get_base_prompt() -> Prompt:
-    research_template = PromptTemplate.from_file(
-        os.path.join(
-            pathlib.Path(__file__).parent,
-            "prompts",
-            "researcher.prompt",
-        )
-    )
-    return research_template.render(
-        {
-            "now": datetime.now().strftime("%Y-%m-%d"),
-        }
-    )
+from arkaine.toolbox.research.researcher import Researcher
+from arkaine.toolbox.research.finding import Finding
 
 
 class DeepWebResearcher(DoWhile):
@@ -166,215 +153,6 @@ class ResourceQueryJudge(Agent):
         return resources
 
 
-def save(resources):
-    import pickle
-
-    with open("resources.pkl", "wb") as f:
-        pickle.dump(resources, f)
-
-    raise "dead"
-
-
-class Research_good(Linear):
-    def __init__(
-        self,
-        llm: LLM,
-        name: str = "researcher",
-        queries_to_generate: int = 3,
-        max_learnings: int = 5,
-        max_workers: int = 10,
-        id: str = None,
-    ):
-        self._llm = llm
-        self._query_generator = Webqueryer(llm)
-        self._parallel_websearch = ParallelList(Websearch())
-        self._parallel_finding_generation = ParallelList(
-            GenerateFinding(llm, max_learnings)
-        )
-        self._parallel_resource_judge = ParallelList(ResourceQueryJudge(llm))
-
-        self._max_learnings = max_learnings
-        self._queries_to_generate = queries_to_generate
-
-        self.__research_template = PromptTemplate.from_file(
-            os.path.join(
-                pathlib.Path(__file__).parent,
-                "prompts",
-                "researcher.prompt",
-            )
-        )
-        self.__findings_template = PromptTemplate.from_file(
-            os.path.join(
-                pathlib.Path(__file__).parent,
-                "prompts",
-                "generate_findings.prompt",
-            )
-        )
-        self.__judge_resources_template = PromptTemplate.from_file(
-            os.path.join(
-                pathlib.Path(__file__).parent,
-                "prompts",
-                "resource_judge.prompt",
-            )
-        )
-
-        args = [
-            Argument(
-                name="topic",
-                description=(
-                    "The topic to research - be as specific as possible"
-                ),
-                type="str",
-                required=True,
-            ),
-        ]
-
-        super().__init__(
-            name,
-            description=(
-                "Research agent is a tool that, given a topic, will repeatedly "
-                "search across the web to build a collection of findings."
-            ),
-            arguments=args,
-            examples=[],
-            steps=[
-                self._generate_queries,
-                self._websearch,
-                lambda context, resources: [
-                    {
-                        "topic": context.x["init_input"]["topic"],
-                        "resources": resources[i : i + 10],
-                    }
-                    for i in range(0, len(resources), 10)
-                ],
-                # save,
-                self._parallel_resource_judge,
-                lambda context, resources: [
-                    {
-                        "topic": context.x["init_input"]["topic"],
-                        "resources": resources[i : i + 10],
-                    }
-                    for i in range(0, len(resources), 10)
-                ],
-                self._parallel_finding_generation,
-            ],
-            id=id,
-            result=Result(
-                description=(
-                    "A list of findings, which gives a source and "
-                    "important information found within."
-                ),
-                type="list",
-            ),
-        )
-
-    def _get_base_prompt(self, context: Context) -> Prompt:
-        return self.__research_template.render(
-            {
-                "now": datetime.now().strftime("%Y-%m-%d"),
-                "proficiency_level": context["proficiency_level"],
-            }
-        )
-
-    def _generate_queries(self, context: Context, topic: str) -> List[str]:
-        return self._query_generator(
-            context, topic, num_queries=self._queries_to_generate
-        )
-
-    def _websearch(self, context: Context, topic) -> List[Resource]:
-        with self._init_context_(context, topic):
-            queries: List[str] = self._generate_queries(context, topic)
-            query_inputs = [{"query": query} for query in queries]
-            results: List[List[Website]] = self._parallel_websearch(
-                context, query_inputs
-            )
-            print(f"Search found {len(results)} results")
-            results = [item for sublist in results for item in sublist]
-
-            seen_urls = set()
-            websites: List[Website] = []
-            for result in results:
-                if result.url not in seen_urls:
-                    seen_urls.add(result.url)
-                    websites.append(result)
-
-            print(f"Found {len(websites)} unique websites")
-
-            # Convert the websites to a list of resources.
-            resources = [
-                Resource(
-                    website.url,
-                    website.title,
-                    "website",
-                    website.snippet,
-                )
-                for website in websites
-            ]
-            return resources
-
-    def _fetch_site_content(self, site: Website) -> Optional[str]:
-        try:
-            markdown = site.get_markdown()
-            markdown = markdown[0:25_000]
-            return f"URL: {site.url}\nTitle: {site.title}\n\n{markdown}---"
-        except Exception as e:
-            print(f"Error getting markdown from {site.url}: {e}")
-            return None
-
-    def _generate_finding(
-        self, context: Context, resource: Resource
-    ) -> Finding:
-        content = self._fetch_site_content(site)
-        # Get the original topic from the execution context data
-        topic = context.x["init_input"]["topic"]
-
-        prompt = self.__findings_template.render(
-            {
-                "content": content,
-                "query": topic,
-                "max_learnings": self._max_learnings,
-            }
-        )
-        try:
-            output = self._llm(context, prompt)
-            return Finding(site, output)
-        except Exception as e:
-            print(f"Error generating finding for {site.url}: {e}")
-            raise e
-
-    # def _generate_findings(
-    #     self, context: Context, sites: List[Website]
-    # ) -> List[Finding]:
-    #     # Grab the original topic from the execution context data
-    #     topic = context.x["init_input"]["topic"]
-
-    #     # Use ThreadPoolExecutor to fetch content in parallel
-    #     content_futures = [
-    #         self.__threadpool.submit(self._fetch_site_content, site)
-    #         for site in sites
-    #     ]
-
-    #     # Collect results and filter out None values from failed fetches
-    #     content_parts = [
-    #         future.result()
-    #         for future in content_futures
-    #         if future.result() is not None
-    #     ]
-
-    #     # Join all content parts into final content string
-    #     content = "".join(content_parts)
-
-    #     print("Post sites")
-    #     prompt = self.__findings_template.render(
-    #         {
-    #             "content": content,
-    #             "query": topic,
-    #             "max_learnings": self._max_learnings,
-    #         }
-    #     )
-    #     return self._llm(context, prompt)
-
-
 class ReportGenerator(Agent):
     def __init__(self, llm: LLM):
         super().__init__(
@@ -421,17 +199,48 @@ class ReportGenerator(Agent):
         return output
 
 
+class WebResearcher(Researcher):
 
-class WebResearcher(???):
-                    
-    def _fetch_site_content(self, site: Website) -> Optional[str]:
-        try:
-            markdown = site.get_markdown()
-            markdown = markdown[0:25_000]
-            return f"URL: {site.url}\nTitle: {site.title}\n\n{markdown}---"
-        except Exception as e:
-            print(f"Error getting markdown from {site.url}: {e}")
-            return None
+    def __init__(
+        self,
+        llm: LLM,
+        name: str = "web_researcher",
+        websearch: Optional[Websearch] = None,
+        max_learnings: int = 5,
+        max_workers: int = 10,
+        id: str = None,
+    ):
+        if websearch is None:
+            websearch = Websearch()
+        self.__websearch = websearch
+
+        super().__init__(
+            llm,
+            name,
+            query_generator=self._serp,
+            search_resources=websearch,
+            max_learnings=max_learnings,
+            max_workers=max_workers,
+            id=id,
+        )
+
+    def _serp(self, context: Context, topic: str) -> List[Resource]:
+        websites = self.__websearch(context, topic)
+
+        resources: List[Resource] = []
+        for website in websites:
+            resources.append(
+                Resource(
+                    website.url,
+                    website.title,
+                    "website",
+                    website.snippet,
+                    website.get_markdown,
+                )
+            )
+
+        return resources
+
 
 class WebResearcher2(Tool):
     def __init__(
