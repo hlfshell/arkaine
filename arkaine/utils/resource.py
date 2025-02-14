@@ -1,6 +1,5 @@
-from abc import ABC, abstractmethod
+from typing import Callable, Optional, Union
 from uuid import uuid4
-from typing import Optional
 
 
 class Resource:
@@ -10,6 +9,7 @@ class Resource:
         name: str,
         type: str,
         description: str,
+        content: Union[str, Callable[[], str]],
         id: Optional[str] = None,
     ):
         self.id = id if id else str(uuid4())
@@ -17,6 +17,13 @@ class Resource:
         self.source = source
         self.type = type
         self.description = description
+        self.__content = content
+
+    @property
+    def content(self):
+        if callable(self.__content):
+            return self.__content()
+        return self.__content
 
     def to_json(self):
         return {
