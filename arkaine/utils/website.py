@@ -30,6 +30,12 @@ class Website:
         if load_content:
             self.load_content()
 
+    @property
+    def content(self) -> str:
+        if not self.raw_content:
+            self.load_content()
+        return self.get_markdown()
+
     def get_title(self) -> str:
         if not self.raw_content:
             self.load_content()
