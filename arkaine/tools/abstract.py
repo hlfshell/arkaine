@@ -14,12 +14,19 @@ class AbstractTool(Tool, ABC):
     Abstract base class for creating tools with enforced argument patterns and
     required methods. Inherits from both Tool and ABC to provide tool
     functionality with abstract method support.
+
+    Optional:
+        To force that a tool must have an associated result, set the
+        required_result_types list in _rules. This will enforce that any tool
+        inheriting from this class must define a result with one of the
+        specified types.
     """
 
     # Class variable to store argument rules
-    _argument_rules: Dict[str, List[str]] = {
+    _rules: Dict[str, List[str]] = {
         "required_args": [],  # List of required argument names
         "allowed_args": [],  # List of allowed argument names
+        "required_result_types": [],
     }
 
     def __init__(self, *args, **kwargs):
@@ -30,6 +37,8 @@ class AbstractTool(Tool, ABC):
         super().__init__(*args, **kwargs)
         # Now that self.args is available, validate the arguments.
         self._validate_argument_rules(self.args)
+        # Validate the result if required.
+        self._validate_result()
 
     def _validate_abstract_methods(self):
         """Ensures all abstract methods are implemented"""
@@ -49,11 +58,11 @@ class AbstractTool(Tool, ABC):
         Raises:
             ValueError: If arguments don't match the defined rules
         """
-        rules = self._argument_rules
+        self._ensure_rule_keys(self._rules)
         provided_args = {arg.name: arg for arg in args}
 
         # Check required arguments
-        for required_arg in rules["required_args"]:
+        for required_arg in self._rules["required_args"]:
             if required_arg.name not in provided_args:
                 raise ValueError(
                     f"Required argument '{required_arg.name} - "
@@ -71,16 +80,61 @@ class AbstractTool(Tool, ABC):
 
         # If allowed_args is specified, verify that any provided argument is
         # allowed.
-        if rules.get("allowed_args"):
-            allowed_arg_names = {arg.name for arg in rules["allowed_args"]}
+        if self._rules.get("allowed_args"):
+            allowed_arg_names = {
+                arg.name for arg in self._rules["allowed_args"]
+            }
             for name in provided_args.keys():
                 if name not in allowed_arg_names and name not in {
-                    arg.name for arg in rules["required_args"]
+                    arg.name for arg in self._rules["required_args"]
                 }:
                     raise ValueError(
                         f"Argument '{name}' is not in the allowed arguments "
                         f"list for {self.__class__.__name__}"
                     )
+
+    def _validate_result(self):
+        """
+        Validates that, if the tool requires a result, the tool has a set
+        Result and the types match one of the allowed/required types.
+        """
+        self._ensure_rule_keys(self._rules)
+        if self._rules["required_result_types"]:
+            if self.result is None:
+                raise ValueError(
+                    f"{self.__class__.__name__} requires a result but none "
+                    "was provided."
+                )
+            if self.result.type_str not in self._rules["required_result_types"]:
+                raise ValueError(
+                    f"{self.__class__.__name__} result type "
+                    f"{self.result.type_str} does not match one of the "
+                    "required types: "
+                    f"{self._rules['required_result_types']}"
+                )
+
+    def _ensure_rule_keys(
+        self, rules: Dict[str, List[str]]
+    ) -> Dict[str, List[str]]:
+        """
+        Ensures all required rule keys exist in the rules dictionary.
+        If a key is missing, it will be added with an empty list.
+
+        Args:
+            rules: Dictionary of rules to validate
+
+        Returns:
+            Dictionary with all required keys present
+        """
+        required_keys = [
+            "required_args",
+            "allowed_args",
+            "required_result_types",
+        ]
+        for key in required_keys:
+            if key not in rules:
+                rules[key] = []
+        self._rules = rules
 
 
 class AbstractAgent(Agent, AbstractTool):
