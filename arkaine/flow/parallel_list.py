@@ -1,5 +1,15 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Callable, Iterable, List, Optional, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+)
 
 from arkaine.tools.toolify import toolify
 from arkaine.tools.events import ToolReturn
@@ -13,18 +23,50 @@ class ParallelList(Tool):
     concurrently. Each input can be optionally formatted before being passed to
     the tool, and the final results can be aggregated using a custom formatter.
 
+    ParallelList can be prepped in a number of ways.
+
     Args:
         tool (Tool): The base tool to wrap and execute for each input
-        arguments (Optional[List[Argument]]): A list of arguments to present
-            as input for the tool. If not provided, the tool's arguments are
-            presented in the description of a singular argument, "input". It
-            will describe the input as a list of items, each of which is a
-            dictionary with the keys and values corresponding to the tool's
-            arguments. Required and default arguments are described.
-        item_formatter (Optional[Callable[[Any], Any]]): Optional
-            function to format each list item into the kwargs expected by the
-            wrapped tool. If not provided, each item is passed directly as the
-            argument specified by list_argument.
+        args (Optional[Union[List[Argument], Dict[str, str], str]]): The arguments
+            for the input of the parallel_list tool. There are three ways to
+            provide this:
+
+            - A list of Argument objects, which will be used as the arguments
+              for the tool. This allows you to set the arguments as you wish,
+              and is intended to be used in conjunction with the args_transform
+              argument.
+            - A dictionary, which will be used to rename the arguments of the
+              tool. The keys are the new names, and the values are the string of
+              the existing names. The goal is to allow name mapping to make sense, like
+              foo -> foos
+
+            In both of these cases, the arguments being passed on call are expected to be
+            called in the manner of:
+
+            parallel_list(a=[1,2,3], b = [a,b,c])
+
+            ...where a and b are arguments of the tool. That is, the index of the
+            passed iterable to each argument resides in the same index. Be wary
+            of optional arguments in this case.
+
+            If instead you wish to utilize parallel_list in the following manner:
+
+            parallel_list([{"a": 1, "b": 2}, {"a": 3, "b": 4}])
+
+            ...wherein you are passing a list of dictionaries, each expected to be
+            a unique set of arguments, you can utilize the following options:
+
+            - Argument: A singular argument object, which we assume is the input list
+                as described above.
+            - A string, which will be used as the name of the input argument.
+
+
+        args_transform (Optional[Callable[[Any], Tuple[Optional[List[Any]],
+            Optional[Dict[str, Any]]]]): Optional function to format the
+            arguments passed into parallel list into whatever format your tool
+            would expect. This allows you to use different names/argument types
+            for the input of the wrapped tool. This is only available if args
+            is provided as a List[Argument].
         result_formatter (Optional[Callable[[List[Any]], Any]]): Optional
             function to format the combined results. If not provided, returns
             the list of results. Note that the list of results is provided in
@@ -56,8 +98,14 @@ class ParallelList(Tool):
     def __init__(
         self,
         tool: Union[Tool, Callable[[Context, Any], Any]],
-        arguments: Optional[List[Argument]] = None,
-        item_formatter: Optional[Callable[[Any], Any]] = None,
+        args: Optional[
+            Union[Dict[str, str], List[Argument], Argument, str]
+        ] = None,
+        args_transform: Optional[
+            Callable[
+                [Any], Tuple[Optional[List[Any]], Optional[Dict[str, Any]]]
+            ]
+        ] = None,
         result_formatter: Optional[Callable[[List[Any]], Any]] = None,
         max_workers: Optional[int] = None,
         completion_strategy: str = "all",
@@ -84,7 +132,7 @@ class ParallelList(Tool):
         if error_strategy not in ["ignore", "fail"]:
             raise ValueError("error_strategy must be one of: ignore, fail")
 
-        self._item_formatter = item_formatter
+        self._args_transform = args_transform
         self._result_formatter = result_formatter
         self._completion_strategy = completion_strategy
         self._completion_count = completion_count
@@ -103,56 +151,183 @@ class ParallelList(Tool):
                 f"inputs. {self.tool.name} is:\n{self.tool.description}"
             )
 
-        # Build the list of arguments argument based on the tool's
-        # argument's descriptions
-        list_arg_description = (
-            "A list wherein each item consists of the following:"
-        )
-        if arguments:
-            target_args = arguments
+        # Build our arguments. We can either:
+        # A) Utilize the same arguments as the tool
+        # B) Set up a whole new list of arguments, with the plan of using
+        #   args_transform to format the inputs
+        # C) Use the dict to "rename" arguments and convert them into a list
+        #   of the arguments of the tool's original inputs.
+        arguments: List[Argument] = []
+        if isinstance(args, dict):
+            self.__args_type = "renamed"
+            # Create a copy of the tool's args that have keys, but replace the
+            # name with the key of the dict, and the type to a list[x] of
+            # whatever it was Every other arg is added as specified
+            args_used: Set[str] = set()
+            self._renamed_args = {}
+            for key, value in args.items():
+                self._renamed_args[key] = value
+
+                # Get the arg of the same name. If it doesn't exist, raise
+                # an error
+                arg = next(
+                    (arg for arg in self.tool.args if arg.name == key), None
+                )
+                if arg is None:
+                    raise ValueError(
+                        f"Argument {value} not found in {self.tool.name}"
+                    )
+                args_used.add(key)
+
+                argument = Argument(
+                    name=key,
+                    description=arg.description,
+                    type=f"list[{arg.type_str}]",
+                    required=arg.required,
+                    default=arg.default,
+                )
+                arguments.append(argument)
+            # All missing args are added as is
+            for arg in self.tool.args:
+                if arg.name not in args_used:
+                    arguments.append(arg)
+        elif isinstance(args, list):
+            self.__args_type = "set"
+            arguments = args
+            if len(args) != 1:
+                raise ValueError(
+                    "Only one positional argument is supported when "
+                    "manually setting args in a ParallelList - the expectation "
+                    "is that you are passing in a list of dicts w/ keys "
+                    "being the wrapped tool's arguments."
+                )
+            if self._args_transform is None:
+                raise ValueError(
+                    "args_transform is required when manually setting args "
+                    "in a ParallelList"
+                )
+        elif isinstance(args, str):
+            self.__args_type = "set"
+            arguments = [
+                Argument(
+                    name=args,
+                    description="A list of dicts, where the keys are the "
+                    "wrapped tool's arguments, and the values are the values "
+                    "to pass for each item in the input list.",
+                    type="list[dict]",
+                    required=True,
+                    default=None,
+                )
+            ]
+        elif args is None:
+            self.__args_type = "original"
+            arguments = self.tool.args
         else:
-            target_args = self.tool.args
-
-        for arg in target_args:
-            list_arg_description += f"\n- {arg.name} ({arg.type})"
-            if arg.required:
-                list_arg_description += f"[required] "
-            list_arg_description += f": {arg.description}"
-            if arg.default:
-                list_arg_description += f" (default: {arg.default})\n"
-
-        args = [
-            Argument(
-                name="input",
-                description=list_arg_description,
-                type="list",
-                required=True,
-            )
-        ]
+            raise ValueError(f"Invalid args type: {type(args)}")
 
         super().__init__(
             name=name,
             description=description,
-            args=args,
+            args=arguments,
             func=self.parallelize,
             examples=self.tool.examples,
         )
 
-    def parallelize(self, context: Context, **kwargs) -> List[Any]:
-        input = kwargs[self.args[0].name]
+    def parallelize(self, context: Context, args, kwargs) -> List[Any]:
+        if self._args_transform:
+            args, kwargs = self._args_transform(args, kwargs)
+            if args is None:
+                args = []
+            if kwargs is None:
+                kwargs = {}
 
-        if not isinstance(input, Iterable):
-            raise ValueError(
-                f"The input argument must be an iterable, got {type(input)}"
-            )
+        # We support both args passed like:
+        # parallel_list([1,2,3], b = [a,b,c])
+        # and
+        # parallel_list([{"a": 1, "b": 2}, { "a": 3, "b": 4}])
+        # But we only support the second one if and only if
+        # Check to see if we are passed a single var list
+        if self.__args_type == "set":
+            # Determine if the passed list is in args or kwargs
+            if len(args) == 1:
+                input_list = args[0]
+            elif len(kwargs) == 1:
+                if self.args[0].name not in kwargs:
+                    raise ValueError(
+                        f"Expected a singular list in {self.args[0].name}, "
+                        f"instead received {kwargs.keys()[0]}"
+                    )
+                input_list = kwargs[self.args[0].name]
+            else:
+                raise ValueError(
+                    "Expected a singular list argument, instead received "
+                    f"{len(args) + len(kwargs)} positional arguments"
+                )
 
-        if self._item_formatter:
-            input = [self._item_formatter(item) for item in input]
+            if not isinstance(input_list, Iterable):
+                raise ValueError(
+                    f"Expected a list in {self.args[0].name}, instead received "
+                    f"{type(input_list)}"
+                )
+        else:
+            # Create a dict of arguments based on self.args
+            args_dict = {}
+            if len(args) > len(self.args):
+                raise ValueError(
+                    f"Too many positional arguments provided: {len(args)} "
+                    f"(expected {len(self.args)})"
+                )
+
+            for arg in self.args:
+                for i in range(len(args)):
+                    name = self.args[i].name
+                    if (
+                        self.__args_type == "renamed"
+                        and name in self._renamed_args
+                    ):
+                        args_dict[self._renamed_args[name]] = args[i]
+                    else:
+                        args_dict[name] = args[i]
+
+                    args_dict[self.args[i].name] = arg
+
+            for key, value in kwargs.items():
+                if key not in args_dict:
+                    if (
+                        self.__args_type == "renamed"
+                        and key in self._renamed_args
+                    ):
+                        args_dict[self._renamed_args[key]] = value
+                    else:
+                        args_dict[key] = value
+                else:
+                    raise ValueError(
+                        f"Argument {key} provided both as a positional "
+                        "argument and a keyword argument"
+                    )
+
+            # Ensure that we have the same number of entries for each argument;
+            # if not, raise an error
+            entry_count = len(args_dict[self.tool.args[0].name])
+            for key, value in args_dict.items():
+                if len(value) != entry_count:
+                    raise ValueError(
+                        f"All arguments must have the same number of entries. "
+                        f"{key} has {len(value)} entries, but "
+                        f"{self.tool.args[0].name} has {entry_count}"
+                    )
+
+            # Convert to an input_list
+            input_list: List[Dict[str, Any]] = []
+            for i in range(entry_count):
+                input_list.append({})
+                for key, value in args_dict.items():
+                    input_list[i][key] = value[i]
 
         # Fire off the tool in parallel with the executor for each input
         futures = {
-            self._threadpool.submit(self.tool, context, kwargs): idx
-            for idx, kwargs in enumerate(input)
+            self._threadpool.submit(self.tool, context, **kwargs)
+            for kwargs in input_list
         }
 
         # Based on the completion strategy, handle the futures
@@ -251,8 +426,8 @@ class ParallelList(Tool):
 
         with context:
             # Format inputs if needed
-            if self._item_formatter:
-                input_list = [self._item_formatter(item) for item in input_list]
+            if self._args_transform:
+                input_list = [self._args_transform(item) for item in input_list]
 
             # Figure out which items failed in context["result"] - we create a
             # new list of outputs that only includes the failed/incomplete
