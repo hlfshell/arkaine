@@ -171,7 +171,31 @@ class ResourceSearch(AbstractAgent):
     }
 
 
-class GenerateFinding(Agent):
+class FindingsGenerator(AbstractAgent):
+    _rules = {
+        "args": {
+            "required": [
+                Argument(
+                    name="topic",
+                    description="The topic to research",
+                    type="str",
+                    required=True,
+                ),
+                Argument(
+                    name="resource",
+                    description="The content to generate findings from",
+                    type="Resource",
+                    required=True,
+                ),
+            ],
+        },
+        "result": {
+            "required": ["list[Finding]"],
+        },
+    }
+
+
+class GenerateFinding(FindingsGenerator):
 
     def __init__(self, llm: LLM, max_learnings: int = 5):
         super().__init__(
@@ -258,6 +282,7 @@ class Researcher(Linear):
         query_generator: QueryGenerator = None,
         search_resources: ResourceSearch = None,
         judge_resources: Optional[ResourceJudge] = None,
+        generating_findings: Optional[FindingsGenerator] = None,
         max_learnings: int = 5,
         max_workers: int = 10,
         id: str = None,
@@ -273,8 +298,12 @@ class Researcher(Linear):
             max_workers=max_workers,
             result_formatter=self._batch_resources,
         )
+
+        if generating_findings is None:
+            generating_findings = GenerateFinding(llm, max_learnings)
+
         self._finding_generation = ParallelList(
-            GenerateFinding(llm, max_learnings),
+            generating_findings,
             max_workers=max_workers,
             error_strategy="ignore",
             result_formatter=self._combine_findings,
