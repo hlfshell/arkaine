@@ -1,4 +1,5 @@
-from typing import Dict, List, Optional, Set
+from datetime import datetime
+from typing import Dict, List, Optional
 
 from arkaine.flow.linear import Linear
 from arkaine.flow.parallel_list import ParallelList
@@ -95,11 +96,13 @@ class DefaultResourceJudge(ResourceJudge):
         context["resources"] = {resource.id: resource for resource in resources}
         resources_str = "\n\n".join([str(resource) for resource in resources])
 
-        prompt = PromptLoader.load_prompt("researcher.prompt")
+        prompt = PromptLoader.load_prompt("researcher").render(
+            {
+                "now": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        )
 
-        query_judge_prompt = PromptLoader.load_prompt(
-            "resource_judge.prompt"
-        ).render(
+        query_judge_prompt = PromptLoader.load_prompt("resource_judge").render(
             {
                 "topic": topic,
                 "resources": resources_str,
@@ -204,14 +207,17 @@ class GenerateFinding(Agent):
             # TODO incorporate pagination, not needing to load
             # resource into memory?
             content = (
-                f"{resource.title}\n\t-{resource.source}\n"
-                f"\n{resource.content[0:25_000]}"
+                f"{resource.name}\n\t-{resource.source}\n"
+                f"\n{resource.content[0:25_000]}\n\n"
             )
         except Exception as e:
-            print(f"Error getting markdown from {resource.source}: {e}")
             raise e
 
-        prompt = PromptLoader.load_prompt("researcher")
+        prompt = PromptLoader.load_prompt("researcher").render(
+            {
+                "now": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        )
 
         prompt.extend(
             PromptLoader.load_prompt("generate_findings").render(
@@ -265,14 +271,19 @@ class Researcher(Linear):
         self._resource_search = ParallelList(
             search_resources,
             max_workers=max_workers,
+            result_formatter=self._batch_resources,
         )
         self._finding_generation = ParallelList(
             GenerateFinding(llm, max_learnings),
             max_workers=max_workers,
+            error_strategy="ignore",
+            result_formatter=self._combine_findings,
         )
         self._resource_judge = ParallelList(
             judge_resources,
             max_workers=max_workers,
+            error_strategy="ignore",
+            result_formatter=self._combine_resources,
         )
 
         self._max_learnings = max_learnings
@@ -281,7 +292,9 @@ class Researcher(Linear):
             Argument(
                 name="topic",
                 description=(
-                    "The topic to research - be as specific as possible"
+                    "The question to research; ensure you are "
+                    "specific, detailed, and concise in asking "
+                    "your question/topic."
                 ),
                 type="str",
                 required=True,
@@ -296,13 +309,7 @@ class Researcher(Linear):
             steps=[
                 self._query_generator,
                 self._resource_search,
-                # We are breaking down the resources into smaller chunks
-                # to avoid overloading the LLM with too much; too many entries
-                # degrades performance.
-                self._group_resources,
                 self._resource_judge,
-                # Again - batching resources
-                self._group_resources,
                 self._finding_generation,
             ],
             id=id,
@@ -315,23 +322,46 @@ class Researcher(Linear):
             ),
         )
 
-    def _generate_queries(self, context: Context, topic: str) -> List[str]:
-        return self._query_generator(
-            context, topic, num_queries=self._generate_queries
+    def _batch_resources(
+        self, context: Context, resource_lists: List[List[Resource]]
+    ) -> List[List[Resource]]:
+        topic = context.parent.args["topic"]
+
+        unique_resources = list(
+            {
+                r.source: r
+                for resource_list in resource_lists
+                for r in resource_list
+            }.values()
         )
 
-    def _group_resources(
-        self, context: Context, resources: List[List[Resource]]
-    ) -> List[List[Resource]]:
-        seen_resources: Set[str] = set()
-        for group in resources:
-            for r in group:
-                if r.id in seen_resources:
-                    continue
-                else:
-                    seen_resources.add(r.id)
+        resource_groups = [
+            unique_resources[i : i + 10]
+            for i in range(0, len(unique_resources), 10)
+        ]
 
+        return {"topic": topic, "resources": resource_groups}
+
+    def _combine_resources(
+        self, context: Context, resource_lists: List[List[Resource]]
+    ) -> List[Resource]:
+        return {
+            "topic": context.parent.args["topic"],
+            "resources": [
+                r for resource_list in resource_lists for r in resource_list
+            ],
+        }
+
+    def _combine_findings(
+        self, context: Context, findings: List[List[Finding]]
+    ) -> List[Finding]:
+        # Since the parallel list can return exceptions, and we ignore them
+        # for individual finding generations (as the source may prevent
+        # scraping, or have an issue, etc).
         return [
-            seen_resources[i : i + 10]
-            for i in range(0, len(seen_resources), 10)
+            finding
+            for sublist in findings
+            if isinstance(sublist, list)
+            for finding in sublist
+            if isinstance(finding, Finding)
         ]
