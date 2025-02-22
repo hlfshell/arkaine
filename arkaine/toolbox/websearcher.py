@@ -41,16 +41,7 @@ class WebSearcher(Linear):
                 lambda queries: {"input": [{"query": q} for q in queries]},
                 ParallelList(
                     websearch,
-                    arguments=[
-                        Argument(
-                            "input",
-                            "A list of web searh queries to to perform",
-                            "list[Website]",
-                            required=True,
-                        )
-                    ],
                     result_formatter=self.process_search_results,
-                    # item_formatter=lambda context, query: {"query": query},
                 ),
                 lambda context, sites: {
                     "sites": sites,
@@ -85,7 +76,7 @@ class WebSearcher(Linear):
         return url
 
     def process_search_results(
-        self, results: List[List[Website]]
+        self, context: Context, results: List[List[Website]]
     ) -> List[Website]:
         # First we convert the list of lists into a single list
         results = [item for sublist in results for item in sublist]
