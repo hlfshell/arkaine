@@ -44,6 +44,11 @@ class Resource:
             json["id"],
         )
 
+    def __eq__(self, value: object) -> bool:
+        if not isinstance(value, Resource):
+            return False
+        return self.id == value.id
+
     def __str__(self):
         return (
             f"ID: {self.id}\n"
@@ -55,3 +60,14 @@ class Resource:
 
     def __repr__(self):
         return self.__str__()
+
+    def __getstate__(self):
+        # Ensure content is evaluated before pickling
+        state = self.__dict__.copy()
+        if callable(state["_Resource__content"]):
+            try:
+                state["_Resource__content"] = state["_Resource__content"]()
+            except Exception as e:
+                print(f"Error evaluating content: {e}")
+                state["_Resource__content"] = ""
+        return state
