@@ -1,17 +1,12 @@
-import os
-import pathlib
-from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import List
-from uuid import uuid4
 
-from arkaine.llms.llm import LLM
+from arkaine.llms.llm import LLM, Prompt
 from arkaine.toolbox.research.web_research import Finding
 from arkaine.tools.abstract import AbstractAgent
 from arkaine.tools.argument import Argument
-from arkaine.tools.example import Example
-from arkaine.tools.result import Result
-from arkaine.utils.templater import PromptLoader, PromptTemplate
+from arkaine.tools.context import Context
+from arkaine.utils.templater import PromptLoader
 
 
 class Generator(AbstractAgent):
@@ -36,31 +31,25 @@ class ReportGenerator(Generator):
                 Argument(
                     "findings",
                     "Findings from which we generate the report from",
-                    "list[Finding]",
+                    "list[str]",
                 ),
             ],
             llm=llm,
-            examples=[],
-            result=Result(
-                description="A detailed report generated from the findings",
-                type="str",
-            ),
-            id=str(uuid4()),
         )
 
-        self.__report_template = PromptLoader.load_prompt("generate_report")
-        self.__base_prompt = PromptLoader.load_prompt("researcher")
-
     def prepare_prompt(
-        self, context: str, topic: str, findings: List[Finding]
-    ) -> List[str]:
-        prompt = self.__base_prompt.render(
+        self, context: Context, topic: str, findings: List[Finding]
+    ) -> Prompt:
+        report_template = PromptLoader.load_prompt("generate_report")
+        base_prompt = PromptLoader.load_prompt("researcher")
+        prompt = base_prompt.render(
             {
-                "now": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "now": datetime.now().strftime("%Y-%m-%d"),
+                "proficiency_level": "a highly experienced domain expert",
             }
         )
         prompt.extend(
-            self.__report_template.render(
+            report_template.render(
                 {
                     "topic": topic,
                     "findings": findings,
@@ -70,5 +59,5 @@ class ReportGenerator(Generator):
         )
         return prompt
 
-    def extract_result(self, context: str, output: str) -> str:
+    def extract_result(self, context: Context, output: str) -> str:
         return output
