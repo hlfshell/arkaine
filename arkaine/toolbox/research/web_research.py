@@ -34,14 +34,6 @@ class WebResearcher(Researcher):
         )
 
     def _serp(self, context: Context, query: str) -> List[Resource]:
-        # import pickle
-
-        # If searches.pkl exists, load it
-        # if os.path.exists("searches.pkl"):
-        #     with open("searches.pkl", "rb") as f:
-        #         searches = pickle.load(f)
-        #         return searches
-
         websites = self.__websearch(context, query)
 
         resources: List[Resource] = []
@@ -55,8 +47,5 @@ class WebResearcher(Researcher):
                     website.get_markdown,
                 )
             )
-
-        # with open("searches.pkl", "wb") as f:
-        #     pickle.dump(resources, f)
 
         return resources
