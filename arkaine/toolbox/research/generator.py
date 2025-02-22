@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List
 
 from arkaine.llms.llm import LLM, Prompt
-from arkaine.toolbox.research.web_research import Finding
+from arkaine.toolbox.research.finding import Finding
 from arkaine.tools.abstract import AbstractAgent
 from arkaine.tools.argument import Argument
 from arkaine.tools.context import Context
