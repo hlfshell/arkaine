@@ -87,8 +87,7 @@ class Linear(Tool):
             try:
                 output = step(context, output)
             except Exception as e:
-                name = f"Step Index {index}" + " - " + step.name
-                raise type(e)(f"Error in {name}: {str(e)}") from e
+                raise StepException(e, index) from e
 
         return output
 
@@ -126,3 +125,12 @@ class Linear(Tool):
             context.output = results
             context.broadcast(ToolReturn(results))
             return results
+
+
+class StepException(Exception):
+    def __init__(self, exception: Exception, index: int):
+        self.exception = exception
+        self.index = index
+
+    def __str__(self):
+        return f"Error in step {self.index}: {str(self.exception)}"
