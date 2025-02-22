@@ -5,7 +5,8 @@ import json
 import pathlib
 import re
 from threading import Lock
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
+from pathlib import Path
 
 
 class PromptTemplate:
@@ -28,9 +29,11 @@ class PromptTemplate:
 
     @classmethod
     def from_file(
-        cls, path: str, defaults: Optional[Dict[str, Any]] = None
+        cls, path: Union[str, Path], defaults: Optional[Dict[str, Any]] = None
     ) -> PromptTemplate:
         """Load a template from a given filepath."""
+        # Convert path to string if it is not already a string.
+        path = str(path)
         if path.endswith(".json"):
             with open(path, "r") as f:
                 template = json.load(f)
