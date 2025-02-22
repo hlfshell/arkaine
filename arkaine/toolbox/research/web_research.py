@@ -17,7 +17,7 @@ from arkaine.tools.context import Context
 from arkaine.tools.result import Result
 from arkaine.tools.tool import Tool
 from arkaine.utils.resource import Resource
-from arkaine.utils.templater import PromptTemplate
+from arkaine.utils.templater import PromptTemplate, PromptLoader
 from arkaine.utils.website import Website
 from arkaine.toolbox.research.researcher import Researcher
 from arkaine.toolbox.research.finding import Finding
@@ -172,20 +172,20 @@ class ReportGenerator(Agent):
             ],
             llm=llm,
         )
-        self.__report_template = PromptTemplate.from_file(
-            os.path.join(
-                pathlib.Path(__file__).parent,
-                "prompts",
-                "generate_report.prompt",
-            )
-        )
 
     def prepare_prompt(
         self, context: Context, topic: str, findings: List[Finding]
     ) -> Prompt:
-        prompt = get_base_prompt()
+        report_template = PromptLoader.load_prompt("generate_report")
+        base_prompt = PromptLoader.load_prompt("researcher")
+        prompt = base_prompt.render(
+            {
+                "now": datetime.now().strftime("%Y-%m-%d"),
+                "proficiency_level": "a highly experienced domain expert",
+            }
+        )
         prompt.extend(
-            self.__report_template.render(
+            report_template.render(
                 {
                     "topic": topic,
                     "findings": findings,
@@ -211,21 +211,29 @@ class WebResearcher(Researcher):
         id: str = None,
     ):
         if websearch is None:
-            websearch = Websearch()
+            websearch = Websearch(provider="bing", limit=20)
         self.__websearch = websearch
 
         super().__init__(
             llm,
             name,
-            query_generator=self._serp,
-            search_resources=websearch,
+            query_generator=Webqueryer(llm),
+            search_resources=self._serp,
             max_learnings=max_learnings,
             max_workers=max_workers,
             id=id,
         )
 
-    def _serp(self, context: Context, topic: str) -> List[Resource]:
-        websites = self.__websearch(context, topic)
+    def _serp(self, context: Context, query: str) -> List[Resource]:
+        # import pickle
+
+        # If searches.pkl exists, load it
+        # if os.path.exists("searches.pkl"):
+        #     with open("searches.pkl", "rb") as f:
+        #         searches = pickle.load(f)
+        #         return searches
+
+        websites = self.__websearch(context, query)
 
         resources: List[Resource] = []
         for website in websites:
@@ -238,6 +246,9 @@ class WebResearcher(Researcher):
                     website.get_markdown,
                 )
             )
+
+        # with open("searches.pkl", "wb") as f:
+        #     pickle.dump(resources, f)
 
         return resources
 
