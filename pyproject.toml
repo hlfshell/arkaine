@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "arkaine"
-version = "0.0.10"
+version = "0.0.11"
 description = "A batteries-included framework for DIY AI agents"
 readme = "README.md"
 authors = [{name = "Keith Chester", email = "k@hlfshell.ai"}]
