@@ -8,4 +8,13 @@ Your findings so far are:
 
 {findings}
 
-Given these findings and your work so far, generate a list of followup questions to query via SERP to guide further research. Answer only in a numbered form to make it easy to parse.
+Given these findings and your work so far, generate a list of followup questions to guide further research. You may generate no questions as well if you feel as if research is sufficient.
+
+If you have no questions to proceed with, simply reply with:
+
+NONE
+
+If you have questions to generate, then return them in the following format:
+
+REASON: The reason you believe the question should be asked
+QUESTION: The question to pose for followup research
