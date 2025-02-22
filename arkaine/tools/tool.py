@@ -233,7 +233,9 @@ class Tool:
 
         if missing_args or extraneous_args:
             raise InvalidArgumentException(
-                self.name, missing_args, extraneous_args
+                tool_name=self.name,
+                missing_required_args=missing_args,
+                extraneous_args=extraneous_args,
             )
 
     @staticmethod
