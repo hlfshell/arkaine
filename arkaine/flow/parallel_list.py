@@ -408,7 +408,7 @@ class ParallelList(Tool):
 
         # Get the original args and clear the context for re-running
         args = context.args.copy()
-        input_list = args[self.args[0].name]
+        input_list = args["input"]
         original_results = context["results"]
         context.clear(executing=True)
 
@@ -447,8 +447,10 @@ class ParallelList(Tool):
                     )
                 )
 
-            context, kwargs = self.extract_arguments((context, input_list), {})
-            output = self.parallelize(context, **kwargs)
+            output = self.parallelize(
+                context,
+                input_list,
+            )
 
             context["results"] = original_results
 
