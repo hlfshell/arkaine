@@ -7,7 +7,6 @@ from arkaine.internal.parser import Label, Parser
 from arkaine.llms.llm import LLM, Prompt
 from arkaine.toolbox.research.finding import Finding
 from arkaine.tools.abstract import AbstractAgent
-from arkaine.tools.agent import Agent
 from arkaine.tools.argument import Argument
 from arkaine.tools.context import Context
 from arkaine.tools.result import Result
@@ -214,6 +213,11 @@ class GenerateFinding(FindingsGenerator):
                 ),
             ],
             llm=llm,
+            result=Result(
+                description="A list of findings, which gives a source and "
+                + "important information found within.",
+                type="list[Finding]",
+            ),
         )
 
         self.__max_learnings = max_learnings
