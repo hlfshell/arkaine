@@ -17,7 +17,7 @@ from arkaine.utils.tool_format import gemini as gemini_format
 
 class GoogleBackend(Backend):
 
-    CONTEXT_LENGTHS = GoogleLLM.CONTEXT_LENGTHS
+    MODELS = GoogleLLM.MODELS
 
     def __init__(
         self,
@@ -45,8 +45,10 @@ class GoogleBackend(Backend):
 
         if context_length:
             self.__context_length = context_length
-        elif model in self.CONTEXT_LENGTHS:
-            self.__context_length = self.CONTEXT_LENGTHS[model]
+        elif model in GoogleBackend.MODELS:
+            self.__context_length = GoogleBackend.MODELS[model][
+                "context_length"
+            ]
         else:
             raise ValueError(
                 f"Unknown model: {model} - must specify context length"
