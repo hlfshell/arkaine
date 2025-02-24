@@ -1,31 +1,66 @@
 from typing import Any, Callable, Dict, List, Optional, Union
 
-from arkaine.tools.events import ToolReturn
-from arkaine.tools.tool import Argument, Context, Example, Tool
+from arkaine.tools.tool import Context, Example, Tool
 from arkaine.tools.toolify import toolify
 
 
 class DoWhile(Tool):
     """
-    A tool that executes a sequence of steps repeatedly while a condition is met.
-    The condition is evaluated after each iteration, ensuring the steps are executed
-    at least once.
+    A tool that executes a sequence of steps repeatedly while a condition is
+    met. The condition is evaluated after each iteration, ensuring the steps are
+    executed at least once.
+
+    The pseudocode flow of do while is thus, assuming the tool is called Foo,
+    and our do while wrapper is called dw:
+
+    dw(context, arguments):
+        continue = False while(continue):
+            output = Foo(context, arguments)
+
+            continue = condition(context, output
+
+            if not continue:
+                break
+
+            arguments = prepare_args(context, args, output)
+
+        if format_output is not None:
+            return format_output(context, output)
+
+        return output
+
+    The context of the do while has the following state keys maintained within
+    it during do while execution that may be useful to utilize in prepare_args
+    or the condition function:
+
+    context["x"]:
+        - iteration: The current iteration number
+        - args: A list of each set of arguments passed to the tool for each
+            iteration, starting with the initial arguments the tool was called
+            with.
+        - outputs: A list of the outputs of the tool for each iteration
 
     Args:
         tool (Tool): The tool to repeatedly trigger
 
-        condition (Callable[[Context, Any], bool]): Function that evaluates whether
-            to continue the loop. Takes the context and current output as arguments
-            and returns a boolean.
+        condition (Callable[[Context, Any], bool]): Function that evaluates
+            whether to continue the loop. Takes the context and current output
+            as arguments and returns a boolean.
 
-        name Optional[(str)]: The name of the do-while tool; defaults to the tool's
-            name w/ ":do_while" appended
+        prepare_args (Callable[[Context, Dict[str, Any]], Dict[str, Any]]):
+            Function that prepares the arguments for the tool call. Takes the
+            context and current arguments and returns a dictionary of arguments.
 
-        description Optional[(str)]: Description of what the do-while accomplishes and it's
-            condition. If not provided defaults to the wrapped tool's description.
+        format_output (Optional[Callable[[Context, Any], Any]]): Function that
+            formats the output of the tool. Takes the context and output and
+            returns a formatted output.
 
-        arguments (List[Argument]): List of arguments required by the chain.
-            If not specified, the arguments will be inferred from the first step.
+        name Optional[(str)]: The name of the do-while tool; defaults to the
+            tool's name w/ ":do_while" appended
+
+        description Optional[(str)]: Description of what the do-while
+            accomplishes and it's condition. If not provided defaults to the
+            wrapped tool's description.
 
         examples (List[Example]): Example usage scenarios
 
@@ -41,77 +76,76 @@ class DoWhile(Tool):
         self,
         tool: Union[Tool, Callable[[Context, Any], Any]],
         condition: Callable[[Context, Any], bool],
-        prepare_args: Callable[[Context, Dict[str, Any]], Dict[str, Any]],
-        initial_state: Optional[
-            Union[
-                Dict[str, Any],
-                Callable[[Context, Dict[str, Any]], Dict[str, Any]],
-            ]
-        ] = None,
+        prepare_args: Optional[
+            Callable[[Context, Dict[str, Any]], Dict[str, Any]]
+        ],
+        format_output: Optional[Callable[[Context, Any], Any]] = None,
         name: Optional[str] = None,
         description: Optional[str] = None,
-        arguments: Optional[List[Argument]] = None,
         examples: List[Example] = [],
         max_iterations: Optional[int] = None,
+        id: Optional[str] = None,
     ):
         self.condition = condition
         self.max_iterations = max_iterations
         self.prepare_args = prepare_args
-
-        if initial_state is None:
-            self.initial_state = {}
-        elif isinstance(initial_state, dict):
-            self.initial_state = initial_state
-            self.__initial_state_fn = None
-        elif callable(initial_state):
-            self.initial_state = None
-            self.__initial_state_fn = initial_state
+        self.format_output = format_output
 
         if isinstance(tool, Tool):
             self.tool = tool
         else:
             self.tool = toolify(tool)
 
+        # Use default name if none provided
+        if name is None:
+            name = f"{self.tool.name}:do_while"
+
+        # Use tool's description if none provided
+        if description is None:
+            description = (
+                f"Repeatedly executes {self.tool.name} until condition is met. "
+                f"Inherits arguments from {self.tool.name}."
+            )
+
         super().__init__(
             name=name,
-            args=arguments,
+            args=self.tool.args,
             description=description,
             func=self._loop,
             examples=examples,
+            id=id,
         )
 
     def _loop(self, context: Context, **kwargs) -> Any:
-        if "iteration" not in context:
-            context["iteration"] = 0
+        args = kwargs
 
-        if "state" not in context:
-            if self.__initial_state_fn is not None:
-                context["state"] = self.__initial_state_fn(context, kwargs)
-            elif self.__initial_state is not None:
-                context["state"] = self.__initial_state
-            else:
-                context["state"] = {}
-
-        if "args" not in context:
-            context["args"] = []
+        context.init("args", [])
+        context.init("outputs", [])
 
         while True:
-            if (
-                self.__max_iterations is not None
-                and context["iteration"] >= self.__max_iterations
-            ):
-                raise ValueError("max iterations reached")
+            context.init("iteration", 0)
+            context.increment("iteration", 1)
 
-            args = self.prepare_args(context, kwargs)
-            context["current_args"] = args
-            context["args"].append(args)
+            if (
+                self.max_iterations is not None
+                and context["iteration"] > self.max_iterations
+            ):
+                raise ValueError("max iterations surpassed")
+
+            context.append("args", args)
 
             output = self.tool(context, **args)
 
+            context.append("outputs", output)
+
             if self.condition(context, output):
                 break
-            else:
-                context["iteration"] += 1
+
+            if self.prepare_args is not None:
+                args = self.prepare_args(context, args)
+
+        if self.format_output is not None:
+            return self.format_output(context, output)
 
         return output
 
@@ -133,4 +167,4 @@ class DoWhile(Tool):
 
         # Since context maintains state, we can just retry the tool call
         # withe the last known state and arguments
-        return self._loop(context, **context["current_args"])
+        return self._loop(context, **context["args"][-1])
