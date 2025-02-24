@@ -77,6 +77,7 @@ class GenerateQuestions(QuestionGenerator):
                 type="list[str]",
                 description="List of generated questions",
             ),
+            llm=llm,
         )
 
         self.__parser = Parser(
@@ -86,7 +87,7 @@ class GenerateQuestions(QuestionGenerator):
             ]
         )
 
-    def _prepare_prompt(
+    def prepare_prompt(
         self,
         context: Context,
         topic: str,
@@ -114,7 +115,7 @@ class GenerateQuestions(QuestionGenerator):
 
         return prompt
 
-    def _extract_result(self, context: Context, output: str) -> List[str]:
+    def extract_result(self, context: Context, output: str) -> List[str]:
         if output.strip().lower() == "NONE":
             return []
 
@@ -216,16 +217,7 @@ class DeepResearcher(DoWhile):
             tool=research_func,
             name=f"{name}_researchers_parallel",
             description="A set of researchers to study each question passed",
-            arguments=[
-                Argument(
-                    name="questions",
-                    description="A list of questions to research",
-                    type="list[str]",
-                    required=True,
-                ),
-            ],
-            examples=[],
-            id=id,
+            result_formatter=self._format_findings,
         )
 
         self._generate_questions = questions_generator
@@ -233,7 +225,6 @@ class DeepResearcher(DoWhile):
         self.max_depth = max_depth
         self.max_time_seconds = max_time_seconds
 
-        # Our top-level arguments: a single list of starting questions
         args = [
             Argument(
                 name="questions",
@@ -261,7 +252,7 @@ class DeepResearcher(DoWhile):
                 "propose follow-up questions, until no more questions "
                 "remain or the depth/time constraints are met."
             ),
-            arguments=args,
+            args=args,
             max_iterations=self.max_depth + 1,  # Should never be hit
             examples=[],
             id=id,
@@ -298,6 +289,10 @@ class DeepResearcher(DoWhile):
           4) Uses generate_questions to propose follow-up questions based on all known findings.
           5) Appends any newly generated questions to context["questions"], unless depth is about to exceed.
         """
+        print("Executing research cycle")
+        for index, question in enumerate(questions):
+            print(f"{index + 1}. {question}")
+
         # No questions are asked, we're done.
         if len(questions) == 0:
             return context["findings"]
@@ -308,6 +303,8 @@ class DeepResearcher(DoWhile):
         context.increment("depth")
 
         findings = self.__researchers(context, questions=questions)
+
+        print(f"Findings: {len(findings)}")
 
         context.concat("findings", findings)
 
@@ -342,6 +339,9 @@ class DeepResearcher(DoWhile):
         prepare_args is called just before each iteration in the DoWhile loop.
         We pop the next question from context["questions"] for that iteration.
         """
+        if "depth" not in context:
+            context["depth"] = 0
+
         if context["depth"] == 0:
             return kwargs["questions"]
         else:

@@ -278,6 +278,13 @@ class GenerateFinding(FindingsGenerator):
 
 
 class Researcher(Linear):
+    """
+    TODO - write out what this is, how it works, and flow,
+    and do it for the above classes to. This way we can make tests
+    for the flow of it, etc. Then make tests for the abstract classes
+    feature. Then we can move onto deep research
+    """
+
     def __init__(
         self,
         llm: LLM,
