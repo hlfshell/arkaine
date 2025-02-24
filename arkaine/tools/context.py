@@ -223,6 +223,9 @@ class Context:
     def update(self, key: str, operation: Callable) -> Any:
         return self.__data.update(key, operation)
 
+    def init(self, key: str, value: Any):
+        return self.__data.init(key, value)
+
     def increment(self, key: str, amount=1):
         return self.__data.increment(key, amount)
 

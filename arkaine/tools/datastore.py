@@ -184,6 +184,12 @@ class ThreadSafeDataStore:
         with self.__lock:
             return list(self.__data.keys())
 
+    def init(self, key: str, value: Any):
+        with self.__lock:
+            if key not in self.__data:
+                self.__data[key] = value
+                self.__broadcast_update(key, value)
+
     def increment(self, key: str, amount=1):
         return self.update(key, lambda x: x + amount)
 
