@@ -11,15 +11,30 @@ from arkaine.tools.tool import Tool
 
 class AbstractTool(Tool, ABC):
     """
-    Abstract base class for creating tools with enforced argument patterns and
-    required methods. Inherits from both Tool and ABC to provide tool
-    functionality with abstract method support.
+    Abstract base class for creating tools with enforced argument and result
+    patterns and required methods. Inherits from both Tool and ABC to provide
+    tool functionality with abstract method support.
 
-    Optional:
-        To force that a tool must have an associated result, set the
-        required_result_types list in _rules. This will enforce that any tool
-        inheriting from this class must define a result with one of the
-        specified types.
+    Example:
+        ---
+        ExampleTool(AbstractTool):
+            _rules = {
+                "args": {
+                    "required": [Argument(name="arg1", type="str")],
+                    "allowed": [Argument(name="arg2", type="int")],
+                },
+                "result": {
+                    "required": ["str"],
+                },
+            }
+        ---
+
+    This example would force that any tool inheriting AbstractTool to have
+    an argument called "arg1" of type "str" and an optional argument called
+    "arg2" of type "int". It would also force that the result be a string.
+
+    Note that abstract tool inherits from ABC.abc, and thus @abstractmethod
+    decorators are supported and also checked.
     """
 
     # Class variable to store argument rules
@@ -184,6 +199,8 @@ class AbstractAgent(Agent, AbstractTool):
     Any subclass must implement:
         - prepare_prompt(self, context: Context, **kwargs) -> Prompt
         - extract_result(self, context: Context, output: str) -> Optional[Any]
+
+    ...as well as the rules defined by the _rules attribute.
     """
 
     def __init__(
