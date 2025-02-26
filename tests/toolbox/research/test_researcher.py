@@ -1,20 +1,36 @@
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
+from arkaine.llms.llm import LLM, Prompt
 from arkaine.toolbox.research.researcher import (
     DefaultResourceJudge,
+    Finding,
     GenerateFinding,
     Researcher,
-    Finding,
 )
-from arkaine.utils.resource import Resource
 from arkaine.tools.context import Context
+from arkaine.tools.tool import Tool
+from arkaine.utils.resource import Resource
 
 
 @pytest.fixture
 def mock_llm():
-    return Mock()
+
+    class MockLLM(LLM):
+        def __init__(self):
+            super().__init__(
+                name="mock_llm",
+                id="mock-llm-id",
+            )
+
+        def context_length(self) -> int:
+            return 4096
+
+        def completion(self, prompt) -> str:
+            return "Mocked response"
+
+    return MockLLM()
 
 
 @pytest.fixture
@@ -45,40 +61,55 @@ def mock_resources():
 
 
 @pytest.fixture
-def mock_query_generator():
-    query_gen = Mock()
-    query_gen.return_value = ["query1", "query2", "query3"]
+def mock_tool():
+    def _create_mock_tool(name="mock_tool", return_value="mock result"):
+        func = Mock()
+        func.return_value = return_value
+        return Tool(
+            name=name,
+            description="A mock tool for testing",
+            args=[],
+            func=func,
+            examples=[],
+            id=None,
+            result=None,
+        )
+
+    return _create_mock_tool
+
+
+@pytest.fixture
+def mock_query_generator(mock_tool):
+    query_gen = mock_tool(
+        name="query_generator", return_value=["query1", "query2", "query3"]
+    )
     return query_gen
 
 
 @pytest.fixture
-def mock_resource_search(mock_resources):
-    search = Mock()
-    search.return_value = mock_resources
+def mock_resource_search(mock_tool, mock_resources):
+    search = mock_tool(name="resource_search", return_value=mock_resources)
     return search
 
 
 @pytest.fixture
-def mock_resource_judge(mock_resources):
-    judge = Mock()
-    judge.return_value = mock_resources[:2]
+def mock_resource_judge(mock_resources, mock_tool):
+    judge = mock_tool(name="resource_judge", return_value=mock_resources[:2])
     return judge
 
 
 @pytest.fixture
-def mock_findings_generator():
-    generator = Mock()
-
-    def generate_finding(context, topic, resource):
-        return [
+def mock_findings_generator(mock_tool):
+    generator = mock_tool(
+        name="findings_generator",
+        return_value=[
             Finding(
-                source=resource.source,
-                summary=f"Summary of {resource.name}",
-                content=f"Finding content from {resource.name}",
+                source="http://example.com/1",
+                summary="Summary of Resource 1",
+                content="Finding content from Resource 1",
             )
-        ]
-
-    generator.side_effect = generate_finding
+        ],
+    )
     return generator
 
 
@@ -90,50 +121,39 @@ def researcher(
     mock_resource_judge,
     mock_findings_generator,
 ):
-    # Create a working researcher by patching the methods we're trying to test
-    with patch(
-        "arkaine.toolbox.research.researcher.Researcher._batch_resources"
-    ) as batch_mock:
-        with patch(
-            "arkaine.toolbox.research.researcher.Researcher._combine_resources"
-        ) as combine_mock:
-            with patch(
-                "arkaine.toolbox.research.researcher.Researcher."
-                "_combine_findings"
-            ) as findings_mock:
+    """Create a properly configured researcher for testing."""
+    # Create a researcher with mocked components
+    researcher = Researcher(
+        name="test_researcher",
+        description="Test researcher",
+        llm=mock_llm,
+        query_generator=mock_query_generator,
+        search_resources=mock_resource_search,
+        judge_resources=mock_resource_judge,
+        generating_findings=mock_findings_generator,
+    )
 
-                batch_mock.side_effect = lambda ctx, resources: {
-                    "topic": "test",
-                    "resources": resources[0],
-                }
-                combine_mock.side_effect = lambda ctx, resources: {
-                    "topic": "test",
-                    "resources": [r for sublist in resources for r in sublist],
-                }
-                findings_mock.side_effect = lambda ctx, findings: [
-                    f
-                    for sublist in findings
-                    if isinstance(sublist, list)
-                    for f in sublist
-                ]
+    # Replace the ParallelList instances with mocks
+    researcher._resource_search = Mock()
+    researcher._resource_judge = Mock()
+    researcher._finding_generation = Mock()
 
-                researcher = Researcher(
-                    name="test_researcher",
-                    description="Test researcher",
-                    llm=mock_llm,
-                    query_generator=mock_query_generator,
-                    search_resources=mock_resource_search,
-                    judge_resources=mock_resource_judge,
-                    generating_findings=mock_findings_generator,
-                )
-                return researcher
+    # Configure the mocks to return appropriate values
+    researcher._resource_search.return_value = {
+        "topic": "test",
+        "resources": [],
+    }
+    researcher._resource_judge.return_value = {"topic": "test", "resources": []}
+    researcher._finding_generation.return_value = []
+
+    return researcher
 
 
-def test_researcher_initialization(mock_llm):
+def test_researcher_initialization(mock_resource_search, mock_llm):
     """Test that the Researcher can be initialized with minimal arguments."""
     # Only providing the required arguments
     researcher = Researcher(
-        search_resources=Mock(),
+        search_resources=mock_resource_search,
         llm=mock_llm,
     )
     assert researcher is not None
@@ -142,47 +162,48 @@ def test_researcher_initialization(mock_llm):
     # With custom name
     researcher = Researcher(
         name="custom_researcher",
-        search_resources=Mock(),
+        search_resources=mock_resource_search,
         llm=mock_llm,
     )
     assert researcher.name == "custom_researcher"
 
 
-def test_missing_requirements():
+def test_missing_requirements(
+    mock_llm, mock_resource_search, mock_resource_judge
+):
     """Test that required components are enforced."""
     # Missing search_resources
     with pytest.raises(ValueError) as excinfo:
-        Researcher(llm=Mock())
+        Researcher(llm=mock_llm)
     assert str(excinfo.value) == "search_resources is required"
 
     # Missing llm when judge_resources is not provided
     with pytest.raises(ValueError) as excinfo:
-        Researcher(search_resources=Mock())
+        Researcher(search_resources=mock_resource_search)
     assert (
         str(excinfo.value)
         == "llm is required if judge_resources is not provided"
     )
     # Missing llm when generating_findings is not provided
     with pytest.raises(ValueError) as excinfo:
-        Researcher(search_resources=Mock(), judge_resources=Mock())
+        Researcher(
+            search_resources=mock_resource_search,
+            judge_resources=mock_resource_judge,
+        )
     assert (
         str(excinfo.value)
         == "llm is required if generating_findings is not provided"
     )
 
 
-def test_batch_resources():
+def test_batch_resources(mock_resource_search, mock_llm, mock_tool):
     """Test the _batch_resources method."""
-    # Create a real researcher object, patching the ParallelList *instance*
-    with patch(
-        "arkaine.toolbox.research.researcher.ParallelList"
-    ) as mock_parallel_list:
-        researcher = Researcher(
-            name="test_researcher", search_resources=Mock(), llm=Mock()
-        )
-
-    # Mock the return value of the ParallelList instance
-    mock_parallel_list.return_value.return_value = []
+    # Create a real researcher object
+    researcher = Researcher(
+        name="test_researcher",
+        search_resources=mock_resource_search,
+        llm=mock_llm,
+    )
 
     # Create test resources
     resources = [
@@ -197,9 +218,9 @@ def test_batch_resources():
     ]
 
     # Create a context with a parent context
-    context = Context(researcher)
-    context.parent = Mock()
-    context.parent.args = {"topic": "test topic"}
+    parent = Context(mock_tool())
+    parent.args = {"topic": "test topic"}
+    context = parent.child_context(researcher)
 
     # Test the _batch_resources method directly
     result = researcher._batch_resources(
@@ -217,16 +238,14 @@ def test_batch_resources():
     assert set(r.source for r in all_resources) == {r.source for r in resources}
 
 
-def test_combine_resources():
+def test_combine_resources(mock_resource_search, mock_llm, mock_tool):
     """Test the _combine_resources method."""
-    # Create a real researcher object, patching the ParallelList *instance*
-    with patch(
-        "arkaine.toolbox.research.researcher.ParallelList"
-    ) as mock_parallel_list:
-        researcher = Researcher(
-            name="test_researcher", search_resources=Mock(), llm=Mock()
-        )
-        mock_parallel_list.return_value.return_value = []
+    # Create a real researcher object
+    researcher = Researcher(
+        name="test_researcher",
+        search_resources=mock_resource_search,
+        llm=mock_llm,
+    )
 
     # Create test resources
     resources = [
@@ -241,9 +260,9 @@ def test_combine_resources():
     ]
 
     # Create a context with a parent context
-    context = Context(researcher)
-    context.parent = Mock()
-    context.parent.args = {"topic": "test topic"}
+    parent = Context(mock_tool())
+    context = parent.child_context(researcher)
+    parent.args = {"topic": "test topic"}
 
     # Test the _combine_resources method directly
     result = researcher._combine_resources(
@@ -263,16 +282,14 @@ def test_combine_resources():
     }
 
 
-def test_combine_findings():
+def test_combine_findings(mock_resource_search, mock_llm):
     """Test the _combine_findings method."""
-    # Create a real researcher object, patching the ParallelList *instance*
-    with patch(
-        "arkaine.toolbox.research.researcher.ParallelList"
-    ) as mock_parallel_list:
-        researcher = Researcher(
-            name="test_researcher", search_resources=Mock(), llm=Mock()
-        )
-        mock_parallel_list.return_value.return_value = []
+    # Create a real researcher object
+    researcher = Researcher(
+        name="test_researcher",
+        search_resources=mock_resource_search,
+        llm=mock_llm,
+    )
 
     # Create test findings
     findings1 = [
@@ -304,22 +321,22 @@ def test_default_resource_judge(mock_llm, mock_resources):
     # Mock the LLM output with a correctly formatted response
     # Only one resource is recommended.
     mock_llm.return_value = """
-    <resource>
-    resource: http://example.com/1
-    reason: This is relevant because it contains important information.
-    recommend: yes
-    </resource>
-    
-    <resource>
-    resource: http://example.com/2
-    reason: This is not relevant because it's off-topic.
-    recommend: no
-    </resource>
+    RESOURCE: http://example.com/1
+    REASON: This is relevant because it contains important information.
+    RECOMMEND: yes
+
+    RESOURCE: http://example.com/2
+    REASON: This is not relevant because it's off-topic.
+    RECOMMEND: no
     """
 
     # Create a context and run the judge
     context = Context(judge)
-    result = judge(context, topic="test topic", resources=mock_resources)
+
+    # Add resources to context
+    context["resources"] = {r.source: r for r in mock_resources}
+
+    result = judge.extract_result(context, mock_llm.return_value)
 
     # We should get only the first resource
     assert len(result) == 1
@@ -337,30 +354,37 @@ def test_generate_finding(mock_llm, mock_resources):
 
     # Mock the LLM output with a correctly formatted response
     mock_llm.return_value = """
-    <summary>
-    summary: This is a summary of the resource.
-    finding: This is the finding content.
-    </summary>
+    SUMMARY: This is a summary of the resource.
+    FINDING: This is the finding content.
     """
 
     # Create a context and run the finding generator
     context = Context(finding_gen)
-    result = finding_gen(
-        context, topic="test topic", resource=mock_resources[0]
-    )
+    context.args = {"resource": mock_resources[0]}
+
+    result = finding_gen.extract_result(context, mock_llm.return_value)
 
     # We should get a finding
     assert len(result) == 1
     assert isinstance(result[0], Finding)
-    assert (
-        result[0].source == "Resource 1 - http://example.com/1"
-    )  # Corrected expected source
+    assert result[0].source == "Resource 1 - http://example.com/1"
+
+    # The summary and content should be strings, not lists
     assert result[0].summary == "This is a summary of the resource."
     assert result[0].content == "This is the finding content."
 
 
-def test_resource_batching_with_many_resources(researcher):
+def test_resource_batching_with_many_resources(
+    mock_resource_search, mock_llm, mock_tool
+):
     """Test that resources are properly batched into groups of 10."""
+    # Create a real researcher object
+    researcher = Researcher(
+        name="test_researcher",
+        search_resources=mock_resource_search,
+        llm=mock_llm,
+    )
+
     # Create 25 mock resources
     many_resources = [
         Resource(
@@ -373,9 +397,9 @@ def test_resource_batching_with_many_resources(researcher):
         for i in range(25)
     ]
 
-    context = Context(researcher)
-    context.parent = Mock()
-    context.parent.args = {"topic": "test topic"}
+    parent = Context(mock_tool())
+    parent.args = {"topic": "test topic"}
+    context = parent.child_context(researcher)
 
     # Call the batching method
     result = researcher._batch_resources(context, [many_resources])
@@ -387,8 +411,15 @@ def test_resource_batching_with_many_resources(researcher):
     assert len(result["resources"][2]) == 5
 
 
-def test_deduplication_of_resources(researcher):
+def test_deduplication_of_resources(mock_resource_search, mock_llm, mock_tool):
     """Test that duplicate resources are properly deduplicated."""
+    # Create a real researcher object
+    researcher = Researcher(
+        name="test_researcher",
+        search_resources=mock_resource_search,
+        llm=mock_llm,
+    )
+
     # Create duplicate resources with the same source
     duplicate_resources = [
         Resource(
@@ -407,9 +438,9 @@ def test_deduplication_of_resources(researcher):
         ),
     ]
 
-    context = Context(researcher)
-    context.parent = Mock()
-    context.parent.args = {"topic": "test topic"}
+    parent = Context(mock_tool())
+    parent.args = {"topic": "test topic"}
+    context = parent.child_context(researcher)
 
     # Call the batching method with duplicates
     result = researcher._batch_resources(context, [duplicate_resources])
@@ -420,89 +451,54 @@ def test_deduplication_of_resources(researcher):
     assert all_resources[0].source == "http://example.com/same"
 
 
-def test_researcher_end_to_end():
+def test_researcher_end_to_end(
+    mock_resources,
+    mock_llm,
+    mock_query_generator,
+    mock_resource_search,
+    mock_resource_judge,
+    mock_findings_generator,
+):
     """Test the complete flow of the Researcher."""
     # Create mock components
-    mock_llm = Mock()
-    mock_query_generator = Mock()
-    mock_query_generator.return_value = ["test query"]
+    mock_llm = mock_llm
+    mock_query_generator.func.return_value = ["test query"]
 
-    mock_resource_search = Mock()
-    mock_resources = [
-        Resource(
-            source=f"http://example.com/{i}",
-            name=f"Resource {i}",
-            type="webpage",
-            description=f"Description of Resource {i}",
-            content=f"Content of Resource {i}",
-        )
-        for i in range(3)
+    # Create a researcher with our mocks
+    researcher = Researcher(
+        llm=mock_llm,
+        query_generator=mock_query_generator,
+        search_resources=mock_resource_search,
+        judge_resources=mock_resource_judge,
+        generating_findings=mock_findings_generator,
+    )
+
+    # Create a test context
+    context = Context(researcher)
+
+    # Mock the invoke method directly on the researcher instance
+    researcher.invoke = Mock()
+    researcher.invoke.return_value = [
+        Finding(
+            source="http://example.com/1",
+            summary="Summary of Resource 1",
+            content="Finding from Resource 1",
+        ),
+        Finding(
+            source="http://example.com/2",
+            summary="Summary of Resource 2",
+            content="Finding from Resource 2",
+        ),
     ]
-    mock_resource_search.return_value = mock_resources
 
-    mock_resource_judge = Mock()
-    mock_resource_judge.return_value = mock_resources[:2]
+    # Run the researcher
+    results = researcher(context, topic="test topic")
 
-    mock_findings_generator = Mock()
-
-    def generate_finding(context, topic, resource):
-        return [
-            Finding(
-                source=resource.source,
-                summary=f"Summary of {resource.name}",
-                content=f"Finding content from {resource.name}",
-            )
-        ]
-
-    mock_findings_generator.side_effect = generate_finding
-
-    # Create a researcher with properly mocked internal methods
-    with patch(
-        "arkaine.toolbox.research.researcher.ParallelList"
-    ) as mock_parallel:  # Patch the class
-        # Mock the *return value* of ParallelList (which is an instance)
-        mock_parallel.return_value.return_value = mock_resources[:2]
-
-        # Create the researcher with our mocks
-        researcher = Researcher(
-            llm=mock_llm,
-            query_generator=mock_query_generator,
-            search_resources=mock_resource_search,
-            judge_resources=mock_resource_judge,
-            generating_findings=mock_findings_generator,
-        )
-
-        # Create a test context
-        context = Context(researcher)
-
-        # Override the steps to avoid complex mocking
-        researcher.steps = [
-            mock_query_generator,
-            mock_resource_search,
-            mock_resource_judge,
-            mock_findings_generator,
-        ]
-
-        # Run the test with a direct call to mock components
-        with patch.object(
-            researcher,
-            "invoke",
-            side_effect=lambda ctx, **kwargs: [
-                Finding(
-                    source=f"http://example.com/{i}",
-                    summary=f"Summary of Resource {i}",
-                    content=f"Finding from Resource {i}",
-                )
-                for i in range(2)
-            ],
-        ):
-            results = researcher(context, topic="test topic")
-
-            # Check the results
-            assert len(results) == 2
-            assert all(isinstance(finding, Finding) for finding in results)
-            assert results[0].source == "http://example.com/0"
-            assert results[1].source == "http://example.com/1"
+    # Check the results
+    assert len(results) == 2
+    assert all(isinstance(finding, Finding) for finding in results)
+    assert results[0].source == "http://example.com/1"
+    assert results[1].source == "http://example.com/2"
 
 
 def test_handling_hallucinated_resources(mock_llm, mock_resources):
@@ -511,21 +507,20 @@ def test_handling_hallucinated_resources(mock_llm, mock_resources):
 
     # Mock response with a non-existent resource ID
     mock_llm.return_value = """
-    <resource>
-    resource: http://example.com/nonexistent
-    reason: This resource looks very promising.
-    recommend: yes
-    </resource>
+    RESOURCE: http://example.com/nonexistent
+    REASON: This resource looks very promising.
+    RECOMMEND: yes
     
-    <resource>
-    resource: http://example.com/1
-    reason: This is relevant.
-    recommend: yes
-    </resource>
+    RESOURCE: http://example.com/1
+    REASON: This is relevant.
+    RECOMMEND: yes
     """
 
     context = Context(judge)
-    result = judge(context, topic="test topic", resources=mock_resources)
+    # Add resources to context - use the source as the key, not the ID
+    context["resources"] = {r.source: r for r in mock_resources}
+
+    result = judge.extract_result(context, mock_llm.return_value)
 
     # Should only return the valid resource
     assert len(result) == 1
