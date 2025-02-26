@@ -310,9 +310,12 @@ class GenerateFinding(FindingsGenerator):
             if label["errors"]:
                 continue
 
-            summary = label["data"]["summary"]
-            content = label["data"]["finding"]
-            findings.append(Finding(source, summary, content))
+            try:
+                summary = label["data"]["summary"][0]
+                content = label["data"]["finding"][0]
+                findings.append(Finding(source, summary, content))
+            except Exception:  # NOQA
+                continue
 
         return findings
 
@@ -381,6 +384,9 @@ class Researcher(Linear):
                     "llm is required if judge_resources is not provided"
                 )
             judge_resources = DefaultResourceJudge(llm)
+
+        if search_resources is None:
+            raise ValueError("search_resources is required")
 
         self._resource_search = ParallelList(
             search_resources,
