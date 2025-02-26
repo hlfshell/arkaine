@@ -1,8 +1,8 @@
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock
 
 import pytest
 
-from arkaine.llms.llm import LLM, Prompt
+from arkaine.llms.llm import LLM
 from arkaine.toolbox.research.researcher import (
     DefaultResourceJudge,
     Finding,
