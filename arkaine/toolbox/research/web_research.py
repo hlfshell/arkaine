@@ -20,12 +20,16 @@ class WebResearcher(Researcher):
         id: str = None,
     ):
         if websearch is None:
-            websearch = Websearch(provider="bing", limit=20)
+            websearch = Websearch(provider="duckduckgo", limit=20)
         self.__websearch = websearch
 
         super().__init__(
-            llm,
             name,
+            description=(
+                "Research a topic by searching "
+                "the web and reading webpages on the topic."
+            ),
+            llm=llm,
             query_generator=Webqueryer(llm),
             search_resources=self._serp,
             max_learnings=max_learnings,
