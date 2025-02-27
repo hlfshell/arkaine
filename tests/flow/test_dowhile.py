@@ -66,7 +66,7 @@ def test_dowhile_basic_functionality(counter_tool):
     )
 
     context = Context(do_while)
-    result = do_while(context, 1)
+    result = do_while(context, increment=1)
 
     assert result == 5
     assert context["iteration"] == 5  # Started at 1, took 5 steps
@@ -87,7 +87,7 @@ def test_dowhile_max_iterations(counter_tool):
 
     context = Context(do_while)
     with pytest.raises(ValueError, match="max iterations surpassed"):
-        output = do_while(context, 1)
+        output = do_while(context, increment=1)
 
     assert context["iteration"] == 4
 
@@ -105,7 +105,7 @@ def test_dowhile_format_output(counter_tool):
     )
 
     context = Context(do_while)
-    result = do_while(context, 1)
+    result = do_while(context, increment=1)
 
     assert result == 10
 
@@ -123,7 +123,7 @@ def test_dowhile_retry_mechanism(error_tool):
     context = Context(do_while)
 
     with pytest.raises(ValueError, match="Failed"):
-        do_while(context, 1)
+        do_while(context, value=1)
 
     assert context["iteration"] == 2
 
@@ -161,7 +161,7 @@ def test_dowhile_dynamic_args(counter_tool):
     )
 
     context = Context(do_while)
-    result = do_while(context, 1)
+    result = do_while(context, increment=1)
 
     assert result >= 5
     assert context["args"] == [
@@ -185,6 +185,6 @@ def test_dowhile_toolify_function():
     )
 
     context = Context(do_while)
-    result = do_while(context, 1)
+    result = do_while(context, value=1)
 
     assert result == 4

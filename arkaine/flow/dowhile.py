@@ -1,5 +1,6 @@
 from typing import Any, Callable, Dict, List, Optional, Union
 
+from arkaine.tools.argument import Argument
 from arkaine.tools.tool import Context, Example, Tool
 from arkaine.tools.toolify import toolify
 
@@ -47,6 +48,12 @@ class DoWhile(Tool):
             whether to continue the loop. Takes the context and current output
             as arguments and returns a boolean.
 
+        args (Optional[List[Argument]]): A list of arguments the dowhile tool
+            accepts. Note that if not provided, the tool's arguments will be
+            utilized. If you change the arguments, you *must* also use
+            prepare_args to adjust the arguments for the wrapped tool
+            appropriately.
+
         prepare_args (Callable[[Context, Dict[str, Any]], Dict[str, Any]]):
             Function that prepares the arguments for the tool call. Takes the
             context and current arguments and returns a dictionary of arguments.
@@ -79,6 +86,7 @@ class DoWhile(Tool):
         prepare_args: Optional[
             Callable[[Context, Dict[str, Any]], Dict[str, Any]]
         ],
+        args: Optional[List[Argument]] = None,
         format_output: Optional[Callable[[Context, Any], Any]] = None,
         name: Optional[str] = None,
         description: Optional[str] = None,
@@ -107,9 +115,18 @@ class DoWhile(Tool):
                 f"Inherits arguments from {self.tool.name}."
             )
 
+        if args is not None and len(args) > 0:
+            if self.prepare_args is None:
+                raise ValueError(
+                    "prepare_args must be provided if args are provided"
+                )
+            args = args
+        else:
+            args = self.tool.args
+
         super().__init__(
             name=name,
-            args=self.tool.args,
+            args=args,
             description=description,
             func=self._loop,
             examples=examples,
