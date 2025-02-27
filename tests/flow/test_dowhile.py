@@ -60,7 +60,7 @@ def test_dowhile_basic_functionality(counter_tool):
 
     do_while = DoWhile(
         counter_tool,
-        condition=condition,
+        stop_condition=condition,
         prepare_args=prepare_args,
         name="count_to_five",
     )
@@ -88,7 +88,7 @@ def test_dowhile_max_iterations(counter_tool):
 
     do_while = DoWhile(
         counter_tool,
-        condition=condition,
+        stop_condition=condition,
         prepare_args=prepare_args,
         max_iterations=3,
     )
@@ -107,7 +107,7 @@ def test_dowhile_format_output(counter_tool):
 
     do_while = DoWhile(
         counter_tool,
-        condition=condition,
+        stop_condition=condition,
         prepare_args=prepare_args,
         format_output=format_output,
     )
@@ -130,7 +130,7 @@ def test_dowhile_retry_mechanism(error_tool):
 
     do_while = DoWhile(
         error_tool,
-        condition=condition,
+        stop_condition=condition,
         prepare_args=prepare_args,
     )
 
@@ -153,7 +153,7 @@ def test_dowhile_retry_wrong_context(counter_tool):
 
     do_while = DoWhile(
         counter_tool,
-        condition=condition,
+        stop_condition=condition,
         prepare_args=prepare_args,
     )
 
@@ -170,7 +170,7 @@ def test_dowhile_dynamic_args(counter_tool):
 
     do_while = DoWhile(
         counter_tool,
-        condition=condition,
+        stop_condition=condition,
         prepare_args=prepare_args,
     )
 
@@ -200,7 +200,7 @@ def test_dowhile_toolify_function():
 
     do_while = DoWhile(
         simple_func,
-        condition=condition,
+        stop_condition=condition,
         prepare_args=prepare_args,
     )
 
@@ -244,7 +244,7 @@ def test_dowhile_custom_args():
 
     do_while = DoWhile(
         simple_func,
-        condition=condition,
+        stop_condition=condition,
         prepare_args=prepare_args,
         args=custom_args,
     )

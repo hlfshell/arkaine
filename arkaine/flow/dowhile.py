@@ -44,7 +44,7 @@ class DoWhile(Tool):
     Args:
         tool (Tool): The tool to repeatedly trigger
 
-        condition (Callable[[Context, Any], bool]): Function that evaluates
+        stop_condition (Callable[[Context, Any], bool]): Function that evaluates
             whether to continue the loop. Takes the context and current output
             as arguments and returns a boolean.
 
@@ -82,7 +82,7 @@ class DoWhile(Tool):
     def __init__(
         self,
         tool: Union[Tool, Callable[[Context, Any], Any]],
-        condition: Callable[[Context, Any], bool],
+        stop_condition: Callable[[Context, Any], bool],
         prepare_args: Optional[
             Callable[[Context, Dict[str, Any]], Dict[str, Any]]
         ],
@@ -94,7 +94,7 @@ class DoWhile(Tool):
         max_iterations: Optional[int] = None,
         id: Optional[str] = None,
     ):
-        self.condition = condition
+        self.stop_condition = stop_condition
         self.max_iterations = max_iterations
         self.prepare_args = prepare_args
         self.format_output = format_output
@@ -111,8 +111,8 @@ class DoWhile(Tool):
         # Use tool's description if none provided
         if description is None:
             description = (
-                f"Repeatedly executes {self.tool.name} until condition is met. "
-                f"Inherits arguments from {self.tool.name}."
+                f"Repeatedly executes {self.tool.name} until condition is "
+                f"met. Inherits arguments from {self.tool.name}."
             )
 
         if args is not None and len(args) > 0:
@@ -158,7 +158,7 @@ class DoWhile(Tool):
 
             context.append("outputs", output)
 
-            if self.condition(context, output):
+            if self.stop_condition(context, output):
                 break
 
         if self.format_output is not None:
