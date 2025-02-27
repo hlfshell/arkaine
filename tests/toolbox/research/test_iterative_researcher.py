@@ -4,8 +4,8 @@ from unittest.mock import Mock, patch
 import pytest
 
 from arkaine.llms.llm import LLM
-from arkaine.toolbox.research.deep_researcher import (
-    DeepResearcher,
+from arkaine.toolbox.research.iterative_researcher import (
+    IterativeResearcher,
     DefaultQuestionGenerator,
     QuestionGenerator,
 )
@@ -160,13 +160,13 @@ def mock_question_generator(mock_llm):
 def test_deep_researcher_initialization(mock_llm, mock_researcher):
     """Test that DeepResearcher can be initialized with various configurations."""
     # Default initialization with just LLM
-    deep_researcher = DeepResearcher(llm=mock_llm)
+    deep_researcher = IterativeResearcher(llm=mock_llm)
     assert deep_researcher is not None
     assert deep_researcher.max_depth == 3
     assert deep_researcher.max_time_seconds == 600
 
     # Custom initialization
-    deep_researcher = DeepResearcher(
+    deep_researcher = IterativeResearcher(
         llm=mock_llm,
         name="custom_deep_researcher",
         max_depth=5,
@@ -181,7 +181,7 @@ def test_deep_researcher_initialization(mock_llm, mock_researcher):
 
 def test_format_findings():
     """Test the _format_findings method."""
-    deep_researcher = DeepResearcher(llm=Mock())
+    deep_researcher = IterativeResearcher(llm=Mock())
     context = Context(deep_researcher)
 
     findings1 = [
@@ -210,7 +210,9 @@ def test_format_findings():
 
 def test_execute_research_cycle(mock_llm, mock_researcher, mock_findings):
     """Test the _execute_research_cycle method."""
-    deep_researcher = DeepResearcher(llm=mock_llm, researcher=mock_researcher)
+    deep_researcher = IterativeResearcher(
+        llm=mock_llm, researcher=mock_researcher
+    )
 
     context = Context(deep_researcher)
     questions = ["What is AI?", "How does machine learning work?"]
@@ -238,7 +240,7 @@ def test_execute_research_cycle(mock_llm, mock_researcher, mock_findings):
 
 def test_should_stop_max_depth(mock_llm):
     """Test that _should_stop returns True when max_depth is reached."""
-    deep_researcher = DeepResearcher(llm=mock_llm, max_depth=3)
+    deep_researcher = IterativeResearcher(llm=mock_llm, max_depth=3)
     context = Context(deep_researcher)
     context["iteration"] = 3  # At max depth
 
@@ -248,7 +250,7 @@ def test_should_stop_max_depth(mock_llm):
 
 def test_should_stop_max_time(mock_llm):
     """Test that _should_stop returns True when max_time is exceeded."""
-    deep_researcher = DeepResearcher(llm=mock_llm, max_time_seconds=1)
+    deep_researcher = IterativeResearcher(llm=mock_llm, max_time_seconds=1)
     context = Context(deep_researcher)
     context["iteration"] = 1
 
@@ -261,7 +263,7 @@ def test_should_stop_max_time(mock_llm):
 
 def test_should_stop_no_questions(mock_llm, mock_question_generator):
     """Test that _should_stop returns True when no more questions are generated."""
-    deep_researcher = DeepResearcher(
+    deep_researcher = IterativeResearcher(
         llm=mock_llm, questions_generator=mock_question_generator
     )
     context = Context(deep_researcher)
@@ -277,7 +279,7 @@ def test_should_stop_no_questions(mock_llm, mock_question_generator):
 
 def test_should_continue(mock_llm, mock_question_generator):
     """Test that _should_stop returns False when conditions to continue are met."""
-    deep_researcher = DeepResearcher(
+    deep_researcher = IterativeResearcher(
         llm=mock_llm, questions_generator=mock_question_generator
     )
     context = Context(deep_researcher)
@@ -295,7 +297,7 @@ def test_should_continue(mock_llm, mock_question_generator):
 
 def test_prepare_args_first_iteration(mock_llm):
     """Test that _prepare_args returns initial args on first iteration."""
-    deep_researcher = DeepResearcher(llm=mock_llm)
+    deep_researcher = IterativeResearcher(llm=mock_llm)
     context = Context(deep_researcher)
     context["iteration"] = 1
 
@@ -307,7 +309,7 @@ def test_prepare_args_first_iteration(mock_llm):
 
 def test_prepare_args_subsequent_iterations(mock_llm):
     """Test that _prepare_args returns next_questions on subsequent iterations."""
-    deep_researcher = DeepResearcher(llm=mock_llm)
+    deep_researcher = IterativeResearcher(llm=mock_llm)
     context = Context(deep_researcher)
     context["iteration"] = 2
     context["next_questions"] = ["Follow-up question 1", "Follow-up question 2"]
@@ -412,7 +414,7 @@ def test_deep_researcher_end_to_end(
     ]
 
     # Create DeepResearcher with our mocks
-    deep_researcher = DeepResearcher(
+    deep_researcher = IterativeResearcher(
         llm=mock_llm,
         researcher=mock_researcher,
         questions_generator=mock_question_generator,

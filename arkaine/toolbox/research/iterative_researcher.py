@@ -2,7 +2,7 @@ from datetime import datetime
 from time import time
 from typing import Dict, List, Optional
 
-from arkaine.flow import Branch, DoWhile, ParallelList
+from arkaine.flow import DoWhile, ParallelList
 from arkaine.internal.parser import Label, Parser
 from arkaine.llms.llm import LLM, Prompt
 from arkaine.toolbox.research.finding import Finding
@@ -141,7 +141,7 @@ class DefaultQuestionGenerator(QuestionGenerator):
         return [output["question"] for output in output]
 
 
-class DeepResearcher(DoWhile):
+class IterativeResearcher(DoWhile):
     """
     A "deep" iterative researcher that:
       • Takes an initial list of questions.
@@ -173,7 +173,7 @@ class DeepResearcher(DoWhile):
     def __init__(
         self,
         llm: LLM,
-        name: str = "deep_researcher",
+        name: str = "iterative_researcher",
         max_depth: int = 3,
         max_time_seconds: int = 600,
         researcher: Optional[Researcher] = None,
