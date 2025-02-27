@@ -15,15 +15,15 @@ class DoWhile(Tool):
     and our do while wrapper is called dw:
 
     dw(context, arguments):
-        continue = False while(continue):
+        continue = True
+        while(continue):
+            arguments = prepare_args(context, args, output)
             output = Foo(context, arguments)
 
             continue = condition(context, output
 
             if not continue:
                 break
-
-            arguments = prepare_args(context, args, output)
 
         if format_output is not None:
             return format_output(context, output)
@@ -149,6 +149,9 @@ class DoWhile(Tool):
             ):
                 raise ValueError("max iterations surpassed")
 
+            if self.prepare_args is not None:
+                args = self.prepare_args(context, args)
+
             context.append("args", args)
 
             output = self.tool(context, **args)
@@ -157,9 +160,6 @@ class DoWhile(Tool):
 
             if self.condition(context, output):
                 break
-
-            if self.prepare_args is not None:
-                args = self.prepare_args(context, args)
 
         if self.format_output is not None:
             return self.format_output(context, output)
