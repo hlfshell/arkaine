@@ -215,6 +215,9 @@ class Context:
         else:
             return self.root.debug
 
+    def get(self, key: str, default: Any = None) -> Any:
+        return self.__data.get(key, default)
+
     def operate(
         self, keys: Union[str, List[str]], operation: Callable[[Any], Any]
     ) -> None:

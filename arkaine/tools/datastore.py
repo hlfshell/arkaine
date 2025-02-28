@@ -108,6 +108,10 @@ class ThreadSafeDataStore:
     def __del__(self):
         self.__threadpool.shutdown(wait=False)
 
+    def get(self, key: str, default: Any = None) -> Any:
+        with self.__lock:
+            return self.__data.get(key, default)
+
     def operate(
         self, keys: Union[str, List[str]], operation: Callable[[Any], Any]
     ) -> None:
