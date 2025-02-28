@@ -2,7 +2,7 @@ The original research topic is:
 
 ```{topic}```
 
-{questions}
+{generated_topics}
 
 Your findings so far are:
 
@@ -17,4 +17,4 @@ NONE
 If you have questions to generate, then return them in the following format:
 
 REASON: The reason you believe the question should be asked
-QUESTION: The question to pose for followup research
+TOPIC: The question to pose for followup research

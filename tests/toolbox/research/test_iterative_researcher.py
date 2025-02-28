@@ -6,15 +6,15 @@ import pytest
 from arkaine.llms.llm import LLM
 from arkaine.toolbox.research.iterative_researcher import (
     IterativeResearcher,
-    DefaultQuestionGenerator,
-    QuestionGenerator,
+    DefaultTopicGenerator,
+    TopicGenerator,
 )
 from arkaine.toolbox.research.finding import Finding
-from arkaine.toolbox.research.researcher import Researcher
 from arkaine.tools.argument import Argument
 from arkaine.tools.context import Context
 from arkaine.tools.result import Result
 from arkaine.tools.tool import Tool
+from arkaine.tools.toolify import toolify
 from arkaine.utils.resource import Resource
 
 
@@ -121,19 +121,17 @@ def mock_researcher(mock_llm, mock_findings):
 
 
 @pytest.fixture
-def mock_question_generator(mock_llm):
-    class MockQuestionGenerator(QuestionGenerator):
+def mock_topic_generator(mock_llm):
+    class MockQuestionGenerator(TopicGenerator):
         def __init__(self):
             super().__init__(
-                name="GenerateQuestions",
-                description=(
-                    "Generate a list of questions to research a topic.",
-                ),
+                name="GenerateTopics",
+                description=("Generate a list of topics to research.",),
                 args=[
                     Argument(
-                        name="questions",
+                        name="topics",
                         description=(
-                            "Questions that have already been researched",
+                            "Topics that have already been researched",
                         ),
                         type="list[str]",
                         required=True,
@@ -221,28 +219,29 @@ def test_execute_research_cycle(mock_llm, mock_researcher, mock_findings):
     )
 
     context = Context(iterative_researcher)
-    questions = ["What is AI?", "How does machine learning work?"]
+    topics = ["What is AI?", "How does machine learning work?"]
+    execute_research_cycle = toolify(
+        iterative_researcher._execute_research_cycle
+    )
+    child_context = context.child_context(execute_research_cycle)
 
     # Mock the ParallelList researchers
     # iterative_researcher.__researcher = Mock()
     # iterative_researcher.__researcher.return_value = mock_findings
 
     # Execute the research cycle
-    with patch("builtins.print") as mock_print:
-        result = iterative_researcher._execute_research_cycle(
-            context, questions
-        )
+    result = execute_research_cycle(child_context, topics)
 
     # Verify results
-    assert "all_questions" in context
-    assert context["all_questions"] == questions
+    assert "all_topics" in context
+    assert context["all_topics"] == topics
     assert "findings" in context
     assert context["findings"] == mock_findings * 2
     assert result == mock_findings * 2
 
     # Test with empty questions
     context = Context(iterative_researcher)
-    result = iterative_researcher._execute_research_cycle(context, [])
+    result = execute_research_cycle(child_context, [])
     assert result == []
 
 
@@ -263,66 +262,66 @@ def test_should_stop_max_time(mock_llm):
     context["iteration"] = 1
 
     # Set start_time to be more than max_time_seconds ago
-    deep_researcher.start_time = time() - 2
+    context["researcher_start_time"] = time() - 2
 
     result = deep_researcher._should_stop(context, None)
     assert result is True
 
 
-def test_should_stop_no_questions(mock_llm, mock_question_generator):
+def test_should_stop_no_questions(mock_llm, mock_topic_generator):
     """
     Test that _should_stop returns True when no more questions are generated.
     """
 
-    mock_question_generator.extract_result = Mock()
-    mock_question_generator.extract_result.return_value = []
+    mock_topic_generator.extract_result = Mock()
+    mock_topic_generator.extract_result.return_value = []
 
     deep_researcher = IterativeResearcher(
-        llm=mock_llm, questions_generator=mock_question_generator
+        llm=mock_llm, topic_generator=mock_topic_generator
     )
     context = Context(deep_researcher)
     context["iteration"] = 1
-    deep_researcher.start_time = time()
+    context["researcher_start_time"] = time()
 
     result = deep_researcher._should_stop(context, None)
     assert result is True
 
 
-def test_should_continue(mock_llm, mock_question_generator):
+def test_should_continue(mock_llm, mock_topic_generator):
     """
     Test that _should_stop returns False when conditions to continue are
     met.
     """
 
-    mock_question_generator.extract_result = Mock()
-    mock_question_generator.extract_result.return_value = [
-        "New question 1",
-        "New question 2",
+    mock_topic_generator.extract_result = Mock()
+    mock_topic_generator.extract_result.return_value = [
+        "New topic 1",
+        "New topic 2",
     ]
 
     deep_researcher = IterativeResearcher(
-        llm=mock_llm, questions_generator=mock_question_generator
+        llm=mock_llm, topic_generator=mock_topic_generator
     )
     context = Context(deep_researcher)
     context["iteration"] = 1
-    deep_researcher.start_time = time()
+    context["researcher_start_time"] = time()
 
     result = deep_researcher._should_stop(context, None)
     assert result is False
-    assert "next_questions" in context
-    assert context["next_questions"] == ["New question 1", "New question 2"]
+    assert "next_topics" in context
+    assert context["next_topics"] == ["New topic 1", "New topic 2"]
 
 
 def test_prepare_args_first_iteration(mock_llm):
     """
     Test that _prepare_args returns initial args on first iteration.
     """
-    deep_researcher = IterativeResearcher(llm=mock_llm)
-    context = Context(deep_researcher)
+    iterative_researcher = IterativeResearcher(llm=mock_llm)
+    context = Context(iterative_researcher)
     context["iteration"] = 1
 
-    initial_args = {"questions": ["Initial question"]}
-    result = deep_researcher._prepare_args(context, initial_args)
+    initial_args = {"topics": ["Initial question"]}
+    result = iterative_researcher._prepare_args(context, initial_args)
 
     assert result == {"topics": ["Initial question"]}
 
@@ -331,22 +330,20 @@ def test_prepare_args_subsequent_iterations(mock_llm):
     """
     Test that _prepare_args returns next_questions on subsequent iterations.
     """
-    deep_researcher = IterativeResearcher(llm=mock_llm)
-    context = Context(deep_researcher)
+    iterative_researcher = IterativeResearcher(llm=mock_llm)
+    context = Context(iterative_researcher)
     context["iteration"] = 2
-    context["next_questions"] = ["Follow-up question 1", "Follow-up question 2"]
+    context["next_topics"] = ["Follow-up topic 1", "Follow-up topic 2"]
 
-    initial_args = {"questions": ["Initial question"]}
-    result = deep_researcher._prepare_args(context, initial_args)
+    initial_args = {"topics": ["Initial question"]}
+    result = iterative_researcher._prepare_args(context, initial_args)
 
-    assert result == {
-        "topics": ["Follow-up question 1", "Follow-up question 2"]
-    }
+    assert result == {"topics": ["Follow-up topic 1", "Follow-up topic 2"]}
 
 
-def test_default_question_generator(mock_llm):
-    """Test the DefaultQuestionGenerator."""
-    generator = DefaultQuestionGenerator(mock_llm)
+def test_default_topic_generator(mock_llm):
+    """Test the DefaultTopicGenerator."""
+    generator = DefaultTopicGenerator(mock_llm)
     context = Context(generator)
 
     # Mock the parser.parse_blocks method
@@ -355,31 +352,31 @@ def test_default_question_generator(mock_llm):
             {
                 "errors": False,
                 "data": {
-                    "reason": "Need more information about X",
-                    "question": "What is X?",
+                    "reason": ["Need more information about X"],
+                    "topic": ["What is X?"],
                 },
             },
             {
                 "errors": False,
                 "data": {
-                    "reason": "Need to understand Y",
-                    "question": "How does Y work?",
+                    "reason": ["Need to understand Y"],
+                    "topic": ["How does Y work?"],
                 },
             },
         ]
 
         result = generator.extract_result(context, "Some output")
-
+    print(result)
     assert result == ["What is X?", "How does Y work?"]
-    assert "questions" in context
-    assert len(context["questions"]) == 2
-    assert context["questions"][0]["reason"] == "Need more information about X"
-    assert context["questions"][1]["question"] == "How does Y work?"
+    assert "topics" in context
+    assert len(context["topics"]) == 2
+    assert context["topics"][0]["reason"] == "Need more information about X"
+    assert context["topics"][1]["topic"] == "How does Y work?"
 
 
-def test_default_question_generator_none_response(mock_llm):
-    """Test the DefaultQuestionGenerator when it returns NONE."""
-    generator = DefaultQuestionGenerator(mock_llm)
+def test_default_topic_generator_none_response(mock_llm):
+    """Test the DefaultTopicGenerator when it returns NONE."""
+    generator = DefaultTopicGenerator(mock_llm)
     context = Context(generator)
 
     result = generator.extract_result(context, "NONE")
@@ -387,9 +384,9 @@ def test_default_question_generator_none_response(mock_llm):
     assert result == []
 
 
-def test_default_question_generator_with_errors(mock_llm):
-    """Test the DefaultQuestionGenerator when parsing has errors."""
-    generator = DefaultQuestionGenerator(mock_llm)
+def test_default_topic_generator_with_errors(mock_llm):
+    """Test the DefaultTopicGenerator when parsing has errors."""
+    generator = DefaultTopicGenerator(mock_llm)
     context = Context(generator)
 
     # Mock the parser.parse_blocks method with some errors
@@ -398,30 +395,30 @@ def test_default_question_generator_with_errors(mock_llm):
             {
                 "errors": True,  # This one has errors
                 "data": {
-                    "reason": "Invalid reason",
-                    "question": "Invalid question",
+                    "reason": ["Invalid reason"],
+                    "topic": ["Invalid topic"],
                 },
             },
             {
                 "errors": False,
                 "data": {
-                    "reason": "Valid reason",
-                    "question": "Valid question",
+                    "reason": ["Valid reason"],
+                    "topic": ["Valid topic"],
                 },
             },
         ]
 
         result = generator.extract_result(context, "Some output")
 
-    # Only the valid question should be returned
-    assert result == ["Valid question"]
-    assert len(context["questions"]) == 1
+    # Only the valid topic should be returned
+    assert result == ["Valid topic"]
+    assert len(context["topics"]) == 1
 
 
 def test_deep_researcher_end_to_end(
-    mock_llm, mock_researcher, mock_question_generator
+    mock_llm, mock_researcher, mock_topic_generator
 ):
-    """Test the complete flow of DeepResearcher."""
+    """Test the complete flow of IterativeResearcher."""
     # Configure mocks
     mock_findings = [
         Finding("source1", "summary1", "content1"),
@@ -430,26 +427,26 @@ def test_deep_researcher_end_to_end(
     mock_researcher.return_value = mock_findings
 
     # First call returns questions, second call returns empty to stop iteration
-    mock_question_generator.side_effect = [
-        ["Follow-up question 1", "Follow-up question 2"],
+    mock_topic_generator.side_effect = [
+        ["Follow-up topic 1", "Follow-up topic 2"],
         [],
     ]
 
     # Create DeepResearcher with our mocks
-    deep_researcher = IterativeResearcher(
+    iterative_researcher = IterativeResearcher(
         llm=mock_llm,
         researcher=mock_researcher,
-        questions_generator=mock_question_generator,
+        topic_generator=mock_topic_generator,
     )
 
     # Replace the DoWhile's invoke method
-    deep_researcher.invoke = Mock()
-    deep_researcher.invoke.return_value = mock_findings
+    iterative_researcher.invoke = Mock()
+    iterative_researcher.invoke.return_value = mock_findings
 
     # Run the deep researcher
-    context = Context(deep_researcher)
-    results = deep_researcher(context, questions=["Initial question"])
+    context = Context(iterative_researcher)
+    results = iterative_researcher(context, topics=["Initial topic"])
 
     # Verify results
     assert results == mock_findings
-    assert deep_researcher.invoke.called
+    assert iterative_researcher.invoke.called

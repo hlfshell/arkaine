@@ -15,9 +15,9 @@ from arkaine.tools.tool import Context
 from arkaine.utils.templater import PromptLoader
 
 
-class QuestionGenerator(AbstractAgent):
+class TopicGenerator(AbstractAgent):
     """
-    Abstract base class for agents that generate follow-up questions based on
+    Abstract base class for agents that generate follow-up topics based on
     existing research findings.
 
     Any subclass must implement:
@@ -29,8 +29,8 @@ class QuestionGenerator(AbstractAgent):
         "args": {
             "required": [
                 Argument(
-                    name="questions",
-                    description="Questions that have already been researched",
+                    name="topics",
+                    description="Topics that have already been researched",
                     type="list[str]",
                     required=True,
                 ),
@@ -38,7 +38,7 @@ class QuestionGenerator(AbstractAgent):
                     name="findings",
                     description=(
                         "Findings that have already been researched, "
-                        "from which we can generate follow up questions."
+                        "from which we can generate follow up topics."
                     ),
                     type="list[Finding]",
                     required=True,
@@ -52,15 +52,15 @@ class QuestionGenerator(AbstractAgent):
     }
 
 
-class DefaultQuestionGenerator(QuestionGenerator):
+class DefaultTopicGenerator(TopicGenerator):
     def __init__(self, llm: LLM):
         super().__init__(
-            name="GenerateQuestions",
-            description="Generate a list of questions to research a topic.",
+            name="GenerateTopics",
+            description="Generate a list of topics to research.",
             args=[
                 Argument(
-                    name="questions",
-                    description="Questions that have already been researched",
+                    name="topics",
+                    description="Topics that have already been researched",
                     type="list[str]",
                     required=True,
                 ),
@@ -68,7 +68,7 @@ class DefaultQuestionGenerator(QuestionGenerator):
                     name="findings",
                     description=(
                         "Findings that have already been researched, "
-                        "from which we can generate follow up questions."
+                        "from which we can generate follow up topics."
                     ),
                     type="list[Finding]",
                     required=True,
@@ -76,7 +76,7 @@ class DefaultQuestionGenerator(QuestionGenerator):
             ],
             result=Result(
                 type="list[str]",
-                description="List of generated questions",
+                description="List of generated topics",
             ),
             llm=llm,
         )
@@ -84,18 +84,18 @@ class DefaultQuestionGenerator(QuestionGenerator):
         self.__parser = Parser(
             [
                 Label("reason", required=True, data_type="str"),
-                Label("question", required=True, data_type="str"),
+                Label("topic", required=True, data_type="str"),
             ]
         )
 
     def prepare_prompt(
         self,
         context: Context,
-        questions: List[str],
+        topics: List[str],
         findings: List[Finding],
     ) -> Prompt:
         base = PromptLoader.load_prompt("researcher")
-        questions_prompt = PromptLoader.load_prompt("generate_questions")
+        topics_prompt = PromptLoader.load_prompt("generate_topics")
 
         prompt = base.render(
             {
@@ -104,10 +104,10 @@ class DefaultQuestionGenerator(QuestionGenerator):
         )
 
         prompt.extend(
-            questions_prompt.render(
+            topics_prompt.render(
                 {
-                    "topic": questions[0],
-                    "questions": questions[1:],
+                    "topic": topics[0],
+                    "generated_topics": topics[1:],
                     "findings": findings,
                 }
             )
@@ -123,12 +123,12 @@ class DefaultQuestionGenerator(QuestionGenerator):
 
         output = []
 
-        # Place into output a dict of { "reason": reason, "question": question }
+        # Place into output a dict of { "reason": reason, "topic": topic }
         for block in parsed:
             if block["errors"]:
                 continue
 
-            if len(block["data"]["question"]) == 0:
+            if len(block["data"]["topic"]) == 0:
                 continue
 
             if len(block["data"]["reason"]) == 0:
@@ -137,41 +137,41 @@ class DefaultQuestionGenerator(QuestionGenerator):
             output.append(
                 {
                     "reason": block["data"]["reason"][0].strip(),
-                    "question": block["data"]["question"][0].strip(),
+                    "topic": block["data"]["topic"][0].strip(),
                 }
             )
 
-        context["questions"] = output
+        context["topics"] = output
 
-        return [output["question"] for output in output]
+        return [output["topic"] for output in output]
 
 
 class IterativeResearcher(DoWhile):
     """
     A "deep" iterative researcher that:
-      • Takes an initial list of questions.
-      • For each question, runs a researcher (e.g., WebResearcher) to get
+      • Takes an initial list of topics.
+      • For each topic, runs a researcher (e.g., WebResearcher) to get
         findings.
-      • Proposes follow-up questions based on existing findings to research
+      • Proposes follow-up topics based on existing findings to research
         further.
       • Repeats until:
-         (1) no more questions remain,
+         (1) no more topics remain,
          (2) maximum depth is reached, or
          (3) maximum allotted time is exceeded.
       • Returns all collected findings.
 
     Args:
         name (str): Deep researcher tool name.
-        llm (LLM): Large Language Model for generating follow-up questions,
+        llm (LLM): Large Language Model for generating follow-up topics,
             etc.
         max_depth (int): Maximum number of iterations/depth. Default is 3.
         max_time_seconds (int): Maximum total time in seconds to run the loop.
             Default is depth * 120 seconds (2 minutes per depth).
         researcher (Optional[Researcher]): The researcher tool
-            to run on each question. Defaults to a standard WebResearcher if
+            to run on each topic. Defaults to a standard WebResearcher if
             not provided.
-        questions_generator (Optional[GenerateQuestions]): Agent that suggests
-            additional research questions based on current findings.
+        topic_generator (Optional[DefaultTopicGenerator]): Agent that
+            suggests additional research topics based on current findings.
         id (Optional[str]): Optional custom ID for the tool.
     """
 
@@ -182,13 +182,13 @@ class IterativeResearcher(DoWhile):
         max_depth: int = 3,
         max_time_seconds: int = 600,
         researcher: Optional[Researcher] = None,
-        questions_generator: Optional[DefaultQuestionGenerator] = None,
+        topic_generator: Optional[DefaultTopicGenerator] = None,
         id: Optional[str] = None,
     ):
-        # If the user didn't pass their own "GenerateQuestions" agent, default
+        # If the user didn't pass their own "GenerateTopics" agent, default
         # to it
-        if questions_generator is None:
-            questions_generator = DefaultQuestionGenerator(llm)
+        if topic_generator is None:
+            topic_generator = DefaultTopicGenerator(llm)
 
         self._llm = llm
         if researcher is None:
@@ -201,23 +201,22 @@ class IterativeResearcher(DoWhile):
         self.__researcher = ParallelList(
             tool=researcher,
             name=f"{name}_researchers_parallel",
-            description="A set of researchers to study each question passed",
+            description="A set of researchers to study each topic passed",
             result_formatter=self._format_findings,
         )
 
-        self._generate_questions = questions_generator
+        self._generate_topics = topic_generator
 
         self.max_depth = max_depth
         self.max_time_seconds = max_time_seconds
-        self.start_time = None
 
         args = [
             Argument(
-                name="questions",
+                name="topics",
                 description=(
-                    "A list of questions to start the research with, where "
-                    "each question is a thoroughly prescribed question to "
-                    "research. Ensure that each question is a single, highly "
+                    "A list of topics to start the research with, where "
+                    "each topic is a thoroughly prescribed topic to "
+                    "research. Ensure that each topic is a single, highly "
                     "descriptive target to research and explain."
                 ),
                 type="list[str]",
@@ -234,9 +233,9 @@ class IterativeResearcher(DoWhile):
             name=name,
             description=(
                 "A deep iterative researcher that uses an underlying "
-                "researcher to gather findings from each question in "
-                "a loop, then uses a GenerateQuestions agent to "
-                "propose follow-up questions, until no more questions "
+                "researcher to gather findings from each topic in "
+                "a loop, then uses a GenerateTopics agent to "
+                "propose follow-up topics, until no more topics "
                 "remain or the depth/time constraints are met."
             ),
             max_iterations=self.max_depth + 1,  # Should never be hit
@@ -265,38 +264,38 @@ class IterativeResearcher(DoWhile):
         return findings
 
     def _execute_research_cycle(
-        self, context: Context, questions: List[str]
+        self, context: Context, topics: List[str]
     ) -> List[Finding]:
         """
         This function is called once per iteration of the DoWhile loop:
-          1) Takes all current questions from context["questions"].
-          2) Runs the researcher(s) to gather new findings for all questions
+          1) Takes all current topics from context["topics"].
+          2) Runs the researcher(s) to gather new findings for all topics
             in parallel.
           3) Appends those findings to context["all_findings"].
-          4) Uses generate_questions to propose follow-up questions based on
+          4) Uses generate_topics to propose follow-up topics based on
             all known findings.
-          5) Appends any newly generated questions to context["questions"],
+          5) Appends any newly generated topics to context["topics"],
             unless depth is about to exceed.
         """
+        # Since _execute_research is toolified and thus its own context,
+        # we grab the parent context to reference the iterative researcher's
+        # context.
         ctx = context.parent
         # Initialize start time on first execution
-        print("CHANGE ME below")
-        if self.start_time is None:
-            self.start_time = time()
+        ctx.init("researcher_start_time", time())
 
         # Initialize findings list in context if not present
         ctx.init("findings", [])
-        ctx.init("all_questions", [])
+        ctx.init("all_topics", [])
 
-        # No questions are asked, we're done
-        if len(questions) == 0:
+        # No topics are asked, we're done
+        if len(topics) == 0:
             return ctx["findings"]
 
-        # Track all questions we've researched
-        print("Executing research cycle")
-        ctx.concat("all_questions", questions)
+        # Track all topics we've researched
+        ctx.concat("all_topics", topics)
 
-        findings = self.__researcher(context, topics=questions)
+        findings = self.__researcher(context, topics=topics)
 
         print(f"Findings: {len(findings)}")
 
@@ -307,8 +306,8 @@ class IterativeResearcher(DoWhile):
 
     def _should_stop(self, context: Context, output):
         """
-        This condition is checked after each iteration. We want to stop if:
-          1) No more questions remain.
+        _should_stop is checked after each iteration. We want to stop if:
+          1) No more topics remain.
           2) We have reached max_depth.
           3) We have exceeded max_time_seconds.
         If any of these are true, return True => stop. Otherwise, continue.
@@ -318,46 +317,30 @@ class IterativeResearcher(DoWhile):
             return True
 
         # If we've exceeded total time
-        elapsed = time() - self.start_time
+        elapsed = time() - context["researcher_start_time"]
         if elapsed >= self.max_time_seconds:
             return True
 
-        # If there are no more questions to process
-        next_questions = self._generate_questions(
+        # If there are no more topics to process
+        next_topics = self._generate_topics(
             context,
-            context.get("all_questions", []),
+            context.get("all_topics", []),
             context.get("findings", []),
         )
 
-        if len(next_questions) == 0:
+        if len(next_topics) == 0:
             return True
 
-        # Store the next questions for prepare_args to use
-        context["next_questions"] = next_questions
+        # Store the next topics for prepare_args to use
+        context["next_topics"] = next_topics
 
         # Otherwise, continue
         return False
 
     def _prepare_args(self, context: Context, args):
         if context["iteration"] == 1:
-            if isinstance(args["questions"], str):
-                args["questions"] = [args["questions"]]
+            if isinstance(args["topics"], str):
+                args["topics"] = [args["topics"]]
             return args
         else:
-            return {"questions": context.get("next_questions", [])}
-        # """
-        # prepare_args is called just before each iteration in the DoWhile loop.
-        # We are looking to prepare the next set of questions for each iteration.
-
-        # """
-
-        # if context["iteration"] == 1:
-        #     # First iteration, use the initial questions
-        #     args = args
-        # else:
-        #     # Use the questions generated in _should_stop
-        #     args = {"questions": context.get("next_questions", [])}
-
-        # return {
-        #     "topics": args["questions"],
-        # }
+            return {"topics": context.get("next_topics", [])}
