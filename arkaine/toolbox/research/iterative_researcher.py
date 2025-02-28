@@ -297,8 +297,6 @@ class IterativeResearcher(DoWhile):
 
         findings = self.__researcher(context, topics=topics)
 
-        print(f"Findings: {len(findings)}")
-
         # Add new findings to our collection
         ctx.concat("findings", findings)
 
