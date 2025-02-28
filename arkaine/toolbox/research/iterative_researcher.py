@@ -91,7 +91,6 @@ class DefaultQuestionGenerator(QuestionGenerator):
     def prepare_prompt(
         self,
         context: Context,
-        topic: str,
         questions: List[str],
         findings: List[Finding],
     ) -> Prompt:
@@ -107,8 +106,8 @@ class DefaultQuestionGenerator(QuestionGenerator):
         prompt.extend(
             questions.render(
                 {
-                    "topic": topic,
-                    "questions": questions,
+                    "topic": questions[0],
+                    "questions": questions[1:],
                     "findings": findings,
                 }
             )
@@ -120,7 +119,7 @@ class DefaultQuestionGenerator(QuestionGenerator):
         if output.strip().lower() == "NONE":
             return []
 
-        parsed: List[Dict] = self.__parser.parse_blocks("reason")
+        parsed: List[Dict] = self.__parser.parse_blocks(output, "reason")
 
         output = []
 
@@ -189,12 +188,12 @@ class IterativeResearcher(DoWhile):
         if researcher is None:
             # If the user didn't pass a specialized researcher, default to
             # WebResearcher
-            self.researcher = WebResearcher(llm=llm)
+            researcher = WebResearcher(llm=llm)
         else:
-            self.researcher = researcher
+            researcher = researcher
 
-        self.__researchers = ParallelList(
-            tool=self.researcher,
+        self.__researcher = ParallelList(
+            tool=researcher,
             name=f"{name}_researchers_parallel",
             description="A set of researchers to study each question passed",
             result_formatter=self._format_findings,
@@ -209,7 +208,12 @@ class IterativeResearcher(DoWhile):
         args = [
             Argument(
                 name="questions",
-                description="A list of questions to start the research with",
+                description=(
+                    "A list of questions to start the research with, where "
+                    "each question is a thoroughly prescribed question to "
+                    "research. Ensure that each question is a single, highly "
+                    "descriptive target to research and explain."
+                ),
                 type="list[str]",
                 required=True,
             ),
@@ -217,7 +221,8 @@ class IterativeResearcher(DoWhile):
 
         super().__init__(
             tool=self._execute_research_cycle,
-            condition=self._should_stop,
+            stop_condition=self._should_stop,
+            args=args,
             prepare_args=self._prepare_args,
             format_output=None,
             name=name,
@@ -228,7 +233,6 @@ class IterativeResearcher(DoWhile):
                 "propose follow-up questions, until no more questions "
                 "remain or the depth/time constraints are met."
             ),
-            args=args,
             max_iterations=self.max_depth + 1,  # Should never be hit
             examples=[],
             id=id,
@@ -276,18 +280,15 @@ class IterativeResearcher(DoWhile):
         context.init("findings", [])
         context.init("all_questions", [])
 
-        for index, question in enumerate(questions):
-            print(f"{index + 1}. {question}")
-
-        # No questions are asked, we're done.
+        # No questions are asked, we're done
         if len(questions) == 0:
             return context["findings"]
 
-        # Track all questions we've researche
+        # Track all questions we've researchered
         print("Executing research cycle")
         context.concat("all_questions", questions)
 
-        findings = self.__researchers(context, questions=questions)
+        findings = self.__researcher(context, topics=questions)
 
         print(f"Findings: {len(findings)}")
 
@@ -332,11 +333,17 @@ class IterativeResearcher(DoWhile):
     def _prepare_args(self, context: Context, args):
         """
         prepare_args is called just before each iteration in the DoWhile loop.
-        We prepare the next set of questions for the next iteration.
+        We are looking to prepare the next set of questions for each iteration.
+
         """
+
         if context["iteration"] == 1:
             # First iteration, use the initial questions
-            return args
+            args = args
         else:
             # Use the questions generated in _should_stop
-            return {"questions": context.get("next_questions", [])}
+            args = {"questions": context.get("next_questions", [])}
+
+        return {
+            "topics": args["questions"],
+        }

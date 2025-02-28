@@ -104,13 +104,20 @@ def mock_resource_search(mock_tool, mock_resources):
 
 
 @pytest.fixture
-def mock_researcher(mock_llm, mock_findings, mock_resource_search):
-    researcher = Researcher(
-        llm=mock_llm,
-        search_resources=mock_resource_search,
-    )
-    researcher.__call__ = lambda *args, **kwargs: mock_findings
-    return researcher
+def mock_researcher(mock_llm, mock_findings):
+    # researcher = Researcher(
+    #     llm=mock_llm,
+    #     search_resources=mock_resource_search,
+    # )
+
+    # def mock_call(context, **kwargs):
+    #     return mock_findings
+
+    # researcher.__call__ = mock_call
+    def mock_researcher_func(context, topic=""):
+        return mock_findings
+
+    return mock_researcher_func
 
 
 @pytest.fixture
@@ -148,7 +155,7 @@ def mock_question_generator(mock_llm):
                 llm=mock_llm,
             )
 
-        def prepare_prompt(self, context, args):
+        def prepare_prompt(self, context, *args, **kwargs):
             return "Question prompt"
 
         def extract_result(self, context, output):
@@ -176,7 +183,6 @@ def test_deep_researcher_initialization(mock_llm, mock_researcher):
     assert deep_researcher.name == "custom_deep_researcher"
     assert deep_researcher.max_depth == 5
     assert deep_researcher.max_time_seconds == 300
-    assert deep_researcher.researcher == mock_researcher
 
 
 def test_format_findings():
@@ -210,31 +216,33 @@ def test_format_findings():
 
 def test_execute_research_cycle(mock_llm, mock_researcher, mock_findings):
     """Test the _execute_research_cycle method."""
-    deep_researcher = IterativeResearcher(
+    iterative_researcher = IterativeResearcher(
         llm=mock_llm, researcher=mock_researcher
     )
 
-    context = Context(deep_researcher)
+    context = Context(iterative_researcher)
     questions = ["What is AI?", "How does machine learning work?"]
 
     # Mock the ParallelList researchers
-    deep_researcher.__researchers = Mock()
-    deep_researcher.__researchers.return_value = mock_findings
+    # iterative_researcher.__researcher = Mock()
+    # iterative_researcher.__researcher.return_value = mock_findings
 
     # Execute the research cycle
     with patch("builtins.print") as mock_print:
-        result = deep_researcher._execute_research_cycle(context, questions)
+        result = iterative_researcher._execute_research_cycle(
+            context, questions
+        )
 
     # Verify results
     assert "all_questions" in context
     assert context["all_questions"] == questions
     assert "findings" in context
-    assert context["findings"] == mock_findings
-    assert result == mock_findings
+    assert context["findings"] == mock_findings * 2
+    assert result == mock_findings * 2
 
     # Test with empty questions
-    context = Context(deep_researcher)
-    result = deep_researcher._execute_research_cycle(context, [])
+    context = Context(iterative_researcher)
+    result = iterative_researcher._execute_research_cycle(context, [])
     assert result == []
 
 
@@ -262,32 +270,42 @@ def test_should_stop_max_time(mock_llm):
 
 
 def test_should_stop_no_questions(mock_llm, mock_question_generator):
-    """Test that _should_stop returns True when no more questions are generated."""
+    """
+    Test that _should_stop returns True when no more questions are generated.
+    """
+
+    mock_question_generator.extract_result = Mock()
+    mock_question_generator.extract_result.return_value = []
+
     deep_researcher = IterativeResearcher(
         llm=mock_llm, questions_generator=mock_question_generator
     )
     context = Context(deep_researcher)
     context["iteration"] = 1
     deep_researcher.start_time = time()
-
-    # Mock question generator to return empty list
-    mock_question_generator.return_value = []
 
     result = deep_researcher._should_stop(context, None)
     assert result is True
 
 
 def test_should_continue(mock_llm, mock_question_generator):
-    """Test that _should_stop returns False when conditions to continue are met."""
+    """
+    Test that _should_stop returns False when conditions to continue are
+    met.
+    """
+
+    mock_question_generator.extract_result = Mock()
+    mock_question_generator.extract_result.return_value = [
+        "New question 1",
+        "New question 2",
+    ]
+
     deep_researcher = IterativeResearcher(
         llm=mock_llm, questions_generator=mock_question_generator
     )
     context = Context(deep_researcher)
     context["iteration"] = 1
     deep_researcher.start_time = time()
-
-    # Mock question generator to return new questions
-    mock_question_generator.return_value = ["New question 1", "New question 2"]
 
     result = deep_researcher._should_stop(context, None)
     assert result is False
@@ -296,7 +314,9 @@ def test_should_continue(mock_llm, mock_question_generator):
 
 
 def test_prepare_args_first_iteration(mock_llm):
-    """Test that _prepare_args returns initial args on first iteration."""
+    """
+    Test that _prepare_args returns initial args on first iteration.
+    """
     deep_researcher = IterativeResearcher(llm=mock_llm)
     context = Context(deep_researcher)
     context["iteration"] = 1
@@ -304,11 +324,13 @@ def test_prepare_args_first_iteration(mock_llm):
     initial_args = {"questions": ["Initial question"]}
     result = deep_researcher._prepare_args(context, initial_args)
 
-    assert result == initial_args
+    assert result == {"topics": ["Initial question"]}
 
 
 def test_prepare_args_subsequent_iterations(mock_llm):
-    """Test that _prepare_args returns next_questions on subsequent iterations."""
+    """
+    Test that _prepare_args returns next_questions on subsequent iterations.
+    """
     deep_researcher = IterativeResearcher(llm=mock_llm)
     context = Context(deep_researcher)
     context["iteration"] = 2
@@ -318,7 +340,7 @@ def test_prepare_args_subsequent_iterations(mock_llm):
     result = deep_researcher._prepare_args(context, initial_args)
 
     assert result == {
-        "questions": ["Follow-up question 1", "Follow-up question 2"]
+        "topics": ["Follow-up question 1", "Follow-up question 2"]
     }
 
 
