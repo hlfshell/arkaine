@@ -1,5 +1,5 @@
 import os
-from typing import Optional
+from typing import Optional, Tuple, Union
 
 from anthropic import Anthropic
 
@@ -13,19 +13,23 @@ class Claude(LLM):
     """
 
     MODELS = {
-        "claude-3-opus-20240229": {"context_length": 4096},
-        "claude-3-sonnet-20240229": {"context_length": 4096},
-        "claude-3-haiku-20240307": {"context_length": 4096},
+        "claude-3-7-sonnet-latest": {"context_length": 20000},
+        "claude-3-opus-latest": {"context_length": 4096},
+        "claude-3-haiku-latest": {"context_length": 4096},
+        "claude-3-5-haiku-latest": {"context_length": 4096},
+        "claude-3-5-sonnet-latest": {"context_length": 4096},
         "claude-2.1": {"context_length": 4096},
         "claude-2.0": {"context_length": 4096},
     }
 
     def __init__(
         self,
-        model: str = "claude-3-sonnet-20240229",
+        model: str = "claude-3-sonnet-latest",
+        thinking: bool = False,
         api_key: Optional[str] = None,
         context_length: Optional[int] = None,
         default_temperature: float = 0.7,
+        budget_tokens: Optional[int] = 16000,
     ):
         """
         Initialize a new Claude LLM instance.
@@ -48,6 +52,8 @@ class Claude(LLM):
 
         self.__client = Anthropic(api_key=api_key)
         self.__model = model
+        self.thinking = thinking
+        self.budget_tokens = budget_tokens
         self.default_temperature = default_temperature
 
         if context_length:
@@ -63,7 +69,7 @@ class Claude(LLM):
     def context_length(self) -> int:
         return self.__context_length
 
-    def completion(self, prompt: Prompt) -> str:
+    def completion(self, prompt: Prompt) -> Union[str, Tuple[str, str]]:
         """
         Generate a completion from Claude given a prompt.
 
@@ -91,11 +97,29 @@ class Claude(LLM):
                 response = self.__client.messages.create(
                     model=self.__model,
                     messages=messages,
-                    temperature=self.default_temperature,
+                    temperature=(
+                        1 if self.thinking else self.default_temperature
+                    ),
                     max_tokens=self.context_length,
+                    thinking=(
+                        {
+                            "type": "disabled",
+                        }
+                        if not self.thinking
+                        else {
+                            "type": "enabled",
+                            "budget_tokens": self.budget_tokens,
+                        }
+                    ),
                 )
                 # The response content is now directly accessible
-                return response.content[0].text
+                if self.thinking:
+                    return (
+                        response.content[1].text,
+                        response.content[0].thinking,
+                    )
+                else:
+                    return response.content[0].text
             except Exception as e:
                 if attempts == 3:
                     raise e

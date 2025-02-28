@@ -4,7 +4,7 @@ import re
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from uuid import uuid4
 
 from arkaine.internal.registrar import Registrar
@@ -121,10 +121,12 @@ class LLM(ABC):
         return count
 
     @abstractmethod
-    def completion(self, prompt: Prompt) -> str:
+    def completion(self, prompt: Prompt) -> Union[str, Tuple[str, str]]:
         """
         completion takes a prompt and queries the model to generate a
         completion. The string body of the completion is returned.
+        If the model is a reasoning model, it will return a tuple with
+        the completion and the reasoning.
         """
         pass
 
@@ -196,12 +198,21 @@ class LLM(ABC):
 
         with self._init_context_(context, prompt) as ctx:
             self.__broadcast_call(ctx)
-            response = self.completion(prompt)
+            result = self.completion(prompt)
+
+            if isinstance(result, tuple):
+                response, reasoning = result
+            else:
+                response = result
+                reasoning = ""
+
             ctx["estimated_tokens"] = {
                 "prompt": self.estimate_tokens(prompt),
                 "response": self.estimate_tokens(response),
             }
             ctx.output = response
+            if reasoning:
+                ctx["reasoning"] = reasoning
             return response
 
     def to_json(self) -> Dict[str, Any]:
