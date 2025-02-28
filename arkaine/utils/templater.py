@@ -92,7 +92,8 @@ class PromptTemplate:
         if variables is None:
             variables = self.variables
 
-        # Merge defaults with provided variables, prioritizing provided variables
+        # Merge defaults with provided variables, prioritizing provided
+        # variables
         merged_variables = self.defaults.copy()
         merged_variables.update(variables)
 
