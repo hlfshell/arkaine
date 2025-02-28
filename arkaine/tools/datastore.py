@@ -146,8 +146,9 @@ class ThreadSafeDataStore:
                 path = "".join(f"[{k}]" for k in keys)
                 raise KeyError(f"Key {path} does not exist")
 
-        current[final_key] = operation(current[final_key])
-        self.__broadcast_update(final_key, current[final_key])
+        value = operation(current[final_key])
+        current[final_key] = value
+        self.__broadcast_update(final_key, value)
 
     def update(self, key: str, operation: Callable[[Any], Any]) -> Any:
         """
