@@ -94,8 +94,8 @@ class DefaultQuestionGenerator(QuestionGenerator):
         questions: List[str],
         findings: List[Finding],
     ) -> Prompt:
-        base = PromptLoader.load("researcher")
-        questions = PromptLoader.load("generate_questions")
+        base = PromptLoader.load_prompt("researcher")
+        questions_prompt = PromptLoader.load_prompt("generate_questions")
 
         prompt = base.render(
             {
@@ -104,7 +104,7 @@ class DefaultQuestionGenerator(QuestionGenerator):
         )
 
         prompt.extend(
-            questions.render(
+            questions_prompt.render(
                 {
                     "topic": questions[0],
                     "questions": questions[1:],
@@ -128,10 +128,16 @@ class DefaultQuestionGenerator(QuestionGenerator):
             if block["errors"]:
                 continue
 
+            if len(block["data"]["question"]) == 0:
+                continue
+
+            if len(block["data"]["reason"]) == 0:
+                continue
+
             output.append(
                 {
-                    "reason": block["data"]["reason"],
-                    "question": block["data"]["question"],
+                    "reason": block["data"]["reason"][0].strip(),
+                    "question": block["data"]["question"][0].strip(),
                 }
             )
 
@@ -272,30 +278,32 @@ class IterativeResearcher(DoWhile):
           5) Appends any newly generated questions to context["questions"],
             unless depth is about to exceed.
         """
+        ctx = context.parent
         # Initialize start time on first execution
+        print("CHANGE ME below")
         if self.start_time is None:
             self.start_time = time()
 
         # Initialize findings list in context if not present
-        context.init("findings", [])
-        context.init("all_questions", [])
+        ctx.init("findings", [])
+        ctx.init("all_questions", [])
 
         # No questions are asked, we're done
         if len(questions) == 0:
-            return context["findings"]
+            return ctx["findings"]
 
-        # Track all questions we've researchered
+        # Track all questions we've researched
         print("Executing research cycle")
-        context.concat("all_questions", questions)
+        ctx.concat("all_questions", questions)
 
         findings = self.__researcher(context, topics=questions)
 
         print(f"Findings: {len(findings)}")
 
         # Add new findings to our collection
-        context.concat("findings", findings)
+        ctx.concat("findings", findings)
 
-        return context["findings"]
+        return ctx["findings"]
 
     def _should_stop(self, context: Context, output):
         """
@@ -331,19 +339,25 @@ class IterativeResearcher(DoWhile):
         return False
 
     def _prepare_args(self, context: Context, args):
-        """
-        prepare_args is called just before each iteration in the DoWhile loop.
-        We are looking to prepare the next set of questions for each iteration.
-
-        """
-
         if context["iteration"] == 1:
-            # First iteration, use the initial questions
-            args = args
+            if isinstance(args["questions"], str):
+                args["questions"] = [args["questions"]]
+            return args
         else:
-            # Use the questions generated in _should_stop
-            args = {"questions": context.get("next_questions", [])}
+            return {"questions": context.get("next_questions", [])}
+        # """
+        # prepare_args is called just before each iteration in the DoWhile loop.
+        # We are looking to prepare the next set of questions for each iteration.
 
-        return {
-            "topics": args["questions"],
-        }
+        # """
+
+        # if context["iteration"] == 1:
+        #     # First iteration, use the initial questions
+        #     args = args
+        # else:
+        #     # Use the questions generated in _should_stop
+        #     args = {"questions": context.get("next_questions", [])}
+
+        # return {
+        #     "topics": args["questions"],
+        # }
