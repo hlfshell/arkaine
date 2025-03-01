@@ -3,7 +3,7 @@ from typing import Dict, List, Optional
 
 from arkaine.flow.linear import Linear
 from arkaine.flow.parallel_list import ParallelList
-from arkaine.internal.parser import Label, Parser
+from arkaine.utils.parser import Label, Parser
 from arkaine.llms.llm import LLM, Prompt
 from arkaine.toolbox.research.finding import Finding
 from arkaine.tools.abstract import AbstractAgent
