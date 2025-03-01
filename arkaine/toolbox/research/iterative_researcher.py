@@ -83,7 +83,12 @@ class DefaultTopicGenerator(TopicGenerator):
 
         self.__parser = Parser(
             [
-                Label("reason", required=True, data_type="str"),
+                Label(
+                    "reason",
+                    required=True,
+                    data_type="str",
+                    is_block_start=True,
+                ),
                 Label("topic", required=True, data_type="str"),
             ]
         )
@@ -119,25 +124,23 @@ class DefaultTopicGenerator(TopicGenerator):
         if output.strip().lower() == "NONE":
             return []
 
-        parsed: List[Dict] = self.__parser.parse_blocks(output, "reason")
+        parsed: List[Dict]
+        parsed, _ = self.__parser.parse_blocks(output)
 
         output = []
 
         # Place into output a dict of { "reason": reason, "topic": topic }
         for block in parsed:
-            if block["errors"]:
+            if len(block["topic"]) == 0:
                 continue
 
-            if len(block["data"]["topic"]) == 0:
-                continue
-
-            if len(block["data"]["reason"]) == 0:
+            if len(block["reason"]) == 0:
                 continue
 
             output.append(
                 {
-                    "reason": block["data"]["reason"][0].strip(),
-                    "topic": block["data"]["topic"][0].strip(),
+                    "reason": block["reason"].strip(),
+                    "topic": block["topic"].strip(),
                 }
             )
 

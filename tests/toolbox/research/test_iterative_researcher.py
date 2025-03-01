@@ -105,15 +105,6 @@ def mock_resource_search(mock_tool, mock_resources):
 
 @pytest.fixture
 def mock_researcher(mock_llm, mock_findings):
-    # researcher = Researcher(
-    #     llm=mock_llm,
-    #     search_resources=mock_resource_search,
-    # )
-
-    # def mock_call(context, **kwargs):
-    #     return mock_findings
-
-    # researcher.__call__ = mock_call
     def mock_researcher_func(context, topic=""):
         return mock_findings
 
@@ -347,30 +338,31 @@ def test_default_topic_generator(mock_llm):
     context = Context(generator)
 
     # Mock the parser.parse_blocks method
-    with patch("arkaine.internal.parser.Parser.parse_blocks") as mock_parse:
-        mock_parse.return_value = [
-            {
-                "errors": False,
-                "data": {
-                    "reason": ["Need more information about X"],
-                    "topic": ["What is X?"],
+    with patch("arkaine.utils.parser.Parser.parse_blocks") as mock_parse:
+        mock_parse.return_value = (
+            [
+                {
+                    "reason": "Need more information about X",
+                    "topic": "What is X?",
                 },
-            },
-            {
-                "errors": False,
-                "data": {
-                    "reason": ["Need to understand Y"],
-                    "topic": ["How does Y work?"],
+                {
+                    "reason": "Need to understand Y",
+                    "topic": "How does Y work?",
                 },
-            },
-        ]
+            ],
+            None,
+        )
 
-        result = generator.extract_result(context, "Some output")
-    print(result)
-    assert result == ["What is X?", "How does Y work?"]
+        results = generator.extract_result(context, "Some output")
+
     assert "topics" in context
+    assert len(results) == 2
+    assert results[0] == "What is X?"
+    assert results[1] == "How does Y work?"
     assert len(context["topics"]) == 2
     assert context["topics"][0]["reason"] == "Need more information about X"
+    assert context["topics"][0]["topic"] == "What is X?"
+    assert context["topics"][1]["reason"] == "Need to understand Y"
     assert context["topics"][1]["topic"] == "How does Y work?"
 
 
@@ -390,29 +382,21 @@ def test_default_topic_generator_with_errors(mock_llm):
     context = Context(generator)
 
     # Mock the parser.parse_blocks method with some errors
-    with patch("arkaine.internal.parser.Parser.parse_blocks") as mock_parse:
-        mock_parse.return_value = [
-            {
-                "errors": True,  # This one has errors
-                "data": {
-                    "reason": ["Invalid reason"],
-                    "topic": ["Invalid topic"],
+    with patch("arkaine.utils.parser.Parser.parse_blocks") as mock_parse:
+        mock_parse.return_value = (
+            [
+                {
+                    "reason": "Valid reason",
+                    "topic": "Valid topic",
                 },
-            },
-            {
-                "errors": False,
-                "data": {
-                    "reason": ["Valid reason"],
-                    "topic": ["Valid topic"],
-                },
-            },
-        ]
+            ],
+            [True],
+        )
 
-        result = generator.extract_result(context, "Some output")
+        results = generator.extract_result(context, "Some output")
 
     # Only the valid topic should be returned
-    assert result == ["Valid topic"]
-    assert len(context["topics"]) == 1
+    assert results[0] == "Valid topic"
 
 
 def test_deep_researcher_end_to_end(

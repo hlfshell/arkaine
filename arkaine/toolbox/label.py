@@ -124,11 +124,6 @@ class Labeler(Agent):
         """
         Prepares the prompt for the LLM to assign a label based on examples.
         """
-        # examples = "\nHere are some examples and explanations of the labels:\n"
-        # examples = "\n---\n".join(
-        #     [str(label) for label in self.__label_examples]
-        # )
-
         examples = "### **Examples:**\n"
         for index, example in enumerate(self.__label_examples):
             examples += f"#### **Example {index + 1}**\n"
@@ -167,18 +162,18 @@ class Labeler(Agent):
         """
         Processes the LLM response to extract the label.
         """
-        output = self.__parser.parse(response)
+        output, errors = self.__parser.parse(response)
 
-        if output["errors"]:
-            raise ValueError(f"Errors: {output['errors']}")
+        if errors:
+            raise ValueError(f"Errors: {errors}")
 
         if self.__allow_none:
-            if len(output["data"]["label"]) == 0:
+            if len(output["label"]) == 0:
                 return {"label": "None", "reason": ""}
         else:
             raise ValueError("No label assigned")
 
         return {
-            "label": output["data"]["label"][0],
-            "reason": output["data"]["reason"][0],
+            "label": output["label"],
+            "reason": output["reason"],
         }

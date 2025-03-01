@@ -92,7 +92,7 @@ class DefaultResourceJudge(ResourceJudge):
 
         self.__parser = Parser(
             [
-                Label(name="resource", required=True),
+                Label(name="resource", required=True, is_block_start=True),
                 Label(name="reason", required=True),
                 Label(name="recommend", required=True),
             ]
@@ -122,26 +122,15 @@ class DefaultResourceJudge(ResourceJudge):
         return prompt
 
     def extract_result(self, context: Context, output: str) -> List[Resource]:
-        labels = self.__parser.parse_blocks(output, "resource")
+        labels, _ = self.__parser.parse_blocks(output)
         resources = []
 
         context["parsed_resource_judgements"] = labels
 
         for label in labels:
-            if label["errors"]:
-                continue
+            id = label["resource"]
 
-            id = label["data"]["resource"]
-            if len(id) == 0:
-                continue
-            else:
-                id = id[0].strip()
-
-            recommend = label["data"]["recommend"]
-            if len(recommend) == 0:
-                continue
-            else:
-                recommend = recommend[0].strip()
+            recommend = label["recommend"]
 
             # Find the resource from the original context.
             # If the resource is not found, it is a hallucinated resource
@@ -263,7 +252,7 @@ class GenerateFinding(FindingsGenerator):
         self.__max_learnings = max_learnings
         self.__parser = Parser(
             [
-                Label(name="summary", required=True),
+                Label(name="summary", required=True, is_block_start=True),
                 Label(name="finding", required=True),
             ]
         )
@@ -300,19 +289,16 @@ class GenerateFinding(FindingsGenerator):
         return prompt
 
     def extract_result(self, context: Context, output: str) -> List[Finding]:
-        labels = self.__parser.parse_blocks(output, "summary")
+        labels, _ = self.__parser.parse_blocks(output)
 
         resource: Resource = context.args["resource"]
         source = f"{resource.name} - {resource.source}"
 
         findings: List[Finding] = []
         for label in labels:
-            if label["errors"]:
-                continue
-
             try:
-                summary = label["data"]["summary"][0]
-                content = label["data"]["finding"][0]
+                summary = label["summary"]
+                content = label["finding"]
                 findings.append(Finding(source, summary, content))
             except Exception:  # NOQA
                 continue
