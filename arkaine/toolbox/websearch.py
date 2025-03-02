@@ -11,6 +11,20 @@ from arkaine.utils.website import Website
 DUCK_DUCK_GO = "duckduckgo"
 BING = "bing"
 GOOGLE = "google"
+FIRECRAWL = "firecrawl"
+EXA = "exa"
+
+
+def load_firecrawl():
+    from firecrawl import FirecrawlApp
+
+    return FirecrawlApp
+
+
+def load_exa():
+    from exa_py import Exa
+
+    return Exa
 
 
 class Websearch(Tool):
@@ -23,7 +37,7 @@ class Websearch(Tool):
         domains: Optional[Union[List[str], bool]] = False,
     ):
         self.provider = provider.lower()
-        self.api_key = api_key
+        self.__api_key = api_key
 
         self.forced_limit = 0
         self.allow_limit = False
@@ -44,14 +58,36 @@ class Websearch(Tool):
         # Validate API key requirements
         if self.provider == BING:
             if not api_key:
-                self.api_key = os.environ.get("BING_SUBSCRIPTION_KEY")
-                if not self.api_key:
+                self.__api_key = os.environ.get("BING_SUBSCRIPTION_KEY")
+                if not self.__api_key:
                     raise ValueError("Bing search requires an API key")
         elif self.provider == GOOGLE:
             if not api_key:
-                self.api_key = os.environ.get("GOOGLE_SEARCH_API_KEY")
-                if not self.api_key:
+                self.__api_key = os.environ.get("GOOGLE_SEARCH_API_KEY")
+                if not self.__api_key:
                     raise ValueError("Google search requires an API key")
+        elif self.provider == FIRECRAWL:
+            # See if firecrawl is installed
+            try:
+                load_firecrawl()
+            except ImportError:
+                raise ImportError("FireCrawl is not installed")
+
+            if not api_key:
+                self.__api_key = os.environ.get("FIRECRAWL_API_KEY")
+                if not self.__api_key:
+                    raise ValueError("FireCrawl search requires an API key")
+
+        elif self.provider == EXA:
+            try:
+                load_exa()
+            except ImportError:
+                raise ImportError("Exa is not installed")
+
+            if not api_key:
+                self.__api_key = os.environ.get("EXA_API_KEY")
+                if not self.__api_key:
+                    raise ValueError("Exa search requires an API key")
 
         args = [
             Argument(
@@ -149,7 +185,7 @@ class Websearch(Tool):
         self, query: str, domains: List[str], limit: int, offset: int
     ) -> List[Website]:
         search_url = "https://api.bing.microsoft.com/v7.0/search"
-        headers = {"Ocp-Apim-Subscription-Key": self.api_key}
+        headers = {"Ocp-Apim-Subscription-Key": self.__api_key}
         params = {
             "q": self._build_query_string(query, domains),
             "textDecorations": False,
@@ -183,7 +219,7 @@ class Websearch(Tool):
     ) -> List[Website]:
         search_url = "https://customsearch.googleapis.com/customsearch/v1"
         params = {
-            "key": self.api_key,
+            "key": self.__api_key,
             "cx": os.environ.get(
                 "GOOGLE_SEARCH_ENGINE_ID"
             ),  # Custom Search Engine ID
@@ -206,6 +242,66 @@ class Websearch(Tool):
                         snippet=result.get("snippet", ""),
                     )
                 )
+
+        return results
+
+    def _search_firecrawl(
+        self, query: str, domains: List[str], limit: int, offset: int
+    ) -> List[Website]:
+        FirecrawlApp = load_firecrawl()
+        firecrawl = FirecrawlApp(api_key=self.__api_key)
+
+        # Firecrawl limit must be between 1 and 10
+        limit = min(max(limit, 1), 10)
+
+        response = firecrawl.search(
+            query=query,
+            params={
+                "scrapeOptions": {
+                    "formats": ["markdown", "html"],
+                },
+                "limit": limit,
+            },
+        )
+
+        results = []
+        for entry in response["data"]:
+            results.append(
+                Website(
+                    url=entry["url"],
+                    title=entry["title"],
+                    snippet=entry["description"],
+                    markdown=entry["markdown"],
+                    html=entry["html"],
+                )
+            )
+
+        return results
+
+    def _search_exa(
+        self, query: str, domains: List[str], limit: int, offset: int
+    ) -> List[Website]:
+        Exa = load_exa()
+        exa = Exa(api_key=self.__api_key)
+
+        response = exa.search_and_contents(
+            query,
+            num_results=limit,
+            type="keyword",
+            text={
+                "max_characters": 250,
+            },
+        )
+
+        results = []
+        for entry in response.results:
+            results.append(
+                Website(
+                    url=entry.url,
+                    title=entry.title,
+                    snippet=entry.text,
+                )
+            )
 
         return results
 
@@ -240,6 +336,8 @@ class Websearch(Tool):
             DUCK_DUCK_GO: self._search_duckduckgo,
             BING: self._search_bing,
             GOOGLE: self._search_google,
+            FIRECRAWL: self._search_firecrawl,
+            EXA: self._search_exa,
         }
 
         return search_methods[self.provider](query, domains, limit, offset)

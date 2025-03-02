@@ -17,6 +17,8 @@ class Website:
         url: str,
         title: str = "",
         snippet: str = "",
+        html: str = "",
+        markdown: str = "",
         load_content: bool = False,
     ):
         self.url = url
@@ -25,6 +27,8 @@ class Website:
         self.domain = Website.extract_domain(url)
         self.raw_content: Optional[str] = None
         self.is_pdf = False
+        self.raw_content = html
+        self.markdown = markdown
         self.lock = Lock()
 
         if load_content:
@@ -37,6 +41,9 @@ class Website:
         return self.get_markdown()
 
     def get_title(self) -> str:
+        if self.title:
+            return self.title
+
         if not self.raw_content:
             self.load_content()
 
@@ -127,6 +134,9 @@ class Website:
         return soup.body
 
     def get_markdown(self):
+        if self.markdown:
+            return self.markdown
+
         if not self.raw_content:
             self.load_content()
 
@@ -136,15 +146,8 @@ class Website:
         soup = BeautifulSoup(self.raw_content, "html.parser")
         markdown = md(soup.body.get_text())
         markdown = re.sub(r"\n+", "\n", markdown)
+        self.markdown = markdown
         return markdown
-
-    def format(self, template: str) -> str:
-        return template.format(
-            url=self.url,
-            domain=self.domain,
-            title=self.title,
-            snippet=self.snippet,
-        )
 
     def __str__(self):
         return f"{self.title}\n{self.url}\n\t{self.snippet}"
