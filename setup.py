@@ -34,6 +34,7 @@ setup(
     extras_require={
         "dev": [
             "pytest",
+            "responses",
         ],
     },
     python_requires=">=3.8",  # Specify minimum Python version

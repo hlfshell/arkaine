@@ -13,18 +13,43 @@ BING = "bing"
 GOOGLE = "google"
 FIRECRAWL = "firecrawl"
 EXA = "exa"
+TAVILY = "tavily"
 
 
 def load_firecrawl():
-    from firecrawl import FirecrawlApp
+    try:
+        from firecrawl import FirecrawlApp
+    except ImportError:
+        raise ImportError(
+            "FireCrawl is not installed - please install with "
+            "pip install firecrawl==1.13.2"
+        )
 
     return FirecrawlApp
 
 
 def load_exa():
-    from exa_py import Exa
+    try:
+        from exa_py import Exa
+    except ImportError:
+        raise ImportError(
+            "Exa is not installed - please install with "
+            "pip install exa_py==1.8.9"
+        )
 
     return Exa
+
+
+def load_tavily():
+    try:
+        from tavily import TavilyClient
+    except ImportError:
+        raise ImportError(
+            "Tavily is not installed - please install with "
+            "pip install tavily==0.5.1"
+        )
+
+    return TavilyClient
 
 
 class Websearch(Tool):
@@ -68,26 +93,24 @@ class Websearch(Tool):
                     raise ValueError("Google search requires an API key")
         elif self.provider == FIRECRAWL:
             # See if firecrawl is installed
-            try:
-                load_firecrawl()
-            except ImportError:
-                raise ImportError("FireCrawl is not installed")
-
+            load_firecrawl()
             if not api_key:
                 self.__api_key = os.environ.get("FIRECRAWL_API_KEY")
                 if not self.__api_key:
                     raise ValueError("FireCrawl search requires an API key")
-
         elif self.provider == EXA:
-            try:
-                load_exa()
-            except ImportError:
-                raise ImportError("Exa is not installed")
-
+            load_exa()
             if not api_key:
                 self.__api_key = os.environ.get("EXA_API_KEY")
                 if not self.__api_key:
                     raise ValueError("Exa search requires an API key")
+        elif self.provider == TAVILY:
+            load_tavily()
+
+            if not api_key:
+                self.__api_key = os.environ.get("TAVILY_API_KEY")
+                if not self.__api_key:
+                    raise ValueError("Tavily search requires an API key")
 
         args = [
             Argument(
@@ -305,6 +328,30 @@ class Websearch(Tool):
 
         return results
 
+    def _search_tavily(
+        self, query: str, domains: List[str], limit: int, offset: int
+    ):
+        client = load_tavily(api_key=self.__api_key)
+
+        response = client.search(
+            query=query,
+            topic="general",
+            max_results=limit,
+            include_domains=domains,
+        )
+
+        results = []
+        for result in response["results"]:
+            results.append(
+                Website(
+                    url=result["url"],
+                    title=result["title"],
+                    snippet=result["content"],
+                )
+            )
+
+        return results
+
     def search(
         self,
         query: str,
@@ -338,6 +385,7 @@ class Websearch(Tool):
             GOOGLE: self._search_google,
             FIRECRAWL: self._search_firecrawl,
             EXA: self._search_exa,
+            TAVILY: self._search_tavily,
         }
 
         return search_methods[self.provider](query, domains, limit, offset)

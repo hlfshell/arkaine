@@ -11,6 +11,7 @@ import requests
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 from pymupdf4llm import to_markdown
+from tldextract import extract
 
 
 class Website:
@@ -72,19 +73,18 @@ class Website:
 
     @classmethod
     def extract_domain(cls, url: str) -> str:
-        parsed_url = urlparse(url)
-        domain = parsed_url.netloc
-        domain = domain.split(":")[0]
-        domain = re.sub(r"^www\.", "", domain)
-        parts = domain.split(".")
-        if len(parts) > 2:
-            domain = ".".join(parts[-2:])
-        return domain
+        parsed_url = extract(url)
+        return f"{parsed_url.domain}." f"{parsed_url.suffix}"
 
     def load_content(self):
         loader = None
         with self.__domain_loader_lock:
-            loader = self.__domain_loaders.get(self.domain, None)
+            if self.domain in self.__domain_loaders:
+                loader = self.__domain_loaders[self.domain]
+            elif "*" in self.__domain_loaders:
+                loader = self.__domain_loaders["*"]
+            elif "all" in self.__domain_loaders:
+                loader = self.__domain_loaders["all"]
 
         if not loader:
             Website.load(self)
@@ -133,6 +133,9 @@ class Website:
                         )
                 else:
                     website.raw_content = response.text
+
+                # Load the title from the title if it is not set
+                website.get_title()
 
     def get_body(self):
         if not self.raw_content:
