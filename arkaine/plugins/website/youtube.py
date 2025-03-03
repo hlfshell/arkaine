@@ -21,22 +21,27 @@ def load_youtube_content(website: Website):
 
     try:
         yt = YouTube(website.url)
-        print(yt.video_id)
         transcript = YouTubeTranscriptApi.get_transcript(
             yt.video_id, preserve_formatting=True
         )
-        title = yt.title
-        description = yt.description
-
-        content = f"Youtube - {title}\n{description}\n\n"
-        content += "Video Transcript:\n"
-        content += "\n".join([t["text"] for t in transcript])
-        if not website.title:
-            website.title = title
-        if not website.snippet:
-            website.snippet = description
-        website.raw_content = content
-        website.markdown = content
     except Exception:  # noqa: B902
         # Fall back to default loader
         Website.load(website)
+    try:
+        title = yt.title
+    except Exception:  # noqa: B902
+        title = ""
+    try:
+        description = yt.description
+    except Exception:  # noqa: B902
+        description = ""
+
+    content = f"Youtube - {title}\n{description}\n\n"
+    content += "Video Transcript:\n"
+    content += "".join([t["text"] for t in transcript])
+    if not website.title:
+        website.title = title
+    if not website.snippet:
+        website.snippet = description
+    website.raw_content = content
+    website.markdown = content
