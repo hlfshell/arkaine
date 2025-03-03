@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import os
 import re
 import tempfile
 from threading import Lock
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 from urllib.parse import urlparse
 
 import requests
@@ -69,7 +71,7 @@ class Website:
         return self.title
 
     @classmethod
-    def extract_domain(self, url: str) -> str:
+    def extract_domain(cls, url: str) -> str:
         parsed_url = urlparse(url)
         domain = parsed_url.netloc
         domain = domain.split(":")[0]
@@ -80,25 +82,29 @@ class Website:
         return domain
 
     def load_content(self):
-        with self.lock:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-                "Accept-Language": "en-US,en;q=0.5",
-                "Accept-Encoding": "gzip",
-                "Connection": "keep-alive",
-            }
+        loader = None
+        with self.__domain_loader_lock:
+            loader = self.__domain_loaders.get(self.domain, None)
+
+        if not loader:
+            Website.load(self)
+        else:
+            loader(self)
+
+    @classmethod
+    def load(cls, website: Website):
+        with website.lock:
 
             session = requests.Session()
-            session.headers.update(headers)
-            response = session.get(self.url, stream=True)
+            session.headers.update(cls.headers)
+            response = session.get(website.url, stream=True)
             response.raise_for_status()
 
             content_type = response.headers.get("Content-Type", "").lower()
-            if "application/pdf" in content_type or self.url.lower().endswith(
-                ".pdf"
+            if "application/pdf" in content_type or (
+                website.url.lower().endswith(".pdf")
             ):
-                self.is_pdf = True
+                website.is_pdf = True
                 temp_file = None
                 try:
                     temp_file = tempfile.NamedTemporaryFile(
@@ -109,9 +115,10 @@ class Website:
                             temp_file.write(chunk)
                     temp_file.close()
 
-                    self.raw_content = to_markdown(
+                    website.raw_content = to_markdown(
                         temp_file.name, show_progress=False
                     )
+                    website.markdown = website.raw_content
                 finally:
                     if temp_file:
                         try:
@@ -121,11 +128,11 @@ class Website:
             else:
                 if "Content-Encoding" in response.headers:
                     if response.headers["Content-Encoding"] == "gzip":
-                        self.raw_content = response.content.decode(
+                        website.raw_content = response.content.decode(
                             "utf-8", errors="replace"
                         )
                 else:
-                    self.raw_content = response.text
+                    website.raw_content = response.text
 
     def get_body(self):
         if not self.raw_content:
@@ -173,3 +180,24 @@ class Website:
             snippet=json_data["snippet"],
             load_content=False,
         )
+
+    __domain_loaders: Dict[str, Callable[[Website], None]] = {}
+    __domain_loader_lock = Lock()
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; "
+        "x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/91.0.4472.124 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,"
+        "application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Accept-Encoding": "gzip",
+        "Connection": "keep-alive",
+    }
+
+    @classmethod
+    def add_custom_domain_loader(
+        cls, domain: str, func: Callable[[Website], None]
+    ):
+        with cls.__domain_loader_lock:
+            cls.__domain_loaders[domain] = func
