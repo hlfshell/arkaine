@@ -20,13 +20,21 @@ class GlobalContextStore(ContextStore):
         raise ValueError("GlobalContextStore cannot be instantiated")
 
     @classmethod
-    def set_store(cls, store: ContextStore):
+    def set_store(cls, store: Optional[ContextStore] = None):
+        if cls.__store is not None:
+            raise ValueError("Store already set")
+
+        if store is None:
+            store = InMemoryContextStore()
+
         with cls.__lock:
             cls.__store = store
 
     @classmethod
     def get_store(cls) -> ContextStore:
         with cls.__lock:
+            if cls.__store is None:
+                cls.set_store()
             return cls.__store
 
     @classmethod
@@ -61,32 +69,39 @@ class InMemoryContextStore(ContextStore):
 
     def __init__(self, contexts: Dict[str, Context] = {}):
         super().__init__()
+        self._lock = Lock()
         self._contexts: Dict[str, Context] = contexts
 
-    def get_context(self, id: str) -> Optional[Context]:
-        return self._contexts.get(id)
+    def get(self, id: str) -> Optional[Context]:
+        with self._lock:
+            return self._contexts.get(id)
 
-    def query_contexts(
-        self, query: Union[Query, List[Query], Check, List[Check]]
+    def query(
+        self,
+        query: Union[Query, List[Query], Check, List[Check]],
+        limit: Optional[int] = None,
     ) -> List[Context]:
-        if isinstance(query, List):
-            q = Query()
-            for i in query:
-                q += i
-            query = q
-        elif isinstance(query, Check):
-            query = Query([query])
+        with self._lock:
+            if isinstance(query, List):
+                q = Query()
+                for i in query:
+                    q += i
+                query = q
+            elif isinstance(query, Check):
+                query = Query([query])
 
-        return [
-            context for context in self._contexts.values() if query(context)
-        ]
+            contexts = [
+                context for context in self._contexts.values() if query(context)
+            ]
+
+            if limit is not None:
+                contexts = contexts[:limit]
+
+            return contexts
 
     def save(self, context: Context) -> None:
-        self._contexts[context.id] = context
-
-    @staticmethod
-    def load(self) -> "ContextStore":
-        raise NotImplementedError("InMemoryContextStore is not persistent")
+        with self._lock:
+            self._contexts[context.id] = context
 
     def __enter__(self) -> InMemoryContextStore:
         return self
@@ -97,13 +112,12 @@ class InMemoryContextStore(ContextStore):
 
 class FileContextStore(InMemoryContextStore):
 
-    def __init__(self, folder_path: str, contexts: Dict[str, Context]):
+    def __init__(self, folder_path: str):
         super().__init__()
         self._folder_path = folder_path
-        self._contexts = contexts
 
     @staticmethod
-    def load(cls, folder_path: str) -> "ContextStore":
+    def load(cls, folder_path: str) -> FileContextStore:
         contexts = {}
         for root, _, files in os.walk(folder_path):
             for file in files:
@@ -113,6 +127,12 @@ class FileContextStore(InMemoryContextStore):
 
         return cls(folder_path, contexts)
 
+    def write(self, context: Context) -> None:
+        with self._lock:
+            self._contexts[context.id] = context
+            context.save(os.path.join(self._folder_path, context.id))
+
     def save(self, context: Context) -> None:
-        super().save()
-        context.save(os.path.join(self._folder_path, context.id))
+        with self._lock:
+            self._contexts[context.id] = context
+            context.save(os.path.join(self._folder_path, context.id))
