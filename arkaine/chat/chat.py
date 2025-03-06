@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from concurrent.futures import ALL_COMPLETED, Future, wait
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from arkaine.chat.conversation import Conversation, ConversationStore, Message
 from arkaine.llms.llm import LLM
@@ -17,7 +17,7 @@ class Chat(Tool, ABC):
     def __init__(
         self,
         llm: LLM,
-        store: ConversationStore,
+        store: Optional[ConversationStore] = None,
         tools: List[Tool] = [],
         agent_name: str = "Arkaine",
         user_name: str = "User",
@@ -52,6 +52,8 @@ class Chat(Tool, ABC):
         self._tools = {tool.tname: tool for tool in tools}
 
     def _get_active_conversation(self, new_message: Message) -> Conversation:
+        if self._store is None:
+            return Conversation()
         try:
             conversations = self._store.get_conversations(
                 order="newest",
@@ -102,7 +104,8 @@ class Chat(Tool, ABC):
         conversation.append(response)
         conversation.label(self._llm)
 
-        self._store.save_conversation(conversation)
+        if self._store is not None:
+            self._store.save_conversation(conversation)
 
         return response.content
 
