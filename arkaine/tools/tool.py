@@ -142,10 +142,8 @@ class Tool:
             ctx.broadcast(ToolReturn(results))
             return results
 
-    def async_call(
-        self, context: Optional[Context] = None, *args, **kwargs
-    ) -> Context:
-        _, kwargs = self.extract_arguments(args, kwargs)
+    def async_call(self, *args, **kwargs) -> Context:
+        context, kwargs = self.extract_arguments(args, kwargs)
 
         if context is None:
             context = Context()
