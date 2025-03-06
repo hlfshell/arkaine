@@ -14,6 +14,7 @@ from typing import (
     List,
     Optional,
     Tuple,
+    Type,
     Union,
 )
 from uuid import uuid4
@@ -368,7 +369,7 @@ class Context:
     def add_event_listener(
         self,
         listener: Callable[[Context, Event], None],
-        event_type: Optional[str] = None,
+        event_type: Optional[Union[str, Type[Event]]] = None,
         ignore_children_events: bool = False,
     ):
         """
@@ -384,6 +385,10 @@ class Context:
             ignore_children_events (bool): If True, the listener will not be
                 notified of events from child contexts
         """
+
+        if isinstance(event_type, Event):
+            event_type = event_type.type()
+
         with self.__lock:
             event_type = event_type or "all"
             if ignore_children_events:
