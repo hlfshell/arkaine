@@ -18,7 +18,7 @@ class SimpleChat(Chat):
     SimpleChat is a simplistic chat agent, that can have multiple
     conversations, each with their own isolated history, tools, and state. It
     is simple as it follows the chat pattern of message->response - tit for tat
-    - with no context sharing between conversations, and no initiative outside
+    with no context sharing between conversations, and no initiative outside
     of its response. There is only the user and the agent.
 
     Args:
@@ -27,8 +27,9 @@ class SimpleChat(Chat):
         tools (List[Tool]): List of tools available to the chat agent for
             performing tasks.
 
-        store (ConversationStore): Storage system for managing conversation
-            histories.
+        store (ConversationStore, optional): Storage system for managing
+            conversation histories. If none is provided, every message will
+            be considered a new conversation.
 
         agent_name (str, optional): Name of the chat agent. Defaults to
             "Arkaine".
@@ -53,7 +54,7 @@ class SimpleChat(Chat):
         self,
         llm: LLM,
         tools: List[Tool],
-        store: ConversationStore,
+        store: Optional[ConversationStore] = None,
         agent_name: str = "Arkaine",
         user_name: str = "User",
         backend: Optional[Backend] = None,
