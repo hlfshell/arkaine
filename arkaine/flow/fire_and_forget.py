@@ -93,7 +93,7 @@ class FireAndForget(Tool):
         output = context.output
         context.clear(executing=True)
 
-        target_ctx = GlobalContextStore.get_context(output)
+        target_ctx = GlobalContextStore.get(output)
         if target_ctx is None:
             print(
                 f"Warning: context {output} not found in "
