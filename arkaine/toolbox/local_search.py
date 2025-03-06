@@ -1,3 +1,4 @@
+import os
 from typing import List, Optional, Union
 
 import googlemaps
@@ -28,13 +29,22 @@ class LocalSearch(Tool):
 
     def __init__(
         self,
-        api_key: str,
+        api_key: Optional[str] = None,
         default_location: Optional[str] = None,
         formatted_str: bool = False,
         radius_km: int = 10,
         force_distance: bool = False,
         enforced_limit: Optional[int] = None,
     ):
+        if api_key is None:
+            api_key = os.environ.get("GOOGLE_MAPS_API_KEY")
+        if api_key is None:
+            api_key = os.environ.get("GOOGLE_API_KEY")
+        if api_key is None:
+            raise ValueError(
+                "No API key provided. Either provide it or set one of "
+                "GOOGLE_MAPS_API_KEY or GOOGLE_API_KEY"
+            )
         self.__client = googlemaps.Client(key=api_key)
         self.__default_location = default_location
         self.__force_distance = force_distance
