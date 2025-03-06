@@ -226,5 +226,5 @@ class ThreadSafeDataStore:
     @classmethod
     def from_json(cls, data: dict) -> "ThreadSafeDataStore":
         """Create a ThreadSafeDataStore from JSON data."""
-        store = cls(data.data, data.context, data.label)
+        store = cls(data["data"], data["context"], data["label"])
         return store
