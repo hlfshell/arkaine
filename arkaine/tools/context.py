@@ -679,7 +679,7 @@ class Context:
         )
 
         # Create the base context
-        context = cls(attached=attached)
+        context = cls(attach=attached)
 
         # Load the basic properties
         context.__id = data["id"]
