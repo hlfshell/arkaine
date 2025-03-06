@@ -12,7 +12,7 @@ class Ollama(LLM):
 
     def __init__(
         self,
-        model: str,
+        model: str = "llama3.1",
         context_length: int = 1024,
         host: str = "http://localhost:11434",
         default_temperature: float = 0.7,
