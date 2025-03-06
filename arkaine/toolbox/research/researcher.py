@@ -1,15 +1,16 @@
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 from arkaine.flow.linear import Linear
 from arkaine.flow.parallel_list import ParallelList
-from arkaine.utils.parser import Label, Parser
 from arkaine.llms.llm import LLM, Prompt
 from arkaine.toolbox.research.finding import Finding
 from arkaine.tools.abstract import AbstractAgent
 from arkaine.tools.argument import Argument
 from arkaine.tools.context import Context
+from arkaine.tools.events import Event
 from arkaine.tools.result import Result
+from arkaine.utils.parser import Label, Parser
 from arkaine.utils.resource import Resource
 from arkaine.utils.templater import PromptLoader
 
@@ -292,16 +293,24 @@ class GenerateFinding(FindingsGenerator):
         labels, _ = self.__parser.parse_blocks(output)
 
         resource: Resource = context.args["resource"]
-        source = f"{resource.name} - {resource.source}"
 
         findings: List[Finding] = []
         for label in labels:
             try:
                 summary = label["summary"]
                 content = label["finding"]
-                findings.append(Finding(source, summary, content))
+                findings.append(Finding(resource, summary, content))
             except Exception:  # NOQA
                 continue
+
+        # Attempt to broadcast the findings via the researcher, which should be
+        # the parent's parent (generatefindings->parallellist->researcher)
+        try:
+            context.parent.parent.broadcast(
+                FindingsGeneratedEvent(self, findings)
+            )
+        except Exception:
+            pass
 
         return findings
 
@@ -449,6 +458,13 @@ class Researcher(Linear):
         self, context: Context, resource_lists: List[List[Resource]]
     ) -> List[List[Resource]]:
         topic = context.parent.args["topic"]
+        queries = [i["query"] for i in context.args["input"]]
+        [
+            context.parent.broadcast(
+                ResearchQueryEvent(context.parent.attached, query)
+            )
+            for query in queries
+        ]
 
         unique_resources = list(
             {
@@ -457,6 +473,13 @@ class Researcher(Linear):
                 for r in resource_list
             }.values()
         )
+
+        [
+            context.parent.broadcast(
+                ResourceFoundEvent(context.parent.attached, resource)
+            )
+            for resource in unique_resources
+        ]
 
         resource_groups = [
             unique_resources[i : i + 10]
@@ -481,10 +504,80 @@ class Researcher(Linear):
         # Since the parallel list can return exceptions, and we ignore them
         # for individual finding generations (as the source may prevent
         # scraping, or have an issue, etc).
-        return [
+        findings = [
             finding
             for sublist in findings
             if isinstance(sublist, list)
             for finding in sublist
             if isinstance(finding, Finding)
         ]
+
+        return findings
+
+
+class ResearchQueryEvent(Event):
+    """
+    ResearchQueryEvent is an event that is utilized to notify when a research
+    query is searched for.
+    """
+
+    def __init__(self, researcher: Union[str, Researcher], query: str):
+        if isinstance(researcher, Researcher):
+            researcher = researcher.id
+        super().__init__(
+            ResearchQueryEvent,
+            {
+                "researcher": researcher,
+                "query": query,
+            },
+        )
+
+    @classmethod
+    def type(self) -> str:
+        return "research_query"
+
+
+class ResourceFoundEvent(Event):
+    """
+    ResourceFoundEvent is an event that is utilized to notify when a resource
+    is found.
+    """
+
+    def __init__(self, researcher: Union[str, Researcher], resource: Resource):
+        if isinstance(researcher, Researcher):
+            researcher = researcher.id
+        super().__init__(
+            ResourceFoundEvent,
+            {
+                "researcher": researcher,
+                "resource": resource,
+            },
+        )
+
+    @classmethod
+    def type(self) -> str:
+        return "resource_found"
+
+
+class FindingsGeneratedEvent(Event):
+    """
+    FindingsGeneratedEvent is an event that is utilized to notify when a finding
+    is generated.
+    """
+
+    def __init__(
+        self, researcher: Union[str, Researcher], findings: List[Finding]
+    ):
+        if isinstance(researcher, Researcher):
+            researcher = researcher.id
+        super().__init__(
+            FindingsGeneratedEvent,
+            {
+                "researcher": researcher,
+                "findings": findings,
+            },
+        )
+
+    @classmethod
+    def type(self) -> str:
+        return "findings_generated"
