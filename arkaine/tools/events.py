@@ -1,8 +1,9 @@
-import json
+from __future__ import annotations
 import traceback
+from abc import abstractmethod
 from datetime import datetime, timezone
 from time import time
-from typing import Any
+from typing import Any, Type, Union
 
 from arkaine.internal.to_json import recursive_to_json
 from arkaine.tools.types import ToolArguments
@@ -16,10 +17,15 @@ class Event:
 
     # Keep Event class here since it's the base class
 
-    def __init__(self, event_type: str, data: Any = None):
+    def __init__(self, event_type: Union[str, Type[Event]], data: Any = None):
         self._event_type = event_type
         self.data = data
         self._timestamp = time()
+
+    @classmethod
+    @abstractmethod
+    def type(self) -> str:
+        return "event"
 
     @property
     def timestamp(self) -> float:
@@ -49,7 +55,11 @@ class Event:
 
 class ToolCalled(Event):
     def __init__(self, args: ToolArguments):
-        super().__init__("tool_called", args)
+        super().__init__(ToolCalled, args)
+
+    @classmethod
+    def type(self) -> str:
+        return "tool_called"
 
     def __str__(self) -> str:
         args_str = ", ".join(
@@ -60,9 +70,11 @@ class ToolCalled(Event):
 
 class ToolStart(Event):
     def __init__(self, tool: str):
-        super().__init__("tool_start")
+        super().__init__(ToolStart, tool)
 
-        self.data = tool
+    @classmethod
+    def type(self) -> str:
+        return "tool_start"
 
     def __str__(self) -> str:
         return f"{self._get_readable_timestamp()} - {self.data} started"
@@ -70,7 +82,11 @@ class ToolStart(Event):
 
 class ToolReturn(Event):
     def __init__(self, result: Any):
-        super().__init__("tool_return", result)
+        super().__init__(ToolReturn, result)
+
+    @classmethod
+    def type(self) -> str:
+        return "tool_return"
 
     def __str__(self) -> str:
         return f"{self._get_readable_timestamp()} returned:\n" f"{self.data}"
@@ -78,7 +94,11 @@ class ToolReturn(Event):
 
 class ToolException(Event):
     def __init__(self, exception: Exception):
-        super().__init__("tool_exception", exception)
+        super().__init__(ToolException, exception)
+
+    @classmethod
+    def type(self) -> str:
+        return "tool_exception"
 
     def __str__(self) -> str:
         out = f"{self._get_readable_timestamp()}: tool_exception -"
@@ -105,9 +125,12 @@ class ToolException(Event):
 class ChildContextCreated(Event):
     def __init__(self, parent: str, child: str):
         super().__init__(
-            "child_context_created",
-            {"parent": parent, "child": child},
+            ChildContextCreated, {"parent": parent, "child": child}
         )
+
+    @classmethod
+    def type(self) -> str:
+        return "child_context_created"
 
     def __str__(self) -> str:
         out = f"{self._get_readable_timestamp()}: context_created"
@@ -121,7 +144,11 @@ class ContextUpdate(Event):
         data = {
             **kwargs,
         }
-        super().__init__("context_update", data)
+        super().__init__(ContextUpdate, data)
+
+    @classmethod
+    def type(self) -> str:
+        return "context_update"
 
     def __str__(self) -> str:
         out = f"{self._get_readable_timestamp()}: context_update"
