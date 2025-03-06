@@ -9,7 +9,6 @@ class Label:
     name: str = field(metadata={"transform": str.lower})
     required: bool = False
     data_type: str = "text"
-    requires: List[str] = field(default_factory=list)
     required_with: List[str] = field(default_factory=list)
     is_json: bool = False
     is_block_start: bool = False
