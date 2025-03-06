@@ -14,7 +14,7 @@ from threading import Lock, Thread
 from time import sleep
 from typing import Callable, Dict, List, Optional, Union
 
-from arkaine.tools import Tool
+from arkaine.tools.tool import Tool
 from arkaine.utils.interval import Interval
 
 
@@ -389,7 +389,7 @@ class Inbox:
         call_when: Dict[
             Union[List, EmailFilter, Callable[[EmailMessage], bool]],
             Union[Tool, List[Tool]],
-        ],
+        ] = {},
         username: Optional[Union[str, dict]] = None,
         password: Optional[Union[str, dict]] = None,
         service: Optional[str] = None,
@@ -534,6 +534,56 @@ class Inbox:
             if on not in self.__listeners:
                 raise ValueError(f"Unknown listener type: {on}")
             self.__listeners[on].append(listener)
+
+    def add_filter(
+        self,
+        filter: Union[EmailFilter, Callable[[EmailMessage], bool], List],
+        tools: Union[Tool, List[Tool]],
+    ):
+        """
+        Add a new filter and associated tools to the inbox.
+
+        Args:
+            filter: An EmailFilter, callable function, or list of filters
+            tools: A single Tool or list of Tool objects to trigger when filter matches
+        """
+        if isinstance(tools, Tool):
+            tools = [tools]
+
+        # Convert to EmailFilter if needed
+        if isinstance(filter, List):
+            email_filter = None
+            for f in filter:
+                if isinstance(f, EmailFilter):
+                    if email_filter:
+                        email_filter += f
+                    else:
+                        email_filter = f
+                elif callable(f):
+                    if email_filter:
+                        email_filter += EmailFilter(func=f)
+                    else:
+                        email_filter = EmailFilter(func=f)
+                else:
+                    raise ValueError(f"Unknown filter type: {type(f)}")
+        elif isinstance(filter, EmailFilter):
+            email_filter = filter
+        elif callable(filter):
+            email_filter = EmailFilter(func=filter)
+        else:
+            raise ValueError(f"Unknown filter type: {type(filter)}")
+
+        with self.__lock:
+            # Add tools to the filter
+            tool_names = [t.tname for t in tools]
+            if email_filter in self.__call_when:
+                self.__call_when[email_filter].extend(tool_names)
+            else:
+                self.__call_when[email_filter] = tool_names
+
+            # Add tools to the tools dictionary
+            for tool in tools:
+                self.__tools[tool.tname] = tool
 
     def start(self):
         """Start monitoring emails."""
