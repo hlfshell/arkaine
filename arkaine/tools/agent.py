@@ -212,11 +212,23 @@ class SimpleIterativeAgent(IterativeAgent):
         llm: LLM,
         prepare_prompt: Callable[[Context, Any], Prompt],
         extract_result: Optional[Callable[[Context, str], Optional[Any]]],
+        initial_state: Dict[str, Any] = {},
+        max_steps: Optional[int] = None,
         examples: List[Example] = [],
         id: Optional[str] = None,
         result: Optional[Result] = None,
     ):
-        super().__init__(name, description, args, llm, examples, id, result)
+        super().__init__(
+            name,
+            description,
+            args,
+            llm,
+            examples,
+            result,
+            initial_state,
+            max_steps,
+            id,
+        )
         self.__prepare_prompt = prepare_prompt
         self.__extract_result = extract_result
 
