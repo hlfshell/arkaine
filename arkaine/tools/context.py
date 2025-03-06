@@ -280,9 +280,94 @@ class Context:
         return self.__parent
 
     @property
+    def parents(self) -> List[Context]:
+        """
+        parents is a list of all the parents in order of hierarchy, starting
+        with the immediate parent and going up to the root context. If this is
+        the root context, the list will be empty.
+        """
+        parents = []
+        current = self
+        while self.parent is not None:
+            parents.append(current.parent)
+            current = current.parent
+        return parents
+
+    def get_parents_of_type(
+        self, type: Union[Type[Attachable], str]
+    ) -> List[Context]:
+        """
+        get_parents_of_type returns a list of all the parents of a given type.
+        If no parents are of the given type (or there are no parents), an empty
+        list is returned. The order of the list is from the immediate parent to
+        the root context, if applicable.
+        """
+        return [
+            parent
+            for parent in self.parents
+            if isinstance(parent.attachable, type)
+        ]
+
+    @property
     def children(self) -> List[Context]:
         with self.__lock:
             return self.__children
+
+    def is_descendant_of(self, context: Context) -> bool:
+        """
+        is_descendant_of returns True if the given context is a descendant of
+        this context.
+        """
+        return context in self.parents
+
+    def get_children_of_type(
+        self, type: Union[Type[Attachable], str], depth: Optional[int] = None
+    ) -> List[Context]:
+        """
+        get_children_of_type returns a list of all the children of a given type,
+        up to a specific depth (if depth is None, it will traverse the entire
+        tree). This is a flat list, with no meaning behind its ordering. Utilize
+        map_to_child to get the specific path or depth to a specific child.
+        """
+        if depth == 0:
+            return []
+
+        matches = []
+        for child in self.children:
+            if isinstance(child.attachable, type):
+                matches.append(child)
+            else:
+                matches.extend(
+                    child.get_children_of_type(
+                        type, depth - 1 if depth else None
+                    )
+                )
+        return matches
+
+    def map_to_child(self, child: Context) -> List[Context]:
+        """
+        map_to_child context returns a list of the path to a given child node
+        *if* it exists as a child to this one (if it isn't, the list will be
+        empty). This path starts at the first child node that leads to the given
+        child, followed by the next child node, and so on to the node that
+        contains the given child.
+        """
+        if not child.is_descendant_of(self):
+            return []
+        path = []
+        current = child
+        for child in self.children:
+            if child == current:
+                path.append(child)
+                current = child
+                break
+            else:
+                next_path = child.map_to_child(current)
+                if next_path:
+                    path.extend(next_path)
+                    break
+
+        return path
 
     @property
     def events(self) -> List[Event]:
