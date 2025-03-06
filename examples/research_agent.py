@@ -175,7 +175,7 @@ def main():
         json.dump(recursive_to_json(ctx.output), f, indent=2)
 
     print("\nIterations:", ctx["iteration"])
-    print("Collected questions:", ctx["all_questions"], "\n")
+    print("Collected questions:", ctx["all_topics"], "\n")
 
     # Generate a report based on the research findings. The generator
     # is another agent that takes the topic and the findings and generates
