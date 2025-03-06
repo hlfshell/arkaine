@@ -31,6 +31,8 @@ class EmailSender(Tool):
         smtp_port: Custom SMTP port (overrides service setting)
         aws_region: AWS region for SES (required if service is 'aws_ses')
         use_tls: Whether to use TLS encryption (recommended)
+        allow_response: Whether to allow the tool to specify a message
+            id as an argument as a response to the email.
         to: Recipient email address(es), defaulting to None. If set, then
             the "to" argument is never presented to the agent.
         env_prefix: Prefix for environment variables (default: "EMAIL")
@@ -75,6 +77,7 @@ class EmailSender(Tool):
         smtp_port: Optional[int] = None,
         aws_region: Optional[str] = None,
         use_tls: bool = True,
+        allow_response: bool = False,
         to: Optional[Union[str, List[str]]] = None,
         env_prefix: str = "EMAIL",
     ):
@@ -122,6 +125,19 @@ class EmailSender(Tool):
             ),
         ]
 
+        if allow_response:
+            args.append(
+                Argument(
+                    name="message_id",
+                    description=(
+                        "Message ID of the email you are responding "
+                        "to (if any)",
+                    ),
+                    type="str",
+                    required=False,
+                )
+            )
+
         examples = [
             Example(
                 name="Send Email",
@@ -140,9 +156,20 @@ class EmailSender(Tool):
                 },
                 output="Email sent successfully",
             ),
+            Example(
+                name="Send Email with Response",
+                args={
+                    "subject": "Re: Hello!",
+                    "body": "In response to your e-mail, I'd like to suggest...",
+                    "message_id": "1234567890",
+                },
+                output="Email sent successfully",
+                description="Send an email in response to another email",
+            ),
         ]
 
         description = "Sends plain text or HTML emails"
+        self.to = to
         if not self.to:
             description += " to the specified recipient(s)"
             args.append(
@@ -222,7 +249,10 @@ class EmailSender(Tool):
             SMTPException: If there's an error sending the email
         """
         # Get recipients
-        to_addrs = kwargs["to"]
+        if self.to:
+            to_addrs = self.to
+        else:
+            to_addrs = kwargs["to"]
         if isinstance(to_addrs, str):
             to_addrs = [to_addrs]
 
@@ -231,6 +261,10 @@ class EmailSender(Tool):
         msg["From"] = self.username
         msg["To"] = ", ".join(to_addrs)
         msg["Subject"] = kwargs["subject"]
+
+        if "message_id" in kwargs:
+            msg["In-Reply-To"] = kwargs["message_id"]
+            msg["References"] = kwargs["message_id"]
 
         # Attach body with auto-detection of HTML
         body = kwargs["body"]
