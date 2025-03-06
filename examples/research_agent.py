@@ -9,10 +9,14 @@ how nested your agents might become...
 The iterative researcher is an agent that repeatedly studies a given
 topic/question, querying a web search engine, collecting possibly relevant
 websites, and then finally reading through the most likely to contain
-information relevant to the topic/question, generating "findings" - short
-dense summaries of important information relevant to the topic at hand.
+information relevant to the topic/question, generating "findings" - short dense
+summaries of important information relevant to the topic at hand.
 
 Finally, it generates a report for human consumption.
+
+Note: The researcher tends to hit rate limits pretty quickly - if you encounter
+this by running into 429 errors, try taking a break between executions or swap
+the search engine provider to a paid one.
 
 
 Important points:
@@ -134,9 +138,9 @@ def main():
     # We attach listeners to the context to monitor the progress of the
     # research, by looking for events we know are broadcasted in the
     # researchers.
-    ctx.add_event_listener(update, "research_query")
-    ctx.add_event_listener(update, "resource_found")
-    ctx.add_event_listener(update, "findings_generated")
+    ctx.add_event_listener(update, ResearchQueryEvent)
+    ctx.add_event_listener(update, ResourceFoundEvent)
+    ctx.add_event_listener(update, FindingsGeneratedEvent)
 
     # The context status is calculated on query, and can be either
     # "running", "complete", or "error".
