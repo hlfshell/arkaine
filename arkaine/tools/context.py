@@ -165,6 +165,8 @@ class Context:
 
         self.__completion_event = ThreadEvent()
 
+    # OBJECT BEHAVIOR
+
     def __enter__(self):
         return self
 
@@ -190,63 +192,62 @@ class Context:
         self.__event_listeners_filtered.clear()
         self.__children.clear()
 
-    def __getitem__(self, name: str) -> Any:
-        return self.__data[name]
-
-    def __setitem__(self, name: str, value: Any):
-        self.__data[name] = value
-
-    def __contains__(self, name: str) -> bool:
-        return name in self.__data
-
-    def __delitem__(self, name: str):
-        del self.__data[name]
+    # PROPERTIES
 
     @property
-    def x(self) -> ThreadSafeDataStore:
-        if self.is_root:
-            return self.__x
+    def exception(self) -> Optional[Exception]:
+        with self.__lock:
+            return self.__exception
+
+    @exception.setter
+    def exception(self, e: Optional[Exception]):
+        if e is None:
+            with self.__lock:
+                self.__exception = e
         else:
-            return self.root.x
+            self.broadcast(ToolException(e))
+            with self.__lock:
+                self.__exception = e
+            self.__completion_event.set()
+
+            for listener in self.__on_exception_listeners:
+                self.__executor.submit(listener, self, e)
+            for listener in self.__on_end_listeners:
+                self.__executor.submit(listener, self)
 
     @property
-    def debug(self) -> ThreadSafeDataStore:
-        if self.is_root:
-            return self.__debug
-        else:
-            return self.root.debug
+    def args(self) -> Dict[str, Any]:
+        with self.__lock:
+            return self.__args
 
-    def get(self, key: str, default: Any = None) -> Any:
-        return self.__data.get(key, default)
-
-    def operate(
-        self, keys: Union[str, List[str]], operation: Callable[[Any], Any]
-    ) -> None:
-        self.__data.operate(keys, operation)
-
-    def update(self, key: str, operation: Callable) -> Any:
-        return self.__data.update(key, operation)
-
-    def init(self, key: str, value: Any):
-        return self.__data.init(key, value)
-
-    def increment(self, key: str, amount=1):
-        return self.__data.increment(key, amount)
-
-    def decrement(self, key: str, amount=1):
-        return self.__data.decrement(key, amount)
-
-    def append(self, keys: Union[str, List[str]], value: Any) -> None:
-        self.__data.append(keys, value)
-
-    def concat(self, keys: Union[str, List[str]], value: Any) -> None:
-        self.__data.concat(keys, value)
+    @args.setter
+    def args(self, args: Optional[Dict[str, Any]]):
+        with self.__lock:
+            if self.__args and args:
+                raise ValueError("args already set")
+            self.__args = args
 
     @property
-    def _datastores(
-        self,
-    ) -> Tuple[ThreadSafeDataStore, ThreadSafeDataStore, ThreadSafeDataStore]:
-        return self.__data, self.__x, self.__debug
+    def output(self) -> Any:
+        with self.__lock:
+            return self.__output
+
+    @output.setter
+    def output(self, value: Any):
+        with self.__lock:
+            if value is None:
+                self.__output = None
+                self.__completion_event.set()
+                return
+            if self.__output:
+                raise ValueError("output already set")
+            self.__output = value
+        self.__completion_event.set()
+
+        for listener in self.__on_output_listeners:
+            self.__executor.submit(listener, self, value)
+        for listener in self.__on_end_listeners:
+            self.__executor.submit(listener, self)
 
     @property
     def root(self) -> Context:
@@ -287,6 +288,98 @@ class Context:
     def events(self) -> List[Event]:
         with self.__lock:
             return self.__history
+
+    @property
+    def is_root(self) -> bool:
+        return self.__parent is None
+
+    @property
+    def status(self) -> str:
+        with self.__lock:
+            if self.__exception:
+                return "error"
+            elif self.__output is not None:
+                return "complete"
+            else:
+                return "running"
+
+    @property
+    def id(self) -> str:
+        return self.__id
+
+    @property
+    def executing(self) -> bool:
+        with self.__lock:
+            return self.__executing
+
+    @executing.setter
+    def executing(self, executing: bool):
+        with self.__lock:
+            if self.__executing:
+                raise ValueError("already executing")
+            self.__executing = executing
+
+    # DATASTORE FUNCTIONALITY
+
+    @property
+    def x(self) -> ThreadSafeDataStore:
+        if self.is_root:
+            return self.__x
+        else:
+            return self.root.x
+
+    @property
+    def debug(self) -> ThreadSafeDataStore:
+        if self.is_root:
+            return self.__debug
+        else:
+            return self.root.debug
+
+    def __getitem__(self, name: str) -> Any:
+        return self.__data[name]
+
+    def __setitem__(self, name: str, value: Any):
+        self.__data[name] = value
+
+    def __contains__(self, name: str) -> bool:
+        return name in self.__data
+
+    def __delitem__(self, name: str):
+        del self.__data[name]
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self.__data.get(key, default)
+
+    def operate(
+        self, keys: Union[str, List[str]], operation: Callable[[Any], Any]
+    ) -> None:
+        self.__data.operate(keys, operation)
+
+    def update(self, key: str, operation: Callable) -> Any:
+        return self.__data.update(key, operation)
+
+    def init(self, key: str, value: Any):
+        return self.__data.init(key, value)
+
+    def increment(self, key: str, amount=1):
+        return self.__data.increment(key, amount)
+
+    def decrement(self, key: str, amount=1):
+        return self.__data.decrement(key, amount)
+
+    def append(self, keys: Union[str, List[str]], value: Any) -> None:
+        self.__data.append(keys, value)
+
+    def concat(self, keys: Union[str, List[str]], value: Any) -> None:
+        self.__data.concat(keys, value)
+
+    @property
+    def _datastores(
+        self,
+    ) -> Tuple[ThreadSafeDataStore, ThreadSafeDataStore, ThreadSafeDataStore]:
+        return self.__data, self.__x, self.__debug
+
+    # INTERNAL MANAGEMENT
 
     def child_context(self, attachable: Attachable) -> Context:
         """Create a new child context for the given tool."""
@@ -336,35 +429,62 @@ class Context:
             self.__executing = executing
             self.__args = args
 
-    @property
-    def is_root(self) -> bool:
-        return self.__parent is None
+    def wait(self, timeout: Optional[float] = None):
+        """
+        Wait for the context to complete (either with a result or exception).
 
-    @property
-    def status(self) -> str:
+        Args:
+            timeout: Maximum time to wait in seconds. If None, wait
+            indefinitely.
+
+        Raises:
+            TimeoutError: If the timeout is reached before completion The
+            original exception: If the context failed with an exception
+        """
         with self.__lock:
-            if self.__exception:
-                return "error"
-            elif self.__output is not None:
-                return "complete"
+            if self.__output is not None or self.__exception is not None:
+                return
+
+        if not self.__completion_event.wait(timeout):
+            with self.__lock:
+                if self.__output is not None or self.__exception is not None:
+                    return
+
+            e = TimeoutError(
+                "Context did not complete within the specified timeout"
+            )
+            self.__exception = e
+            raise e
+
+    def future(self) -> Future:
+        """Return a concurrent.futures.Future object for the context."""
+        future = Future()
+
+        def on_end(context: Context):
+            if self.exception:
+                future.set_exception(self.exception)
             else:
-                return "running"
+                future.set_result(self.output)
 
-    @property
-    def id(self) -> str:
-        return self.__id
-
-    @property
-    def executing(self) -> bool:
+        # Due to timing issues, we have to manually create the listeners within
+        # the lock instead of our usual methods to avoid race conditions.
         with self.__lock:
-            return self.__executing
+            if self.__output is not None:
+                future.set_result(self.__output)
+                return future
+            if self.__exception is not None:
+                future.set_exception(self.__exception)
+                return future
 
-    @executing.setter
-    def executing(self, executing: bool):
-        with self.__lock:
-            if self.__executing:
-                raise ValueError("already executing")
-            self.__executing = executing
+            self.__on_end_listeners.append(on_end)
+
+        return future
+
+    def cancel(self):
+        """Cancel the context."""
+        raise NotImplementedError("Not implemented")
+
+    # EVENT MANAGEMENT
 
     def add_event_listener(
         self,
@@ -441,115 +561,7 @@ class Context:
         with self.__lock:
             self.__on_end_listeners.append(listener)
 
-    def wait(self, timeout: Optional[float] = None):
-        """
-        Wait for the context to complete (either with a result or exception).
-
-        Args:
-            timeout: Maximum time to wait in seconds. If None, wait
-            indefinitely.
-
-        Raises:
-            TimeoutError: If the timeout is reached before completion The
-            original exception: If the context failed with an exception
-        """
-        with self.__lock:
-            if self.__output is not None or self.__exception is not None:
-                return
-
-        if not self.__completion_event.wait(timeout):
-            with self.__lock:
-                if self.__output is not None or self.__exception is not None:
-                    return
-
-            e = TimeoutError(
-                "Context did not complete within the specified timeout"
-            )
-            self.__exception = e
-            raise e
-
-    def future(self) -> Future:
-        """Return a concurrent.futures.Future object for the context."""
-        future = Future()
-
-        def on_end(context: Context):
-            if self.exception:
-                future.set_exception(self.exception)
-            else:
-                future.set_result(self.output)
-
-        # Due to timing issues, we have to manually create the listeners within
-        # the lock instead of our usual methods to avoid race conditions.
-        with self.__lock:
-            if self.__output is not None:
-                future.set_result(self.__output)
-                return future
-            if self.__exception is not None:
-                future.set_exception(self.__exception)
-                return future
-
-            self.__on_end_listeners.append(on_end)
-
-        return future
-
-    def cancel(self):
-        """Cancel the context."""
-        raise NotImplementedError("Not implemented")
-
-    @property
-    def exception(self) -> Optional[Exception]:
-        with self.__lock:
-            return self.__exception
-
-    @exception.setter
-    def exception(self, e: Optional[Exception]):
-        if e is None:
-            with self.__lock:
-                self.__exception = e
-        else:
-            self.broadcast(ToolException(e))
-            with self.__lock:
-                self.__exception = e
-            self.__completion_event.set()
-
-            for listener in self.__on_exception_listeners:
-                self.__executor.submit(listener, self, e)
-            for listener in self.__on_end_listeners:
-                self.__executor.submit(listener, self)
-
-    @property
-    def args(self) -> Dict[str, Any]:
-        with self.__lock:
-            return self.__args
-
-    @args.setter
-    def args(self, args: Optional[Dict[str, Any]]):
-        with self.__lock:
-            if self.__args and args:
-                raise ValueError("args already set")
-            self.__args = args
-
-    @property
-    def output(self) -> Any:
-        with self.__lock:
-            return self.__output
-
-    @output.setter
-    def output(self, value: Any):
-        with self.__lock:
-            if value is None:
-                self.__output = None
-                self.__completion_event.set()
-                return
-            if self.__output:
-                raise ValueError("output already set")
-            self.__output = value
-        self.__completion_event.set()
-
-        for listener in self.__on_output_listeners:
-            self.__executor.submit(listener, self, value)
-        for listener in self.__on_end_listeners:
-            self.__executor.submit(listener, self)
+    # SERIALIZATION
 
     def to_json(self, children: bool = True, debug: bool = True) -> dict:
         """Convert Context to a JSON-serializable dictionary."""
