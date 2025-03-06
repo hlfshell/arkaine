@@ -3,7 +3,6 @@ from time import time
 from typing import Dict, List, Optional
 
 from arkaine.flow import DoWhile, ParallelList
-from arkaine.utils.parser import Label, Parser
 from arkaine.llms.llm import LLM, Prompt
 from arkaine.toolbox.research.finding import Finding
 from arkaine.toolbox.research.researcher import Researcher
@@ -12,6 +11,7 @@ from arkaine.tools.abstract import AbstractAgent
 from arkaine.tools.argument import Argument
 from arkaine.tools.result import Result
 from arkaine.tools.tool import Context
+from arkaine.utils.parser import Label, Parser
 from arkaine.utils.templater import PromptLoader
 
 
