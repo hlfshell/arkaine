@@ -22,7 +22,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="arkaine",
-    version="0.0.14",
+    version="0.0.15",
     author="Keith Chester",
     author_email="keith@hlfshell.ai",
     description="A batteries-included framework for DIY AI agents",
