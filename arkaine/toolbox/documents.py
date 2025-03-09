@@ -2,7 +2,8 @@ import os
 import re
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+import tempfile
+from typing import Dict, List, Optional, Tuple, Union
 
 import google.generativeai as genai
 from PIL import Image
@@ -60,7 +61,7 @@ class OCR(ABC):
         pass
 
 
-class MarkerLocalOCR(OCR):
+class MarkerOCR(OCR):
 
     def __init__(
         self,
@@ -99,7 +100,20 @@ class MarkerLocalOCR(OCR):
         except ImportError:
             raise ImportError(
                 "Marker is not installed - it is an optional dependency "
-                "for arkaine. To install, run marker-pdf[full]==1.6.1"
+                "for arkaine and required when using the MarkerLocalOCR "
+                "class. To install, run marker-pdf[full]==1.6.1"
+            )
+
+        try:
+            from pypdf import PdfReader, PdfWriter
+
+            self.__pdf_reader = PdfReader
+            self.__pdf_writer = PdfWriter
+        except ImportError:
+            raise ImportError(
+                "pypdf is not installed - it is an optional dependency "
+                "for arkaine and required when using the MarkerLocalOCR "
+                "class. To install, run pypdf==5.3.1"
             )
 
         config_parser = ConfigParser(
@@ -107,6 +121,7 @@ class MarkerLocalOCR(OCR):
                 "output_format": self.render_to,
                 "use_llm": True,
                 "gemini_api_key": api_key,
+                "paginate_output": True,
             }
         )
 
@@ -191,101 +206,6 @@ class MarkerLocalOCR(OCR):
 
         return text
 
-    def __normalize_text(self, text: str) -> str:
-        # Replace newlines and asterisks, collapse multiple spaces, and
-        # lower-case the text.
-        normalized = text.replace("\n", " ").replace("*", "")
-        normalized = " ".join(normalized.split())
-        return normalized.lower().strip()
-
-    def __add_page_numbers_to_headers(self, text: str, toc: List[Dict]) -> str:
-        """
-        Add page numbers to headers/titles throughout the text so that we can
-        reference back to the original document's source. For both markdown and
-        HTML, we append an inline comment to the header line indicating the
-        page number.
-
-        It is expected that the table of contents will be passed in,
-        structured as a list of dictionaries. Each dictionary should include,
-        at a minimum, a "title" and a "page_id". An illustrative example is
-        provided below:
-
-        [
-            {
-                "title": "THE STRANGE CASE\nOF DOCTOR JEKYLL\nAND MR. HYDE",
-                "page_id": 0,
-                ...
-            },
-            {
-                "title": "Robert Louis Stevenson",
-                "page_id": 0,
-                ...
-            },
-            ...
-        ]
-        """
-        lines = text.split("\n")
-        header_line_indexes = []
-        header_texts = []
-
-        # Loop through the lines and record the index and content of header
-        # lines.
-        for i, line in enumerate(lines):
-            stripped_line = line.strip()
-            header_text = None
-            if self.render_to == "markdown" and stripped_line.startswith("#"):
-                # Remove leading '#' characters for markdown headers.
-                header_text = stripped_line.lstrip("#").strip()
-            elif self.render_to == "html" and (
-                any(stripped_line.startswith(f"<h{j}>") for j in range(1, 7))
-                or stripped_line.startswith("<title>")
-            ):
-                for tag_name in ["h1", "h2", "h3", "h4", "h5", "h6", "title"]:
-                    opening_tag = f"<{tag_name}>"
-                    closing_tag = f"</{tag_name}>"
-                    if (
-                        stripped_line.startswith(opening_tag)
-                        and closing_tag in stripped_line
-                    ):
-                        header_text = stripped_line[
-                            len(opening_tag) : stripped_line.find(closing_tag)
-                        ].strip()
-                        break
-            if header_text:
-                header_line_indexes.append(i)
-                header_texts.append(header_text)
-
-        # Use the metadata to append the page number comment on matching
-        # headers.
-        modified_lines = list(lines)
-
-        for entry in toc:
-            toc_title = entry.get("title", "")
-            page_id = entry.get("page_id")
-            if not toc_title or page_id is None:
-                continue
-
-            norm_toc_title = self.__normalize_text(toc_title)
-
-            for idx, header in enumerate(header_texts):
-                norm_header = self.__normalize_text(header)
-                # Check for a match using containment after normalization.
-                if (
-                    norm_toc_title in norm_header
-                    or norm_header in norm_toc_title
-                ):
-                    line_index = header_line_indexes[idx]
-                    original_line = modified_lines[line_index]
-                    # Use regex to check if a page comment is already appended.
-                    if not re.search(
-                        r"<!--\s*Page:\s*\d+\s*-->", original_line
-                    ):
-                        comment = f" <!-- Page: {page_id} -->"
-                        modified_lines[line_index] = f"{original_line}{comment}"
-                    break  # Only modify the first matching header for this toc entry.
-
-        return "\n".join(modified_lines)
-
     def _extract_additional_metadata(self, text: str) -> Dict:
         """
         Attempt to extract document metadata such as title and author. First,
@@ -342,7 +262,204 @@ class MarkerLocalOCR(OCR):
 
         return extracted
 
-    def extract(self, filepath: str) -> Document:
+    def __limit_to_pages(
+        self,
+        filepath: str,
+        target_dir: str,
+        pages: List[Union[int, Tuple[int, int]]],
+    ) -> str:
+        """
+        Given a target pdf and a list of pages, create a new pdf in the target
+        directory (passing back the filepath for it) with only the pages
+        specified.
+
+        pages is a list of integers or tuples. If a single value is specified,
+        that page is included on its own. If a tuple is specified, the first
+        value is the start page and the second value is the end page, inclusive.
+        A value of -1 specifies the end of the document, so (30, -1) would be
+        from page 30 to the end of the document.
+
+        The pages written are done *in the order specified*. This means that
+        you can end up duplicating pages. If I have, for instance:
+
+        __limit_to_pages(filepath, target_dir, [(1, 10), (5, 12)])
+
+        ...would create a document of pages 1-10, then 5-12, IE 18 pages.
+
+        Also note that page "0" doesn't exist, we are 1-indexed for the page
+        count.
+
+        If pages specified exceed the total number of pages in the document,
+        an error will be raised.
+        """
+        reader = self.__pdf_reader(filepath)
+        writer = self.__pdf_writer()
+
+        total_pages = len(reader.pages)
+
+        for page_spec in pages:
+            if isinstance(page_spec, int):
+                # Single page
+                page_num = page_spec
+                if page_num <= 0:
+                    raise ValueError(
+                        "Single page specification cannot be negative: "
+                        f"{page_num}"
+                    )
+                if page_num >= total_pages:
+                    raise ValueError(
+                        "Page specification cannot exceed document length: "
+                        f"{page_num}"
+                    )
+                writer.add_page(reader.pages[page_num - 1])
+            else:
+                # Page range (start, end)
+                start, end = page_spec
+
+                # Handle negative end value (meaning "to the end of document")
+                if end < 0:
+                    end = total_pages - 1
+
+                # Validate page range
+                if start <= 0:
+                    raise ValueError(
+                        f"Start page cannot be negative or zero: {start}"
+                    )
+                if start >= total_pages:
+                    raise ValueError(
+                        f"Start page {start} exceeds document length of "
+                        f"{total_pages} pages"
+                    )
+                if end >= total_pages:
+                    raise ValueError(
+                        f"End page {end} exceeds document length of "
+                        f"{total_pages} pages"
+                    )
+                if start > end:
+                    raise ValueError(
+                        f"Start page {start} cannot be greater than end page "
+                        f"{end}"
+                    )
+
+                # Add all pages in the range (inclusive)
+                for page_num in range(start, end + 1):
+                    writer.add_page(reader.pages[page_num - 1])
+
+        output_path = os.path.join(target_dir, "output.pdf")
+
+        with open(output_path, "wb") as output_file:
+            writer.write(output_file)
+
+        return output_path
+
+    def __map_page_numbers(
+        self,
+        filepath: str,
+        pages: List[Union[int, Tuple[int, int]]],
+    ) -> Dict[int, int]:
+        """
+        Creates a mapping from page numbers in the limited document to page
+        numbers
+        in the original document.
+
+        For example, if we extract pages [5, (10, 12)] from the original
+        document,
+        the mapping would be:
+        {
+            0: 5,    # First page in limited doc is page 5 in original
+            1: 10,   # Second page in limited doc is page 10 in original
+            2: 11,   # Third page in limited doc is page 11 in original
+            3: 12    # Fourth page in limited doc is page 12 in original
+        }
+
+        Note: The pages parameter uses 1-indexed page numbers (where page 1 is
+        the first page), but the returned mapping uses 0-indexed values for both
+        keys and values.
+
+        Args:
+            filepath: Path to the original PDF file
+            pages: List of page specifications (integers or tuples) using
+                1-indexed page numbers
+
+        Returns:
+            Dictionary mapping limited document page numbers (0-indexed) to
+            original document page numbers (0-indexed)
+        """
+        reader = self.__pdf_reader(filepath)
+        total_pages = len(reader.pages)
+
+        # Create the mapping
+        mapping = {}
+        limited_page_idx = 0
+
+        for page_spec in pages:
+            if isinstance(page_spec, int):
+                # Single page (convert from 1-indexed to 0-indexed)
+                page_num = page_spec
+                if 0 <= page_num < total_pages:
+                    mapping[limited_page_idx] = page_num
+                    limited_page_idx += 1
+            else:
+                # Page range (start, end) - convert from 1-indexed to 0-indexed
+                start, end = page_spec
+
+                # Handle negative end value (meaning "to the end of document")
+                if end < 0:
+                    end = total_pages - 1
+                else:
+                    end = end - 1  # Convert to 0-indexed
+
+                # Ensure values are within bounds
+                start = max(0, min(start, total_pages - 1))
+                end = max(0, min(end, total_pages - 1))
+
+                # Add all pages in the range (inclusive)
+                if start <= end:
+                    for page_num in range(start, end + 1):
+                        mapping[limited_page_idx] = page_num
+                        limited_page_idx += 1
+
+        return mapping
+
+    def __adjust_page_numbers(self, text: str, page_map: Dict[int, int]) -> str:
+        """
+        Throughout the text, marker has added page numbers in a comment
+        fashion -
+
+        For markdown, this looks like:
+        {#}------------------------------------------------
+
+        For HTML, this looks like:
+        <div class="page" data-page-id="#">
+
+        We replace those page numbers with the actual page numbers
+        from the original document, on the line to be removed in the
+        form of:
+        <!-- PAGE NUMBER: # -->
+        ...for both modes.
+        """
+        lines = text.split("\n")
+        modified_lines = []
+        if self.render_to == "markdown":
+            pattern = r"^\{(\d+)\}-+$"
+        elif self.render_to == "html":
+            pattern = r'<div class="page" data-page-id="(\d+)">'
+
+        for line in lines:
+            # Check for markdown page marker
+            match = re.match(pattern, line.strip())
+            if match:
+                current_page = int(match.group(1))
+                if current_page in page_map:
+                    original_page = page_map[current_page]
+                    line = f"<!-- PAGE NUMBER: {original_page} -->"
+            modified_lines.append(line)
+
+        return "\n".join(modified_lines)
+
+    def extract(
+        self, filepath: str, pages: Optional[List[Union[int, Tuple]]] = None
+    ) -> Document:
         """
         Extracts a document from the given filepath by processing the PDF,
         converting images to text if enabled, and appending page numbers
@@ -350,17 +467,36 @@ class MarkerLocalOCR(OCR):
         data via an LLM based on the table of contents) to populate a Document.
         Returns a Document instance populated with the content and metadata.
         """
-        response = self.__converter(filepath)
+        if pages is not None:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                modified_file = self.__limit_to_pages(
+                    filepath,
+                    temp_dir,
+                    pages,
+                )
+                response = self.__converter(modified_file)
+                # Add page numbers to headers so that we can reference back to
+                # the original document's source.
+                page_map = self.__map_page_numbers(filepath, pages)
+                if self.render_to == "markdown":
+                    text = response.markdown
+                elif self.render_to == "html":
+                    text = response.html
+                text = self.__adjust_page_numbers(text, page_map)
+        else:
+            response = self.__converter(filepath)
 
-        if self.render_to == "markdown":
-            text = response.markdown
-        elif self.render_to == "html":
-            text = response.html
+            if self.render_to == "markdown":
+                text = response.markdown
+            elif self.render_to == "html":
+                text = response.html
 
         # Save the images to disk.
+        # TODO adjust the image names as they refer to page numbers
+        # that aren't quite right
         for key, image in response.images.items():
             # image is a PIL Image object
-            image.save(key)
+            image.save(os.path.join(self.__directory, key))
 
         if self.__convert_images_to_text:
             image_explanations: Dict[str, str] = {
@@ -376,16 +512,8 @@ class MarkerLocalOCR(OCR):
 
         metadata = response.metadata
 
-        # Add page numbers to headers so that we can reference back to the
-        # original document's source.
-        text = self.__add_page_numbers_to_headers(
-            text, metadata["table_of_contents"]
-        )
-
         # Extract additional metadata (such as title and author).
         doc_metadata = self._extract_additional_metadata(text)
-
-        raise "dead"
 
         # Create and populate a Document instance.
         # doc = Document(
@@ -401,3 +529,4 @@ class MarkerLocalOCR(OCR):
         # # Set other fields (such as tags, type, etc.) as needed.
 
         # return doc
+        return text, doc_metadata
