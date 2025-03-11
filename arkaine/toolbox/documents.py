@@ -12,9 +12,10 @@ from typing import Dict, List, Optional, Tuple, Union
 import google.generativeai as genai
 from PIL import Image as PILImage
 from uuid import uuid4
+from arkaine.utils.artifact import Metadata
 
 
-class Document:
+class Document(Metadata):
     """
     Document tracks information about a document and its location. All documents
     are stored in a directory. The file structure is always:
@@ -168,7 +169,7 @@ class Document:
             os.makedirs(os.path.join(library_dir, id))
 
 
-class Image:
+class Image(Metadata):
     def __init__(
         self,
         path: Union[str, Path],
