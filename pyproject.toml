@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=45", "wheel"]
+requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -82,4 +82,27 @@ asyncio_default_fixture_loop_scope = "function"
 [project.urls]
 Homepage = "https://github.com/hlfshell/arkaine"
 Documentation = "https://arkaine.readthedocs.io/"
-Repository = "https://github.com/hlfshell/arkaine.git" 
+Repository = "https://github.com/hlfshell/arkaine.git"
+
+[tool.setuptools]
+include-package-data = true
+
+# This section replaces your MANIFEST.in
+[tool.setuptools.package-data]
+"arkaine" = [
+    "backends/prompts/**/*.prompt",
+    "composer/static/**/*",
+    "chat/prompts/*.prompt",
+    "spellbook/static/**/*.js",
+    "spellbook/static/**/*.css",
+    "spellbook/static/**/*.html",
+    "spellbook/static/components/**/*.js",
+    "wrappers/prompts/**/*",
+    "toolbox/code_envs/extras/python_env/**/*.py",
+    "toolbox/prompts/*.prompt",
+    "toolbox/research/prompts/*.prompt",
+]
+
+# Include non-package files
+[tool.setuptools.data-files]
+"." = ["LICENSE", "README.md"] 
