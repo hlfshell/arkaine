@@ -8,7 +8,7 @@ version = "0.0.18"
 description = "A batteries-included framework for DIY AI agents"
 readme = "README.md"
 authors = [{name = "Keith Chester", email = "keith@hlfshell.ai"}]
-license = {file = "MIT"}
+license = {file = "LICENSE"}
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
