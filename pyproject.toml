@@ -59,6 +59,10 @@ dependencies = [
     "setuptools==75.8.0",
 ]
 
+[project.scripts]
+spellbook = "arkaine.spellbook.main:main"
+
+
 [tool.black]
 line-length = 80
 target-version = ['py38']
