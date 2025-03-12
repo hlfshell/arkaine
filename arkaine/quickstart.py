@@ -1,7 +1,8 @@
 import atexit
 import signal
 from threading import Event
-from typing import Callable, Optional, Union
+from typing import Callable, List, Optional, Union
+import threading
 
 from arkaine.internal.logging.logger import GlobalLogger
 from arkaine.spellbook.server import SpellbookServer
@@ -100,13 +101,24 @@ def quickstart(
     return done
 
 
-def keep_alive(cleanup: Optional[Callable[[], None]] = None):
+def keep_alive(
+    cleanup: Union[Callable[[], None], List[Callable[[], None]]] = [],
+    force_quit_timeout: float = 3.0,
+):
     """
-    keep_alive is a simple function that keeps the program alive until
-    a kill signal is received.
+    keep_alive is a simple function that keeps the program alive until a kill
+    signal is received.
 
-    The optional cleanup function is called when a kill signal is received
+    The optional cleanup function(s) are called when a kill signal is received
+
+    The optional force_quit_timeout is the number of seconds to wait for cleanup
+    *after* all functions passed have been called. If those functions take
+    longer than this timeout, the program will force an exit.
     """
+
+    if not isinstance(cleanup, list):
+        cleanup = [cleanup]
+
     running = Event()
     running.set()
 
@@ -123,5 +135,15 @@ def keep_alive(cleanup: Optional[Callable[[], None]] = None):
     except KeyboardInterrupt:
         running.clear()
     finally:
-        if cleanup:
-            cleanup()
+        for cleanup_func in cleanup:
+            threading.Thread(target=cleanup_func).start()
+
+        # Set up a force exit after 5 seconds in case cleanup hangs
+        def force_exit():
+            exit(1)  # Use non-zero exit code to indicate abnormal termination
+
+        # Ensure we terminate within the specified timeout, even if cleanup
+        # functions hang or some other service holds the main thread.
+        force_exit_timer = threading.Timer(force_quit_timeout, force_exit)
+        force_exit_timer.daemon = True  # Make sure timer doesn't prevent exit
+        force_exit_timer.start()
