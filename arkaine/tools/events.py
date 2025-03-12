@@ -31,6 +31,12 @@ class Event:
     def timestamp(self) -> float:
         return self._timestamp
 
+    def is_a(self, event_type: Union[str, Type[Event]]) -> bool:
+        if isinstance(event_type, str):
+            return self.type() == event_type
+        else:
+            return self.type() == event_type.type()
+
     def _get_readable_timestamp(self) -> str:
         return datetime.fromtimestamp(
             self._timestamp, tz=timezone.utc
