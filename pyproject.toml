@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "arkaine"
-version = "0.0.15"
+version = "0.0.16"
 description = "A batteries-included framework for DIY AI agents"
 readme = "README.md"
-authors = [{name = "Keith Chester", email = "k@hlfshell.ai"}]
+authors = [{name = "Keith Chester", email = "keith@hlfshell.ai"}]
 license = {file = "MIT"}
 classifiers = [
     "Development Status :: 3 - Alpha",

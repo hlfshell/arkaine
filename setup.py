@@ -1,28 +1,38 @@
 from typing import List
+import os
 
 from setuptools import find_packages, setup
 
 
+def _local_path(filename: str) -> str:
+    return os.path.join(os.path.dirname(__file__), filename)
+
+
 def read_requirements(filename: str) -> List[str]:
     """Read requirements from file, cleaning up formatting."""
-    with open(filename) as f:
+    filepath = _local_path(filename)
+    with open(filepath) as f:
         requirements = []
         for line in f:
             line = line.strip()
             # Skip empty lines, comments, and section headers
             if not line or line.startswith("#") or line.startswith("["):
                 continue
-            # Keep version specifiers to ensure reproducible builds
+            # If the line has a comment in it, remove it and then restrip
+            # spacing
+            if "#" in line:
+                line = line.split("#")[0].strip()
+
             requirements.append(line)
         return requirements
 
 
-with open("README.md", "r", encoding="utf-8") as fh:
+with open(_local_path("README.md"), "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
     name="arkaine",
-    version="0.0.15",
+    version="0.0.16",
     author="Keith Chester",
     author_email="keith@hlfshell.ai",
     description="A batteries-included framework for DIY AI agents",
