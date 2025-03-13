@@ -35,24 +35,6 @@ import time
 from threading import Lock
 
 
-# The key points to note here are we import:
-# 1. The researchers (iterative and WebResearcher)
-# 2. OpenAI LLM (you can use deepseek or gemini here)
-# 3. The ReportGenerator, which is another agent generates a report from
-from arkaine.internal.to_json import recursive_to_json
-from arkaine.llms.openai import OpenAI
-from arkaine.toolbox.research.generator import ReportGenerator
-from arkaine.toolbox.research.iterative_researcher import IterativeResearcher
-from arkaine.toolbox.research.researcher import (
-    FindingsGeneratedEvent,
-    ResearchQueryEvent,
-    ResourceFoundEvent,
-)
-from arkaine.toolbox.research.web_research import WebResearcher
-from arkaine.toolbox.websearch import Websearch
-from arkaine.tools.context import Context
-from arkaine.tools.events import Event
-
 # Let's create a detailed topic. Make sure that it is not just a simple
 # query, but rather a complex question worth the time of the large scale
 # search we're performing.
@@ -82,6 +64,17 @@ others will require an API key to utilize. We currently support:
 """
 serp_provider = "duckduckgo"
 
+
+# The key points to note on what we're importing:
+# 1. The researchers (iterative and WebResearcher)
+# 2. OpenAI LLM (you can use deepseek or google here)
+# 3. The ReportGenerator, which is another agent generates a report from
+
+from arkaine.llms.openai import OpenAI
+from arkaine.toolbox.research.web_research import WebResearcher
+from arkaine.toolbox.websearch import Websearch
+from arkaine.toolbox.research.iterative_researcher import IterativeResearcher
+
 # Alright, that's it! Now let's get to work building our research agent.
 
 # Setup an OpenAI llm for the research process. We use o3-mini. Generally
@@ -102,7 +95,7 @@ websearch = Websearch(provider=serp_provider)
 researcher = WebResearcher(llm, websearch=websearch)
 
 """
-A researcher is an agent that, given an LLM, a way to search for resources, 
+A researcher is an agent that, given an LLM, a way to search for resources,
 will crawl through that searcher to find worthwhile resources, consume them,
 and generate "findings". A finding is a short dense summary of important
 information relevant to the topic or question at hand.
@@ -133,6 +126,19 @@ data = {
     "websites_visited": [],
     "findings_generated": [],
 }
+
+
+# We'll import what we need for the event listeners and the context
+# class for working with it.
+
+
+from arkaine.tools.events import Event
+from arkaine.toolbox.research.researcher import (
+    FindingsGeneratedEvent,
+    ResearchQueryEvent,
+    ResourceFoundEvent,
+)
+from arkaine.tools.context import Context
 
 
 # This is our event listener - it will be called whenever an event is
@@ -184,7 +190,12 @@ print("Findings:\n", ctx.output)
 print("*" * 100)
 
 # Save the findings to a json file so you can access them later to play with
-# different generations, or to use as context for another agent!
+# different generations, or to use as context for another agent! To do this
+# we'll use arkaine's recursive_to_json function to convert the findings to a
+# json string.
+
+from arkaine.internal.to_json import recursive_to_json
+
 with open("findings.json", "w") as f:
     json.dump(recursive_to_json(ctx.output), f, indent=2)
 
@@ -194,6 +205,8 @@ print("Collected questions:", ctx["all_topics"], "\n")
 # Generate a report based on the research findings. The generator is another
 # agent that takes the topic and the findings and generates a report. We call it
 # just like we would any other function.
+from arkaine.toolbox.research.generator import ReportGenerator
+
 generator = ReportGenerator(llm)
 
 report = generator(topic, ctx.output)
