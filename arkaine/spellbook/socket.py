@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import json
-import threading
+from threading import Lock, Thread
 from typing import Any, Dict, Set
 
 from websockets.server import WebSocketServerProtocol
 from websockets.sync.server import serve
 
+from arkaine.internal.json import recursive_to_json
 from arkaine.internal.registrar import Registrar
 from arkaine.tools.context import Attachable, Context
 from arkaine.tools.datastore import ThreadSafeDataStore
@@ -29,13 +30,13 @@ class SpellbookSocket:
                 memory (default: 1024)
         """
         self.port = port
-        self.active_connections: Set[WebSocketServerProtocol] = set()
+        self.__active_connections: Set[WebSocketServerProtocol] = set()
         self._contexts: Dict[str, Context] = {}
         self._producers: Dict[str, Dict[str, Attachable]] = {}
         self._server = None
         self._server_thread = None
         self._running = False
-        self._lock = threading.Lock()
+        self._lock = Lock()
         self.__max_contexts = max_contexts
 
         Registrar.enable()
@@ -47,11 +48,13 @@ class SpellbookSocket:
             producers = Registrar.get_producers()
             for type in producers:
                 self._producers[type] = {}
-                for producer in producers[type]:
-                    self._producers[type][producer.id] = producer
+                for id in producers[type]:
+                    self._producers[type][id] = producers[type][id]
 
                     # Add our context creation listener to the producer
-                    producer.add_on_call_listener(self._on_producer_call)
+                    producers[type][id].add_on_call_listener(
+                        self._on_producer_call
+                    )
 
     def _on_producer_call(self, producer: Attachable, context: Context):
         # Subscribe to all the context's events for this tool from
@@ -117,7 +120,7 @@ class SpellbookSocket:
         """Helper function to broadcast a message to all active clients"""
         with self._lock:
             dead_connections = set()
-            for websocket in self.active_connections:
+            for websocket in self.__active_connections:
                 try:
                     websocket.send(json.dumps(message))
                 except Exception as e:
@@ -125,7 +128,7 @@ class SpellbookSocket:
                     dead_connections.add(websocket)
 
             # Clean up dead connections
-            self.active_connections -= dead_connections
+            self.__active_connections -= dead_connections
 
     def _handle_client(self, websocket):
         """Handle an individual client connection"""
@@ -138,7 +141,7 @@ class SpellbookSocket:
 
         try:
             with self._lock:
-                self.active_connections.add(websocket)
+                self.__active_connections.add(websocket)
                 # Send initial context states and their events immediately
 
                 for producer_type in self._producers:
@@ -190,7 +193,7 @@ class SpellbookSocket:
             print(f"Client connection error: {e}")
         finally:
             with self._lock:
-                self.active_connections.discard(websocket)
+                self.__active_connections.discard(websocket)
             print(f"Client disconnected from {remote_addr}")
 
     def __handle_producer_execution(self, data: dict):
@@ -203,7 +206,10 @@ class SpellbookSocket:
 
         producer = Registrar.get_producer_by_type(producer_id, producer_type)
 
-        producer.async_call(**args)
+        if hasattr(producer, "async_call"):
+            producer.async_call(**args)
+        else:
+            Thread(target=producer, kwargs=args).start()
 
     def __handle_context_retry(self, data: dict):
         context_id: str = data["context_id"]
@@ -234,7 +240,6 @@ class SpellbookSocket:
     def _broadcast_context(self, context: Context):
         """Broadcast a context to all active clients"""
         try:
-            print(self.__build_context_message(context))
             self._broadcast_to_clients(self.__build_context_message(context))
         except Exception as e:
             print(f"Failed to broadcast context: {e}")
@@ -263,16 +268,7 @@ class SpellbookSocket:
         self, datastore: ThreadSafeDataStore, key: str, value: Any
     ):
         """Broadcast a datastore update to all active clients"""
-        if hasattr(value, "to_json"):
-            value = value.to_json()
-        else:
-            try:
-                value = json.dumps(value)
-            except Exception:
-                if isinstance(value, str):
-                    value = value
-                else:
-                    value = str(value)
+        out_value = recursive_to_json(value)
 
         self._broadcast_to_clients(
             {
@@ -281,7 +277,7 @@ class SpellbookSocket:
                     "context": datastore.context,
                     "label": datastore.label,
                     "key": key,
-                    "value": value,
+                    "value": out_value,
                 },
             }
         )
@@ -292,9 +288,7 @@ class SpellbookSocket:
             return
 
         self._running = True
-        self._server_thread = threading.Thread(
-            target=self._run_server, daemon=True
-        )
+        self._server_thread = Thread(target=self._run_server, daemon=True)
         self._server_thread.start()
         print(f"WebSocket server started on ws://localhost:{self.port}")
 
@@ -312,12 +306,12 @@ class SpellbookSocket:
         self._running = False
 
         with self._lock:
-            for websocket in self.active_connections:
+            for websocket in self.__active_connections:
                 try:
                     websocket.close()
                 except Exception:
                     pass
-            self.active_connections.clear()
+            self.__active_connections.clear()
 
         if self._server:
             try:
