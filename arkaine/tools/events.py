@@ -17,10 +17,15 @@ class Event:
 
     # Keep Event class here since it's the base class
 
-    def __init__(self, event_type: Union[str, Type[Event]], data: Any = None):
+    def __init__(
+        self,
+        event_type: Union[str, Type[Event]],
+        data: Any = None,
+        timestamp: float = None,
+    ):
         self._event_type = event_type
         self.data = data
-        self._timestamp = time()
+        self._timestamp = timestamp if timestamp is not None else time()
 
     @classmethod
     @abstractmethod
@@ -53,10 +58,13 @@ class Event:
         data = recursive_to_json(self.data)
 
         return {
-            "type": self._event_type,
+            "type": self.__class__.type(),
             "timestamp": self._timestamp,
             "data": data,
         }
+
+    def from_json(self, json: dict) -> Event:
+        return Event(json["type"], json["data"], json["timestamp"])
 
 
 class ToolCalled(Event):
@@ -119,13 +127,6 @@ class ToolException(Event):
             )
 
         return out
-
-    def to_json(self) -> dict:
-        return {
-            "type": self._event_type,
-            "timestamp": self._timestamp,
-            "data": str(self),
-        }
 
 
 class ChildContextCreated(Event):
