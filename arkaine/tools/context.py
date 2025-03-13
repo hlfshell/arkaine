@@ -676,16 +676,11 @@ class Context:
         with self.__lock:
             history = [event.to_json() for event in self.__history]
 
-            # args is a dictionary, so we will move through each key
-            # and set the value. If the value is an object of some type,
-            # we will save the type as well for recreation later.
-            args = {}
-            for key, value in self.__args:
-                args[key] = recursive_to_json(value, serial_wrap=True)
+            args = recursive_to_json(self.__args)
 
             output = {}
             if self.__output:
-                output = recursive_to_json(self.__output, serial_wrap=True)
+                output = recursive_to_json(self.__output)
 
             data = self.__data.to_json()
 
@@ -792,11 +787,15 @@ class Context:
 
         # Load args
         if data.get("args"):
-            context.args = recursive_from_json(data["args"])
+            context.args = recursive_from_json(
+                data["args"], fallback_if_no_class=True
+            )
 
         # Load output if present
         if data.get("output") is not None:
-            context.__output = recursive_from_json(data["output"])
+            context.__output = recursive_from_json(
+                data["output"], fallback_if_no_class=True
+            )
 
         # Load error if present
         if data.get("error"):
@@ -868,27 +867,3 @@ class Context:
                     )
                 )
         return events
-
-
-class SerializableWrapper:
-
-    def __init__(self, value: Any):
-        self.__value = value
-        self.__class = type(value)
-        self.__module = value.__module__
-
-    def to_json(self) -> dict:
-        return {
-            "type": self.__class.__name__,
-            "module": self.__module,
-            "value": recursive_to_json(self.__value),
-        }
-
-    @property
-    def value(self) -> Any:
-        return self.__value
-
-    @classmethod
-    def from_json(cls, data: dict) -> Any:
-        module = importlib.import_module(data["module"])
-        return cls(getattr(module, data["type"])(data["value"]))
