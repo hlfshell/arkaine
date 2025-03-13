@@ -219,7 +219,7 @@ class ThreadSafeDataStore:
         with self.__lock:
             data = {}
             for key, value in self.__data.items():
-                data[key] = recursive_to_json(value, serial_wrap=True)
+                data[key] = recursive_to_json(value)
 
         return {
             "context": self.context,
@@ -231,7 +231,9 @@ class ThreadSafeDataStore:
     def from_json(cls, data: dict) -> "ThreadSafeDataStore":
         """Create a ThreadSafeDataStore from JSON data."""
 
-        loaded_data = recursive_from_json(data["data"])
+        loaded_data = recursive_from_json(
+            data["data"], fallback_if_no_class=True
+        )
 
         store = cls(loaded_data, data["context"], data["label"])
         return store
