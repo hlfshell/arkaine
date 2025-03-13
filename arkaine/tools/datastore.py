@@ -5,7 +5,10 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, List, Optional, Union
 
-from arkaine.internal.to_json import recursive_to_json
+from arkaine.internal.json import (
+    recursive_to_json,
+    recursive_from_json,
+)
 
 
 class ThreadSafeDataStore:
@@ -156,7 +159,8 @@ class ThreadSafeDataStore:
 
         Args:
             key: The key to update
-            operation: A callable that takes the current value and returns the new value
+            operation: A callable that takes the current value and returns
+                the new value
 
         Returns:
             The new value after applying the operation
@@ -215,7 +219,7 @@ class ThreadSafeDataStore:
         with self.__lock:
             data = {}
             for key, value in self.__data.items():
-                data[key] = recursive_to_json(value)
+                data[key] = recursive_to_json(value, serial_wrap=True)
 
         return {
             "context": self.context,
@@ -226,5 +230,8 @@ class ThreadSafeDataStore:
     @classmethod
     def from_json(cls, data: dict) -> "ThreadSafeDataStore":
         """Create a ThreadSafeDataStore from JSON data."""
-        store = cls(data["data"], data["context"], data["label"])
+
+        loaded_data = recursive_from_json(data["data"])
+
+        store = cls(loaded_data, data["context"], data["label"])
         return store
