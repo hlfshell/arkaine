@@ -674,11 +674,11 @@ class Context:
         root = self.root
 
         with self.__lock:
-            history = [event.to_json() for event in self.__history]
+            history = recursive_to_json(self.__history)
 
             args = recursive_to_json(self.__args)
 
-            output = {}
+            output = None
             if self.__output:
                 output = recursive_to_json(self.__output)
 
@@ -813,7 +813,7 @@ class Context:
 
         # Load history
         if data.get("history"):
-            context.__history = cls.__load_history(data["history"])
+            context.__history = recursive_from_json(data["history"])
 
         # Load children recursively
         if data.get("children"):
