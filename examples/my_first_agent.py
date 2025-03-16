@@ -63,9 +63,7 @@ given input, but otherwise can be ignored and you can just utilize strings.
 # Ok, now let's create an agent.
 
 
-###############################################
-# Import Required Objects from arkaine Framework
-###############################################
+# We're often importing these from arkaine.tools to build out our tool / agents.
 from arkaine.tools.argument import Argument
 from arkaine.tools.example import Example
 from arkaine.tools.result import Result

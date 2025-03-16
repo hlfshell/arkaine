@@ -6,6 +6,7 @@ from arkaine.llms.claude import Claude
 from arkaine.llms.google import Google
 from arkaine.llms.groq import Groq
 from arkaine.llms.deepseek import DeepSeek
+import ollama as ollama_module
 
 
 def load_llm(provider: Optional[str] = None, model: Optional[str] = None):
@@ -30,28 +31,11 @@ def load_llm(provider: Optional[str] = None, model: Optional[str] = None):
         provider = os.environ.get("LLM_PROVIDER", None)
 
     if provider is None:
-        # First, see if we have an ollama instance running
-        try:
-            import ollama as ollama_module
-
-            client = ollama_module.Client()
-            models = client.list()
-            print(models)
-            provider = "ollama"
-        except ImportError:
-            pass
-
-        if provider is None:
-            # Now let's run through available env keys
-            # and see if any are set
-            for provider, env_key in api_env_keys.items():
-                if os.environ.get(env_key, None) is not None:
-                    provider = provider
-                    break
-        if provider is None:
-            # At this point we don't know what to do,
-            # so we'll raise an error
-            raise ValueError("No provider specified or api keys found")
+        # Let's run through available env keys and see if any are set
+        for provider, env_key in api_env_keys.items():
+            if os.environ.get(env_key, None) is not None:
+                provider = provider
+                break
 
     if provider == "openai":
         llm = OpenAI
@@ -66,7 +50,21 @@ def load_llm(provider: Optional[str] = None, model: Optional[str] = None):
     elif provider == "deepseek":
         llm = DeepSeek
     else:
-        raise ValueError(f"Invalid provider: {provider}")
+        # First, see if we have an ollama instance running
+        try:
+
+            client = ollama_module.Client()
+            models = client.list()
+            model = models[0].model
+
+            provider = "ollama"
+        except ImportError:
+            pass
+
+    if provider is None:
+        # At this point we don't know what to do,
+        # so we'll raise an error
+        raise ValueError("No provider specified or api keys found")
 
     if model:
         return llm(model=model)
