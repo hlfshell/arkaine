@@ -14,13 +14,16 @@ class WebResearcher(Researcher):
         self,
         llm: LLM,
         name: str = "web_researcher",
-        websearch: Optional[Websearch] = None,
+        websearch: Optional[Union[Websearch, str]] = None,
         max_learnings: int = 5,
         max_workers: int = 10,
         id: str = None,
     ):
         if websearch is None:
             websearch = Websearch(provider="duckduckgo", limit=20)
+        elif isinstance(websearch, str):
+            websearch = Websearch(provider=websearch, limit=20)
+
         self.__websearch = websearch
 
         super().__init__(

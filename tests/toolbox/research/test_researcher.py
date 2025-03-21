@@ -2,6 +2,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from arkaine.flow.parallel_list import ParallelList
 from arkaine.llms.llm import LLM
 from arkaine.toolbox.research.researcher import (
     DefaultResourceJudge,
@@ -9,9 +10,11 @@ from arkaine.toolbox.research.researcher import (
     GenerateFinding,
     Researcher,
 )
+from arkaine.tools.argument import Argument
 from arkaine.tools.context import Context
 from arkaine.tools.tool import Tool
 from arkaine.utils.resource import Resource
+from arkaine.tools.toolify import toolify
 
 
 @pytest.fixture
@@ -62,13 +65,15 @@ def mock_resources():
 
 @pytest.fixture
 def mock_tool():
-    def _create_mock_tool(name="mock_tool", return_value="mock result"):
+    def _create_mock_tool(
+        name="mock_tool", return_value="mock result", args=[]
+    ):
         func = Mock()
         func.return_value = return_value
         return Tool(
             name=name,
             description="A mock tool for testing",
-            args=[],
+            args=args,
             func=func,
             examples=[],
             id=None,
@@ -88,7 +93,18 @@ def mock_query_generator(mock_tool):
 
 @pytest.fixture
 def mock_resource_search(mock_tool, mock_resources):
-    search = mock_tool(name="resource_search", return_value=mock_resources)
+    search = mock_tool(
+        name="resource_search",
+        return_value=mock_resources,
+        args=[
+            Argument(
+                name="topic",
+                description="The topic to search for",
+                type="str",
+                required=True,
+            )
+        ],
+    )
     return search
 
 
@@ -223,9 +239,11 @@ def test_batch_resources(mock_resource_search, mock_llm, mock_tool):
     context = parent.child_context(researcher)
 
     # Test the _batch_resources method directly
-    result = researcher._batch_resources(
-        context, [resources[:2], resources[2:]]
+    func = ParallelList(
+        mock_resource_search,
+        result_formatter=researcher._batch_resources,
     )
+    result = func(context, [resources[:2], resources[2:]])
 
     # Check the result structure
     assert "topic" in result

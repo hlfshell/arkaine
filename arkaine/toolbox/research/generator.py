@@ -61,3 +61,24 @@ class ReportGenerator(Generator):
 
     def extract_result(self, context: Context, output: str) -> str:
         return output
+
+
+class LessonGenerator(Generator):
+    def __init__(self, llm: LLM):
+        super().__init__(
+            name="lesson_generator",
+            description="Generate a lesson from a list of findings",
+            args=[
+                Argument(
+                    "topic",
+                    "The topic the research focused on",
+                    "str",
+                ),
+                Argument(
+                    "findings",
+                    "Findings from which we generate the lesson from",
+                    "list[str]",
+                ),
+            ],
+            llm=llm,
+        )

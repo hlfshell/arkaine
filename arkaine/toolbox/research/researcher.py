@@ -457,6 +457,8 @@ class Researcher(Linear):
     def _batch_resources(
         self, context: Context, resource_lists: List[List[Resource]]
     ) -> List[List[Resource]]:
+        print(context.parent.args)
+        print(context.args)
         topic = context.parent.args["topic"]
         queries = [i["query"] for i in context.args["input"]]
         [
