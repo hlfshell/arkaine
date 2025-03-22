@@ -1,18 +1,32 @@
 import os
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from os import path
 from threading import Lock
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from openai import OpenAI
 
-from arkaine.tools.abstract import AbstractTool
 from arkaine.tools.argument import Argument
 from arkaine.tools.context import Context
 from arkaine.tools.result import Result
+from arkaine.tools.tool import Tool
 
 
+# SpeechAudioOptions: Singleton class for managing speech audio file storage
+# settings
+#
+# This class provides a centralized way to manage the working directory where
+# speech audio files are stored. It uses a singleton pattern to ensure only one
+# instance exists across the application.
+#
+# Properties:
+#   working_directory (str): Get/set the directory path for storing audio files
+#
+# Usage:
+#   options = SpeechAudioOptions.get_instance()
+#   print(options.working_directory)
+#   options.working_directory = "/new/path"
 class SpeechAudioOptions:
 
     __instance = None
@@ -47,6 +61,22 @@ class SpeechAudioOptions:
             self.__options["working_directory"] = value
 
 
+# SpeechAudio: Class for handling speech audio file operations
+#
+# This class manages audio file data and operations, supporting both file-based
+# and in-memory audio data handling.
+#
+# Args:
+#   file_path (Optional[str]): Path to an existing audio file
+#   data (Optional[bytes]): Raw audio data in bytes
+#   extension (Optional[str]): File extension (defaults to 'mp3' for raw data)
+#
+# Usage:
+#   # From file
+#   audio = SpeechAudio(file_path="path/to/audio.mp3")
+#
+#   # From raw data
+#   audio = SpeechAudio(data=audio_bytes, extension="mp3")
 class SpeechAudio:
 
     def __init__(
@@ -75,8 +105,15 @@ class SpeechAudio:
             )
             self.__data = data
 
+            self.save()
+
     def __str__(self):
         return f"Audio(file_path={self.file_path})"
+
+    def save(self):
+        if self.__data is not None:
+            with open(self.file_path, "wb") as f:
+                f.write(self.__data)
 
     @property
     def data(self) -> bytes:
@@ -95,45 +132,39 @@ class SpeechAudio:
         return cls(file_path=json["file_path"])
 
 
-class TextToSpeechTool(AbstractTool):
-    _rules = {
-        "args": {
-            "required": [
-                Argument(
-                    name="text", type="str", description="The text to speak"
-                ),
-            ],
-            "allowed": [
-                Argument(
-                    name="voice",
-                    type="str",
-                    description="The name/id of the voice to use",
-                ),
-                Argument(
-                    name="instructions",
-                    type="str",
-                    description=(
-                        "Additional instructions for the output; support the "
-                        "generation; varies across models"
-                    ),
-                ),
-            ],
-        },
-        "result": {
-            "required": ["SpeechAudio"],
-        },
-    }
+# TextToSpeechTool: Abstract base class for text-to-speech implementations
+#
+# This class provides a common interface for different text-to-speech services.
+# It handles argument processing and provides a standardized way to convert
+# text to speech.
+#
+# Args:
+#   name (str): Name of the tool
+#   voice (Optional[str]): Default voice to use
+#   working_directory (Optional[str]): Directory for storing audio files
+#   id (Optional[str]): Unique identifier for the tool
+#   description (str): Tool description
+#   format (str): Audio format (default: 'mp3')
+#   extra_arguments (List[Argument]): Additional arguments for the tool
+#
+# Usage:
+#   # Implement in a concrete class
+#   class MyTTS(TextToSpeechTool):
+#       def speak(self, context: Context, text: str, voice: str) ->
+#           SpeechAudio:
+class TextToSpeechTool(Tool, ABC):
 
     def __init__(
         self,
         name: str,
         voice: Optional[str] = None,
-        instructions: Optional[str] = None,
         working_directory: Optional[str] = None,
         id: Optional[str] = None,
-        description: str = "Converts a given text into an audio file of content spoken.",
+        description: str = (
+            "Converts a given text into an audio file of content spoken."
+        ),
         format: str = "mp3",
-        cleanup_on_del: bool = True,
+        extra_arguments: List[Argument] = [],
     ):
         if id is None:
             id = uuid4()
@@ -161,29 +192,9 @@ class TextToSpeechTool(AbstractTool):
             )
             self.__voice = None
         else:
-            if voice not in self.voices:
-                raise ValueError(
-                    f"Invalid voice: {voice}; must be one of {self.voices}"
-                )
             self.__voice = voice
 
-        if instructions is None:
-            arguments.append(
-                Argument(
-                    name="instructions",
-                    type="str",
-                    description=(
-                        "Additional instructions for the output; support the "
-                        "generation; varies across models"
-                    ),
-                )
-            )
-            self._instructions = None
-        else:
-            self._instructions = instructions
-
-        self.__cleanup_on_del = cleanup_on_del
-        self.__files_tracker: List[str] = []
+        arguments.extend(extra_arguments)
 
         super().__init__(
             name=name,
@@ -199,60 +210,71 @@ class TextToSpeechTool(AbstractTool):
         )
 
     def _call_speak(self, context: Context, *args, **kwargs) -> SpeechAudio:
+        args: Dict[str, Any] = {}
+
+        # Handle text argument first
         if "text" not in kwargs:
             if len(args) == 0:
                 raise ValueError("text is required")
-            text = args.pop(0)
+            args["text"] = args[0]
+            args = args[1:]  # Shift remaining args
         else:
-            text = kwargs["text"]
+            args["text"] = kwargs["text"]
 
-        voice = ""
+        # Handle voice argument
+        args["voice"] = ""
         if self.__voice is None:
-            voice = kwargs.get("voice", None)
-            if voice is None and len(args) > 0:
-                voice = args.pop(0)
+            if "voice" in kwargs:
+                args["voice"] = kwargs["voice"]
+            elif len(args) > 0:
+                args["voice"] = args[0]
+                args = args[1:]  # Shift remaining args
         else:
-            voice = self.__voice
+            args["voice"] = self.__voice
 
-        if voice not in self.voices:
-            raise ValueError(
-                f"Invalid voice: {voice}; must be one of {self.list_voices}"
-            )
+        # Handle remaining arguments
+        for argument in self.args:
+            if argument.name in ["text", "voice"]:  # Skip already handled args
+                continue
 
-        instructions = ""
-        if self._instructions is None:
-            instructions = kwargs.get("instructions", None)
-            if instructions is None and len(args) > 0:
-                instructions = args.pop(0)
-        else:
-            instructions = self._instructions
+            if argument.name in kwargs:
+                args[argument.name] = kwargs[argument.name]
+            elif argument.required:
+                if len(args) > 0:
+                    args[argument.name] = args[0]
+                    args = args[1:]  # Shift remaining args
+                else:
+                    raise ValueError(f"{argument.name} is required")
 
-        speech = self.speak(context, text, voice, instructions)
+        # Transfer any remaining kwargs
+        args.update(kwargs)
 
-        if self.__cleanup_on_del:
-            self.__files_tracker.append(speech.file_path)
-
-        return speech
-
-    def __del__(self):
-        if self.__cleanup_on_del:
-            for file_path in self.__files_tracker:
-                # If it exists, remove it
-                if path.exists(file_path):
-                    os.remove(file_path)
-
-    @property
-    @abstractmethod
-    def voices(self) -> List[str]:
-        raise NotImplementedError("Subclasses must implement list_voices")
+        return self.speak(context, **args)
 
     @abstractmethod
-    def speak(
-        self, context: Context, text: str, voice: str, instructions: str
-    ) -> SpeechAudio:
+    def speak(self, context: Context, text: str, voice: str) -> SpeechAudio:
         raise NotImplementedError("Subclasses must implement _speak")
 
 
+# TextToSpeechOpenAI: OpenAI's text-to-speech implementation
+#
+# Implements text-to-speech using OpenAI's API with support for multiple voices
+# and audio formats.
+#
+# Args:
+#   model (Optional[str]): OpenAI model to use (default: 'gpt-4o-mini-tts')
+#   api_key (Optional[str]): OpenAI API key
+#   format (Optional[str]): Audio format ('mp3', 'opus', 'aac', 'flac',
+#          'wav', 'pcm')
+#   voice (Optional[str]): Default voice (must be one of VOICES)
+#   instructions (Optional[str]): Additional TTS instructions
+#   working_directory (Optional[str]): Output directory for audio files
+#   name (str): Tool name
+#   id (Optional[str]): Tool ID
+#
+# Usage:
+#   tts = TextToSpeechOpenAI(api_key="your-key")
+#   audio = tts(context, "Hello world", voice="alloy")
 class TextToSpeechOpenAI(TextToSpeechTool):
 
     VOICES = [
@@ -291,22 +313,49 @@ class TextToSpeechOpenAI(TextToSpeechTool):
 
         self.__model = model
 
+        if voice is not None:
+            if voice not in TextToSpeechOpenAI.VOICES:
+                raise ValueError(
+                    f"Invalid voice: {voice}; must be one of "
+                    f"{TextToSpeechOpenAI.VOICES}"
+                )
+
+        if instructions is None:
+            extra_arguments = [
+                Argument(
+                    name="instructions",
+                    type="str",
+                    description=(
+                        "Additional instructions for the TTS model "
+                        "on how to dictate or emote the text"
+                    ),
+                    required=False,
+                ),
+            ]
+        else:
+            extra_arguments = []
+
         super().__init__(
             name=name,
             voice=voice,
-            instructions=instructions,
             working_directory=working_directory,
             id=id,
             format=format,
+            extra_arguments=extra_arguments,
         )
 
-    @property
-    def voices(self) -> List[str]:
-        return TextToSpeechOpenAI.VOICES
-
     def speak(
-        self, context: Context, text: str, voice: str, instructions: str
+        self,
+        context: Context,
+        text: str,
+        voice: str,
+        instructions: Optional[str] = None,
     ) -> SpeechAudio:
+        if voice not in TextToSpeechOpenAI.VOICES:
+            raise ValueError(
+                f"Invalid voice: {voice}; must be one of "
+                f"{TextToSpeechOpenAI.VOICES}"
+            )
 
         response = self.__client.audio.speech.create(
             model=self.__model,
@@ -333,6 +382,21 @@ class TextToSpeechOpenAI(TextToSpeechTool):
         )
 
 
+# TextToSpeechKokoro: Kokoro-based text-to-speech implementation
+#
+# Implements text-to-speech using the Kokoro library, supporting multiple
+# voices and speech speed adjustment.
+#
+# Args:
+#   voice (Optional[str]): Default voice (must be one of VOICES)
+#   speed (Optional[float]): Speech speed multiplier (default: 1.0)
+#   working_directory (Optional[str]): Output directory for audio files
+#   name (str): Tool name
+#   id (Optional[str]): Tool ID
+#
+# Usage:
+#   tts = TextToSpeechKokoro(voice="am_adam")
+#   audio = tts(context, "Hello world", voice="am_adam")
 class TextToSpeechKokoro(TextToSpeechTool):
 
     VOICES = [
@@ -373,10 +437,8 @@ class TextToSpeechKokoro(TextToSpeechTool):
 
     def __init__(
         self,
-        lang_code: str = "a",
         voice: Optional[str] = None,
         speed: Optional[float] = 1.0,
-        format: str = "wav",
         working_directory: Optional[str] = None,
         name: str = "text_to_speech",
         id: Optional[str] = None,
@@ -385,7 +447,8 @@ class TextToSpeechKokoro(TextToSpeechTool):
             from kokoro import KPipeline
         except ImportError:
             raise ImportError(
-                "Kokoro is not installed. Please install it using `pip install kokoro==0.9.2`."
+                "Kokoro is not installed. Please install it "
+                "using `pip install kokoro==0.9.2`."
             )
 
         try:
@@ -394,28 +457,39 @@ class TextToSpeechKokoro(TextToSpeechTool):
             self.__sf = sf
         except ImportError:
             raise ImportError(
-                "soundfile is not installed. Please install it using `pip install soundfile==0.13.1`."
+                "soundfile is not installed. Please install it "
+                "using `pip install soundfile==0.13.1`."
             )
 
-        self.__pipeline = KPipeline(lang_code=lang_code)
+        if voice is not None and voice not in TextToSpeechKokoro.VOICES:
+            raise ValueError(
+                f"Invalid voice: {voice}; must be one of "
+                f"{TextToSpeechKokoro.VOICES}"
+            )
+
+        self.__pipeline = KPipeline(lang_code="a")
         self.__speed = speed
 
         super().__init__(
             name=name,
             voice=voice,
-            instructions="",
             working_directory=working_directory,
             id=id,
-            format=format,
+            format="wav",
         )
 
-    @property
-    def voices(self) -> List[str]:
-        return TextToSpeechKokoro.VOICES
-
     def speak(
-        self, context: Context, text: str, voice: str, instructions: str
+        self,
+        context: Context,
+        text: str,
+        voice: str,
     ) -> SpeechAudio:
+        if voice not in TextToSpeechKokoro.VOICES:
+            raise ValueError(
+                f"Invalid voice: {voice}; must be one of "
+                f"{TextToSpeechKokoro.VOICES}"
+            )
+
         generator = self.__pipeline(
             text, voice=voice, speed=self.__speed, split_pattern=r"\n+"
         )
@@ -437,12 +511,24 @@ class TextToSpeechKokoro(TextToSpeechTool):
             return SpeechAudio(file_path=filepath, extension=self._format)
 
 
+# TextToSpeechGoogle: Google Cloud text-to-speech implementation
+#
+# Implements text-to-speech using Google Cloud TTS API, supporting multiple
+# voices and audio formats.
+#
+# Args:
+#   voice (Optional[str]): Default voice
+#   api_key (Optional[str]): Google Cloud API key
+#   credentials_path (Optional[str]): Path to Google Cloud credentials file
+#   format (str): Audio format ('mp3', 'wav', 'ogg')
+#   working_directory (Optional[str]): Output directory for audio files
+#   name (str): Tool name
+#   id (Optional[str]): Tool ID
+#
+# Usage:
+#   tts = TextToSpeechGoogle(api_key="your-key")
+#   audio = tts(context, "Hello world", voice="en-US-Standard-A")
 class TextToSpeechGoogle(TextToSpeechTool):
-    GENDERS = {
-        "NEUTRAL": "NEUTRAL",
-        "MALE": "MALE",
-        "FEMALE": "FEMALE",
-    }
 
     def __init__(
         self,
@@ -486,14 +572,15 @@ class TextToSpeechGoogle(TextToSpeechTool):
             self.__texttospeech = texttospeech
         except ImportError:
             raise ImportError(
-                "Google Cloud Text-to-Speech is not installed. Please install it using "
+                "Google Cloud Text-to-Speech is not installed. "
+                "Please install it using "
                 "`pip install google-cloud-texttospeech==2.25.1`"
             )
 
-        self.__voices = {}
+        self.voices = {}
         response = self.__client.list_voices()
         for v in response.voices:
-            self.__voices[v.name] = {
+            self.voices[v.name] = {
                 "gender": v.ssml_gender,
                 "rate": v.natural_sample_rate_hertz,
                 "languages": v.language_codes,
@@ -515,24 +602,23 @@ class TextToSpeechGoogle(TextToSpeechTool):
         super().__init__(
             name=name,
             voice=voice,
-            instructions="",
             working_directory=working_directory,
             id=id,
             format=format,
         )
 
-    @property
-    def voices(self) -> List[str]:
-        return list(self.__voices.keys())
+    def speak(self, context: Context, text: str, voice: str) -> SpeechAudio:
+        if voice not in self.voices:
+            raise ValueError(
+                f"Invalid voice: {voice}; must be one of "
+                f"{list(self.voices.keys())}"
+            )
 
-    def speak(
-        self, context: Context, text: str, voice: str, instructions: str
-    ) -> SpeechAudio:
         # Create synthesis input
         synthesis_input = self.__texttospeech.SynthesisInput(text=text)
 
         # Configure voice
-        voice_options = self.__voices[voice]
+        voice_options = self.voices[voice]
 
         voice_params = self.__texttospeech.VoiceSelectionParams(
             language_code=voice_options["languages"][0],
@@ -550,21 +636,76 @@ class TextToSpeechGoogle(TextToSpeechTool):
             input=synthesis_input, voice=voice_params, audio_config=audio_config
         )
 
-        # Save the audio
-        if self._working_directory is not None:
-            filepath = path.join(
-                self._working_directory, f"{uuid4()}.{self._format}"
-            )
-        else:
-            filepath = path.join(
-                SpeechAudioOptions.get_instance().working_directory,
-                f"{uuid4()}.{self._format}",
+        return SpeechAudio(
+            data=response.audio_content,
+            extension=self._format,
+        )
+
+
+# TextToSpeechElevenLabs: ElevenLabs text-to-speech implementation
+#
+# Implements text-to-speech using the ElevenLabs API, supporting multiple
+# voices and models.
+#
+# Args:
+#   voice (Optional[str]): Default voice ID
+#   api_key (Optional[str]): ElevenLabs API key
+#   model (Optional[str]): Model ID (default: 'eleven_multilingual_v2')
+#   working_directory (Optional[str]): Output directory for audio files
+#   name (str): Tool name
+#   id (Optional[str]): Tool ID
+#
+# Usage:
+#   tts = TextToSpeechElevenLabs(api_key="your-key")
+#   audio = ttss(context, "Hello world", voice="voice-id")
+class TextToSpeechElevenLabs(TextToSpeechTool):
+    def __init__(
+        self,
+        voice: Optional[str] = None,
+        api_key: Optional[str] = None,
+        model: Optional[str] = "eleven_multilingual_v2",
+        working_directory: Optional[str] = None,
+        name: str = "text_to_speech",
+        id: Optional[str] = None,
+    ):
+        try:
+            from elevenlabs import ElevenLabs
+        except ImportError:
+            raise ImportError(
+                "ElevenLabs is not installed. Please install it using "
+                "`pip install elevenlabs==1.54.0`"
             )
 
-        with open(filepath, "wb") as f:
-            f.write(response.audio_content)
+        self.__model = model
+        if api_key is None:
+            api_key = os.getenv("ELEVENLABS_API_KEY")
+        if api_key is None:
+            raise ValueError(
+                "Either api_key or the environment variable "
+                "ELEVENLABS_API_KEY must be provided"
+            )
+        self.__client = ElevenLabs(api_key=api_key)
+
+        super().__init__(
+            name=name,
+            voice=voice,
+            working_directory=working_directory,
+            id=id,
+        )
+
+    def speak(self, context: Context, text: str, voice: str) -> SpeechAudio:
+
+        response = self.__client.text_to_speech.convert(
+            voice_id=voice,
+            output_format="mp3_44100_128",
+            text=text,
+            model_id=self.__model,
+        )
+
+        # Collect all bytes from the generator
+        audio_bytes = b"".join(response)
 
         return SpeechAudio(
-            file_path=filepath,
-            extension=self._format,
+            data=audio_bytes,
+            extension="mp3",
         )
