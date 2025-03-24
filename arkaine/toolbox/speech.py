@@ -1,8 +1,10 @@
+from __future__ import annotations
+import json
 import os
 from abc import ABC, abstractmethod
 from os import path
 from threading import Lock
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from uuid import uuid4
 
 from openai import OpenAI
@@ -69,8 +71,8 @@ class SpeechAudioOptions:
 # Args:
 #   file_path (Optional[str]): Path to an existing audio file
 #   data (Optional[bytes]): Raw audio data in bytes
-#   extension (Optional[str]): File extension (defaults to 'mp3' for raw data)
-#
+#   format (Optional[str]): File extension (defaults to 'mp3')
+#   text (Optional[str]): Text associated with the audio
 # Usage:
 #   # From file
 #   audio = SpeechAudio(file_path="path/to/audio.mp3")
@@ -79,33 +81,46 @@ class SpeechAudioOptions:
 #   audio = SpeechAudio(data=audio_bytes, extension="mp3")
 class SpeechAudio:
 
+    FORMATS = ["mp3", "wav", "ogg", "flac", "pcm"]
+
     def __init__(
         self,
         file_path: Optional[str] = None,
         data: Optional[bytes] = None,
-        extension: Optional[str] = None,
+        format: Optional[str] = None,
+        text: Optional[str] = None,
     ):
         if file_path is None and data is None:
             raise ValueError("Either file_path or data must be provided")
 
+        self.__text = text
+
         if file_path is not None:
             self.file_path = file_path
             self.__data = None
-            if extension is not None:
-                self.__extension = extension
+            if format is not None:
+                self.__format = format.lower()
             else:
-                self.__extension = path.splitext(file_path)[1]
+                self.__format = path.splitext(file_path)[1].lower()
         else:
-            if extension is None:
-                extension = "mp3"
-            self.__extension = extension
+            if format is None:
+                format = "mp3"
+            if format.lower() not in SpeechAudio.FORMATS:
+                raise ValueError(
+                    f"Invalid format: {format}; must be one of {SpeechAudio.FORMATS}"
+                )
+            self.__format = format.lower()
             self.file_path = path.join(
                 SpeechAudioOptions.get_instance().working_directory,
-                f"{uuid4()}.{self.__extension}",
+                f"{uuid4()}.{format}",  # do not use lowercase'd format here
             )
             self.__data = data
 
             self.save()
+
+    @classmethod
+    def _json_filepath(cls, file_path: str) -> str:
+        return path.splitext(file_path)[0] + ".json"
 
     def __str__(self):
         return f"Audio(file_path={self.file_path})"
@@ -114,6 +129,28 @@ class SpeechAudio:
         if self.__data is not None:
             with open(self.file_path, "wb") as f:
                 f.write(self.__data)
+            json_path = self._json_filepath(self.file_path)
+            with open(json_path, "w") as f:
+                json.dump(self.to_json(), f)
+
+    @classmethod
+    def load(cls, file_path: str) -> SpeechAudio:
+        if not file_path.endswith(".json"):
+            # Does it end with the format extension?
+            ext = file_path.split(".")[0]
+            if ext.lower() not in SpeechAudio.FORMATS:
+                # In this situation, we will attempt to assume
+                # that we were passed the filename without
+                # an extension and will assume from here. If
+                # this is not the case we will run into a file
+                # not found error which is expected behavior.
+                file_path = file_path + ".json"
+            else:
+                file_path = cls._json_filepath(file_path)
+
+        with open(file_path, "r") as f:
+            json_data = json.load(f)
+        return cls(**json_data)
 
     @property
     def data(self) -> bytes:
@@ -122,14 +159,35 @@ class SpeechAudio:
                 self.__data = f.read()
         return self.__data
 
+    @property
+    def text(self) -> str:
+        return self.__text
+
+    def clear(self):
+        """
+        clear removes the audio data from memory
+        """
+        self.__data = None
+
     def to_json(self) -> Dict[str, str]:
         return {
             "file_path": self.file_path,
+            "format": self.__format,
+            "text": self.__text,
         }
 
     @classmethod
     def from_json(cls, json: Dict[str, str]) -> "SpeechAudio":
-        return cls(file_path=json["file_path"])
+        return cls(
+            file_path=json["file_path"],
+            format=json["format"],
+            text=json["text"],
+        )
+
+
+###############################################################################
+# Text To Speech Tools
+###############################################################################
 
 
 # TextToSpeechTool: Abstract base class for text-to-speech implementations
@@ -378,7 +436,8 @@ class TextToSpeechOpenAI(TextToSpeechTool):
 
         return SpeechAudio(
             file_path=filepath,
-            extension=self._format,
+            format=self._format,
+            text=text,
         )
 
 
@@ -508,7 +567,11 @@ class TextToSpeechKokoro(TextToSpeechTool):
 
             self.__sf.write(filepath, audio, 24000)
 
-            return SpeechAudio(file_path=filepath, extension=self._format)
+            return SpeechAudio(
+                file_path=filepath,
+                format=self._format,
+                text=text,
+            )
 
 
 # TextToSpeechGoogle: Google Cloud text-to-speech implementation
@@ -638,7 +701,7 @@ class TextToSpeechGoogle(TextToSpeechTool):
 
         return SpeechAudio(
             data=response.audio_content,
-            extension=self._format,
+            format=self._format,
         )
 
 
@@ -707,5 +770,274 @@ class TextToSpeechElevenLabs(TextToSpeechTool):
 
         return SpeechAudio(
             data=audio_bytes,
-            extension="mp3",
+            format="mp3",
+            text=text,
         )
+
+
+###############################################################################
+# Speech To Text Tools
+###############################################################################
+
+
+class SpeechToTextTool(Tool, ABC):
+
+    FORMATS = ["mp3", "wav", "ogg", "flac", "pcm"]
+
+    def __init__(
+        self,
+        name: str,
+        working_directory: Optional[str] = None,
+        accept_audio_or_filepath: str = "audio",
+        return_text_or_speechaudio: str = "text",
+        work_with_filepath_or_audio: str = "audio",
+        format: Optional[str] = None,
+        description: str = "Converts an audio file into text.",
+        id: Optional[str] = None,
+    ):
+        self._working_directory = working_directory
+
+        args = []
+        if accept_audio_or_filepath == "audio":
+            args.append(
+                Argument(
+                    name="audio",
+                    description="The audio to convert to text.",
+                    type="SpeechAudio",
+                )
+            )
+        elif accept_audio_or_filepath == "filepath":
+            args.append(
+                Argument(
+                    name="audio",
+                    type="str",
+                    description=(
+                        "The path to the audio file to convert to text."
+                    ),
+                )
+            )
+        else:
+            raise ValueError(
+                "Invalid accept_audio_or_filepath: "
+                f"{accept_audio_or_filepath}; must be one of "
+                f"{['audio', 'filepath']}"
+            )
+
+        if return_text_or_speechaudio == "text":
+            self._return_text_or_speechaudio = "text"
+            result = Result(
+                type="str",
+                description="The text converted from the audio.",
+            )
+        elif return_text_or_speechaudio.lower() == "speechaudio":
+            self._return_text_or_speechaudio = "speechaudio"
+            result = Result(
+                type="SpeechAudio",
+                description="The audio file converted to text.",
+            )
+        else:
+            raise ValueError(
+                "Invalid return_text_or_speechaudio: "
+                f"{return_text_or_speechaudio}; must be one of "
+                f"{['text', 'speechaudio']}"
+            )
+
+        if work_with_filepath_or_audio == "audio":
+            if format is None:
+                raise ValueError(
+                    "format must be provided if work_with_file_path_or_audio "
+                    'is "audio"'
+                )
+            self._work_with_audio = True
+        elif work_with_filepath_or_audio == "filepath":
+            self._work_with_audio = False
+        else:
+            raise ValueError(
+                "Invalid work_with_filepath_or_audio: "
+                f"{work_with_filepath_or_audio}; must be one of "
+                f"{['audio', 'filepath']}"
+            )
+
+        if format is None:
+            format = "mp3"
+        self._format = format.lower()
+
+        if self._format not in SpeechToTextTool.FORMATS:
+            raise ValueError(
+                f"Invalid format: {self._format}; must be one of "
+                f"{SpeechToTextTool.FORMATS}"
+            )
+
+        super().__init__(
+            name=name,
+            description=description,
+            args=args,
+            func=self.__call_transcribe,
+            id=id,
+            result=result,
+        )
+
+    def __call_transcribe(
+        self, context: Context, audio: Union[SpeechAudio, str]
+    ) -> str:
+        if self._work_with_audio:
+            pass
+        else:
+            if isinstance(audio, SpeechAudio):
+                arg = audio.file_path
+            else:
+                arg = audio
+
+            result = self.transcribe(context, arg)
+
+        if self._return_text_or_speechaudio == "text":
+            return result
+        else:
+            data = None
+            if self._work_with_audio:
+                pass
+                return SpeechAudio(
+                    data=data,
+                    format=self._format,
+                    text=result,
+                )
+            else:
+                # Load the data from the arg file path and pass it
+                # to be saved in the correct spot, since that audio
+                # file might be temporary to the tool execution
+                with open(arg, "rb") as f:
+                    data = f.read()
+                return SpeechAudio(
+                    data=data,
+                    format=self._format,
+                    text=result,
+                )
+
+    @abstractmethod
+    def transcribe(
+        self, context: Context, audio: Union[SpeechAudio, str]
+    ) -> str:
+        pass
+
+
+class SpeechToTextOpenAI(SpeechToTextTool):
+    def __init__(
+        self,
+        model: Optional[str] = "whisper-1",
+        api_key: Optional[str] = None,
+        working_directory: Optional[str] = None,
+        name: str = "speech_to_text",
+        id: Optional[str] = None,
+    ):
+        if api_key is None:
+            api_key = os.getenv("OPENAI_API_KEY")
+        if api_key is None:
+            raise ValueError(
+                "Either api_key or the environment variable "
+                "OPENAI_API_KEY must be provided"
+            )
+
+        self.__client = OpenAI(api_key=api_key)
+        self.__model = model
+
+        super().__init__(
+            name=name,
+            working_directory=working_directory,
+            accept_audio_or_filepath="filepath",
+            return_text_or_speechaudio="text",
+            work_with_filepath_or_audio="filepath",
+            format="mp3",
+            id=id,
+        )
+
+    def transcribe(self, context: Context, audio: str) -> str:
+        response = self.__client.audio.transcriptions.create(
+            model=self.__model,
+            file=open(audio, "rb"),
+        )
+        return response.text
+
+
+class SpeechToTextGoogle(SpeechToTextTool):
+    def __init__(
+        self,
+        model: Optional[str] = "default",
+        api_key: Optional[str] = None,
+        credentials_path: Optional[str] = None,
+        working_directory: Optional[str] = None,
+        name: str = "speech_to_text",
+        id: Optional[str] = None,
+    ):
+        if api_key is None:
+            api_key = os.getenv("GOOGLE_API_KEY")
+
+        if credentials_path is None:
+            credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+
+        if api_key is None and credentials_path is None:
+            raise ValueError(
+                "Either api_key or credentials_path must be provided or set "
+                "via the environment variables GOOGLE_API_KEY or "
+                "GOOGLE_APPLICATION_CREDENTIALS, respectively"
+            )
+
+        try:
+            from google.cloud import speech
+
+            if credentials_path is not None:
+                self.__client = speech.SpeechClient.from_service_account_json(
+                    credentials_path
+                )
+            else:
+                from google.api_core import client_options
+
+                options = client_options.ClientOptions(api_key=api_key)
+                self.__client = speech.SpeechClient(client_options=options)
+
+            self.__speech = speech
+        except ImportError:
+            raise ImportError(
+                "Google Cloud Speech is not installed. "
+                "Please install it using "
+                "`pip install google-cloud-speech==2.31.1`"
+            )
+
+        self.__model = model
+
+        super().__init__(
+            name=name,
+            working_directory=working_directory,
+            accept_audio_or_filepath="filepath",
+            return_text_or_speechaudio="text",
+            work_with_filepath_or_audio="filepath",
+            format="wav",  # Google Speech API works well with WAV files
+            id=id,
+        )
+
+    def transcribe(self, context: Context, audio: str) -> str:
+        # Read the audio file
+        with open(audio, "rb") as audio_file:
+            content = audio_file.read()
+
+        # Configure the audio source
+        audio_source = self.__speech.RecognitionAudio(content=content)
+
+        # Configure recognition settings
+        config = self.__speech.RecognitionConfig(
+            encoding=self.__speech.RecognitionConfig.AudioEncoding.LINEAR16,
+            sample_rate_hertz=16000,  # Standard sample rate
+            language_code="en-US",  # Default to English
+            model=self.__model if self.__model != "default" else None,
+        )
+
+        # Perform the transcription
+        response = self.__client.recognize(config=config, audio=audio_source)
+        print("RESPOSNE")
+        print(response)
+
+        # Combine all transcription results
+        transcript = ""
+        for result in response.results:
+            transcript += result.alternatives[0].transcript + " "
+
+        return transcript.strip()
