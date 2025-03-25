@@ -1,11 +1,7 @@
 from __future__ import annotations
 
 import json
-import pathlib
-from os import path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-
-from pydantic import BaseModel
 
 from arkaine.backends.backend import Backend, ToolNotFoundException
 from arkaine.llms.llm import LLM, Prompt
@@ -13,14 +9,47 @@ from arkaine.tools.argument import InvalidArgumentException
 from arkaine.tools.context import Context
 from arkaine.tools.tool import Tool
 from arkaine.tools.types import ToolArguments, ToolResults
-from arkaine.utils.templater import PromptTemplate
+from arkaine.utils.parser import Parser
+from arkaine.utils.templater import PromptLoader
 
 
-class ReActResponse(BaseModel):
-    Thought: str
-    Action: Optional[str] = None
-    ActionInput: Optional[Dict[str, Any]] = None
-    Answer: Optional[str] = None
+class ReActResponse:
+
+    def __init__(
+        self,
+        thought: str,
+        action: Optional[str] = None,
+        action_input: Optional[Dict[str, Any]] = None,
+        answer: Optional[str] = None,
+    ):
+        self.thought = thought
+        self.action = action
+        self.action_input = action_input
+        self.answer = answer
+
+    def __str__(self) -> str:
+        out = f"Thought: {self.thought}\n"
+        if self.action:
+            out += f"Action: {self.action}\n"
+            out += f"Action Input: {self.action_input}\n"
+        if self.answer:
+            out += f"Answer: {self.answer}\n"
+        return out
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
+    def to_json(self) -> Dict[str, Any]:
+        return {
+            "thought": self.thought,
+            "action": self.action,
+            "action_input": self.action_input,
+            "answer": self.answer,
+        }
+
+    @classmethod
+    def from_json(cls, json_str: str) -> ReActResponse:
+        return cls(**json.loads(json_str))
 
 
 class ReActBackend(Backend):
@@ -29,11 +58,25 @@ class ReActBackend(Backend):
         self,
         llm: LLM,
         tools: List[Tool],
-        agent_explanation: str,
+        agent_explanation: Optional[str] = None,
         initial_state: Dict[str, Any] = {},
         process_answer: Optional[Callable[[Any], Any]] = None,
         ignore_actions_without_input: bool = True,
     ):
+
+        if initial_state is None:
+            initial_state = {}
+        initial_state["react_responses"] = []
+
+        self.__parser = Parser(
+            [
+                "Thought",
+                "Action",
+                "Action Input",
+                "Answer",
+            ]
+        )
+
         super().__init__(
             llm,
             tools,
@@ -43,16 +86,15 @@ class ReActBackend(Backend):
         )
 
         self.agent_explanation = agent_explanation
-        self.__templater = PromptTemplate.from_file(
-            path.join(
-                pathlib.Path(__file__).parent,
-                "prompts",
-                "react.prompt",
-            )
+        self.__base_template = PromptLoader.load_prompt(
+            "react_base",
+        )
+        self.__next_step_template = PromptLoader.load_prompt(
+            "react_next_step",
         )
         self.ignore_actions_without_input = ignore_actions_without_input
 
-    def __parse(self, text: str) -> ReActResponse:
+    def __parse_old(self, context: Context, text: str) -> ReActResponse:
         lines = text.strip().split("\n")
         results: Dict[str, Optional[Union[str, Dict]]] = {
             "Thought": None,
@@ -130,15 +172,25 @@ class ReActBackend(Backend):
             results["Answer"] = text.strip()
 
         # Use Pydantic for final validation and parsing
+        context.append("react_responses", ReActResponse(**results))
         return ReActResponse(**results)
 
-    def parse_for_result(self, context: Context, text: str) -> str:
-        return self.__parse(text).Answer
+    def __parse(self, context: Context, text: str) -> ReActResponse:
+        out = self.__parser.parse(text)
+        context.append("react_responses", out)
+        return out
+
+    def parse_for_result(self, context: Context, text: str) -> Optional[str]:
+        out = self.__parser.parse(text)
+        if out.Answer:
+            return out.Answer
+        else:
+            return None
 
     def parse_for_tool_calls(
-        self, context: Context, text: str, stop_at_first_tool: bool = False
+        self, context: Context, text: str
     ) -> List[Tuple[str, ToolArguments]]:
-        response = self.__parse(text)
+        response = self.__parse(context, text)
 
         return (
             []
@@ -151,9 +203,10 @@ class ReActBackend(Backend):
             ]
         )
 
-    def tool_results_to_prompts(
-        self, context: Context, prompt: Prompt, results: ToolResults
-    ) -> List[Prompt]:
+    def format_tool_results(
+        self, context: Context, results: ToolResults
+    ) -> List[str]:
+        out = ""
         for name, args, result in results:
             out = f"---\n{name}("
 
@@ -184,33 +237,63 @@ class ReActBackend(Backend):
             else:
                 out += f"returned:\n{result}\n"
 
-            prompt.append(
-                {
-                    "role": "system",
-                    "content": out,
-                }
-            )
-        return prompt
+        return out
 
-    def prepare_prompt(self, context: Context, **kwargs) -> Prompt:
-        # Create the tools block
+    @property
+    def tool_names(self) -> str:
+        if len(self.tools) > 1:
+            return f"{', '.join(self.tools.keys())}"
+        else:
+            return f"The tool {list(self.tools.keys())[0]}"
+
+    @property
+    def tools_block(self) -> str:
         tools_block = ""
         for _, tool in self.tools.items():
             tools_block += f"{tool}\n"
 
-        if len(self.tools) > 1:
-            tool_names = f"{', '.join(self.tools.keys())}"
-        else:
-            tool_names = f"The tool {list(self.tools.keys())[0]}"
+        return tools_block
 
-        return self.__templater.render(
-            {
-                # "agent_explanation": self.agent_explanation,
-                "tools_block": tools_block,
-                "tool_names": tool_names,
-                "task": kwargs["task"],
-            }
-        )
+    def prepare_prompt(
+        self, context: Context, tool_results: ToolResults, task: str
+    ) -> Prompt:
+        # Create the tool results block
+        if context.get("prompt") is None:
+            explanation = self.agent_explanation
+            if explanation:
+                explanation = f"{explanation}\n\n"
+            else:
+                explanation = (
+                    "You are designed to help with a variety of tasks, "
+                    "from answering questions to providing summaries to other "
+                    "types of analyses."
+                )
+            return self.__base_template.render(
+                {
+                    "agent_explanation": explanation,
+                    "tools_block": self.tools_block,
+                    "tool_names": self.tool_names,
+                    "task": task,
+                }
+            )
+        else:
+            tools_str = ""
+            for tool_result in tool_results:
+                tools_str += self.format_tool_results(context, tool_result)
+                tools_str += "\n\n"
+
+            last_response = context["react_responses"][-1]
+
+            next_prompt = self.__next_step_template.render(
+                {
+                    "last_response": str(last_response),
+                    "tools_results": tools_str,
+                }
+            )
+
+            prompt = context["prompt"]
+            prompt.append(next_prompt)
+            return prompt
 
 
 class FormatException(Exception):

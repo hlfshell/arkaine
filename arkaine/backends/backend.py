@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from concurrent.futures import Future, wait
+from time import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from arkaine.events import (
@@ -25,6 +26,8 @@ class Backend(ABC):
         max_simultaneous_tools: int = 1,
         initial_state: Dict[str, Any] = {},
         process_answer: Optional[Callable[[Any], Any]] = None,
+        max_steps: Optional[int] = None,
+        max_time: Optional[int] = None,
     ):
         super().__init__()
         self.llm = llm
@@ -35,6 +38,8 @@ class Backend(ABC):
         self.max_simultaneous_tool_calls = max_simultaneous_tools
         self.initial_state = initial_state
         self.process_answer = process_answer
+        self.max_steps = max_steps
+        self.max_time = max_time
 
     @abstractmethod
     def parse_for_tool_calls(
@@ -69,24 +74,14 @@ class Backend(ABC):
         pass
 
     @abstractmethod
-    def tool_results_to_prompts(
-        self, context: Context, prompt: Prompt, results: ToolResults
-    ) -> List[Prompt]:
+    def format_tool_results(
+        self, context: Context, results: ToolResults
+    ) -> List[str]:
         """
-        tool_results_to_prompts is called upon the return of each invoked tool
+        format_tool_results is called upon the return of each invoked tool
         by the backend. It is passed the current context and the results of
         each tool. results is a ToolResults type - A list of tuples, wherein
         each tuple is the name of the function being called, the ToolArguments
-        (a dict w/ str key and Any value being passed to the function), and the
-        return of that tool (Any). This is done because any given tool can be
-        invoked multiple times by the model in a single iteration.
-
-        If the tool threw an exception, it is returned as the result. How you
-        handle that result is up to the implementer of the backend. It is
-        recommended, however, that you handle InvalidArgumentException and
-        ToolNotFoundException as they are essentially caused by mistakes of the
-        LLM, and you can use this to better prompt/guide the LLM towards
-        utilizing the tools correctly.
         """
         pass
 
@@ -150,39 +145,57 @@ class Backend(ABC):
     ) -> str:
         self._initialize_state(context)
 
-        # Build prompt
-        prompt = self.prepare_prompt(context, **args)
-
-        steps = 0
+        tool_results: List[Tuple[str, ToolResults]] = []
+        context.init("steps", 0)
+        context.init("start_time", time())
+        context.init("responses", [])
 
         while True:
-            steps += 1
-            context.broadcast(AgentBackendStep(steps))
+            elapsed_time = time() - context["start_time"]
+            if self.max_time and elapsed_time > self.max_time:
+                context["time_elapsed"] = elapsed_time
+                raise MaxTimeExceededException(self.max_time, elapsed_time)
 
-            if max_steps and steps > max_steps:
-                raise Exception("too many steps")
+            context["prompt"] = self.prepare_prompt(
+                context, tool_results=tool_results, **args
+            )
 
-            response = self.query_model(context, prompt)
+            if self.max_steps and context["steps"] + 1 > self.max_steps:
+                context["time_elapsed"] = elapsed_time
+                raise MaxStepsExceededException(
+                    self.max_steps, context["steps"]
+                )
+
+            context.increment("steps")
+            context.broadcast(AgentBackendStep(context["steps"]))
+
+            if max_steps and context["steps"] > max_steps:
+                context["time_elapsed"] = elapsed_time
+                raise MaxStepsExceededException(context["steps"])
+
+            response = self.query_model(context, context["prompt"])
+            context.append("responses", response)
+
+            result = self.parse_for_result(context, response)
+
+            if result:
+                if self.process_answer:
+                    context["time_elapsed"] = elapsed_time
+                    return self.process_answer(result)
+                else:
+                    context["time_elapsed"] = elapsed_time
+                    return result
 
             tool_calls = self.parse_for_tool_calls(
                 context,
                 response,
                 stop_at_first_tool,
             )
-
-            result = self.parse_for_result(context, response)
-
-            if result:
-                if self.process_answer:
-                    return self.process_answer(result)
-                else:
-                    return result
-            elif len(tool_calls) > 0:
+            if len(tool_calls) > 0:
                 context.broadcast(AgentToolCalls(tool_calls))
                 tool_results = self.call_tools(context, tool_calls)
-                prompt = self.tool_results_to_prompts(
-                    context, prompt, tool_results
-                )
+            else:
+                tool_results = [(None, {}, None)]
 
 
 class ToolNotFoundException(Exception):
@@ -204,9 +217,23 @@ class MaxStepsExceededException(Exception):
 
     def __init__(
         self,
+        max_steps: int,
         steps: int,
     ):
+        self.__max_steps = max_steps
         self.__steps = steps
 
     def __str__(self) -> str:
-        return f"exceeded max steps ({self.__steps})"
+        return f"exceeded max steps ({self.__steps} > {self.__max_steps})"
+
+
+class MaxTimeExceededException(Exception):
+    def __init__(self, max_time: int, elapsed_time: int):
+        self.__max_time = max_time
+        self.__elapsed_time = elapsed_time
+
+    def __str__(self) -> str:
+        return (
+            f"exceeded max time ({self.__elapsed_time} seconds > "
+            f"{self.__max_time} seconds)"
+        )

@@ -149,7 +149,7 @@ class PromptLoader:
         )
 
     @classmethod
-    def load_prompt(cls, name: str) -> str:
+    def load_prompt(cls, name: str) -> PromptTemplate:
         """
         Loads a report prompt from a file in the "prompts" directory relative
         to the caller's file and caches it.
