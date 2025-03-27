@@ -35,7 +35,6 @@ class WebSearcher(Linear):
                     required=True,
                 ),
             ],
-            examples=[],
             steps=[
                 Webqueryer(llm),
                 lambda queries: {"input": [{"query": q} for q in queries]},

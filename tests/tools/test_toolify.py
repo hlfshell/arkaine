@@ -2,6 +2,7 @@ from typing import Any, List, Optional, Union
 
 import pytest
 
+from arkaine.tools.context import Context
 from arkaine.tools.tool import Tool
 from arkaine.tools.toolify import toolify
 
@@ -297,3 +298,61 @@ class TestTypeHandling:
         assert "Optional[str]" in types
         assert "Union[int, float]" in types
         assert "dict" in types
+
+
+class TestContextHandling:
+    def test_context_parameter_exclusion(self):
+        @toolify
+        def func(context, x: int, y: int) -> int:
+            """
+            Function with context parameter.
+
+            Args:
+                x: First number
+                y: Second number
+
+            Returns:
+                The sum
+            """
+            return x + y
+
+        assert len(func.args) == 2
+        assert func.args[0].name == "x"
+        assert func.args[1].name == "y"
+
+    def test_context_with_type_hint(self):
+        class Context:
+            pass
+
+        @toolify
+        def func(ctx: Context, x: int, y: int) -> int:
+            """
+            Function with typed context parameter.
+
+            Args:
+                x: First number
+                y: Second number
+
+            Returns:
+                The sum
+            """
+            return x + y
+
+        assert len(func.args) == 2
+        assert func.args[0].name == "x"
+        assert func.args[1].name == "y"
+
+    def test_context_with_lambda(self):
+        # Lambda with context parameter
+        lambda_func = toolify(lambda context, x, y: x + y + context["z"])
+
+        assert len(lambda_func.args) == 2
+        assert lambda_func.args[0].name == "x"
+        assert lambda_func.args[1].name == "y"
+
+        # Assert that the lambda tool, when called, passes the context
+        # correctly
+        context = Context()
+        context["z"] = 10
+        result = lambda_func(context, 1, 2)
+        assert result == 13

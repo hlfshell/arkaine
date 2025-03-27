@@ -53,7 +53,13 @@ def toolify(
 
         for param_name, param in sig.parameters.items():
             # Skip self/cls for methods
-            if param_name in ("self", "cls", "context"):
+            if param_name in ("self", "cls"):
+                continue
+
+            # Skip context parameters (either named "context" or with type hint "Context")
+            param_type = type_hints.get(param_name, "Any")
+            type_str = _get_full_type_str(param_type)
+            if param_name == "context" or type_str == "Context":
                 continue
 
             # Determine if argument is required
@@ -61,10 +67,6 @@ def toolify(
 
             # Get default value if exists
             default = None if required else str(param.default)
-
-            # Get type as string
-            param_type = type_hints.get(param_name, "Any")
-            type_str = _get_full_type_str(param_type)
 
             # Get description from docstring if available
             param_desc = arg_descriptions.get(

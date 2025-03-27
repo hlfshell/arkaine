@@ -437,7 +437,6 @@ class Researcher(Linear):
             name,
             description=description,
             arguments=args,
-            examples=[],
             steps=[
                 self._query_generator,
                 self._resource_search,
