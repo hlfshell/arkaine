@@ -185,174 +185,233 @@ class ParallelList(Tool):
             context = args[0]
             args = args[1:]  # Remove context from args
 
-        # Handle list of dicts input format (Format 1)
-        # Example: tool([{"a": 1, "b": 2}, {"a": 3, "b": 4}])
-        if len(args) == 1 and isinstance(args[0], list) and all(isinstance(item, dict) for item in args[0]):
-            input_list = args[0]
+        # Detect input format and process accordingly
+        input_list = None
+
+        # Format 1: List of dicts - tool([{"a": 1, "b": 2}, {"a": 3, "b": 4}])
+        if self._is_list_of_dicts_format(args):
+            input_list = self._process_list_of_dicts(args[0])
+        
+        # Format 4: List of lists - tool([[1, 2], [3, 4]])
+        elif self._is_list_of_lists_format(args):
+            input_list = self._process_list_of_lists(args[0])
+        
+        # Format 5: Individual lists - tool([1, 2, 3], [4, 5, 6])
+        elif self._is_individual_lists_format(args):
+            input_list = self._process_individual_lists(args, kwargs)
+        
+        # Handle tuple case
+        elif len(args) == 1 and isinstance(args[0], tuple):
+            kwargs = self._process_tuple_arg(args[0], kwargs)
             args = ()
-            return context, {"input": input_list}
-            
-        # Handle list of lists input format (Format 4)
-        # Example: tool([[1, 2], [3, 4]])
-        if len(args) == 1 and isinstance(args[0], list) and all(isinstance(item, list) for item in args[0]):
-            # Map each sublist to a dict with the tool's argument names
-            tool_args = [arg.name for arg in self.tool.args]
-            input_list = []
-            for sublist in args[0]:
-                if len(sublist) > len(tool_args):
-                    raise ValueError(f"Too many values in sublist: {sublist}. Expected {len(tool_args)} arguments.")
-                input_dict = {}
-                for i, value in enumerate(sublist):
-                    if i < len(tool_args):
-                        input_dict[tool_args[i]] = value
-                input_list.append(input_dict)
-            return context, {"input": input_list}
-
-        # Handle tuple case - if we have a single tuple argument, try to map it
-        # to the tool's arguments
-        if len(args) == 1 and isinstance(args[0], tuple):
-            tuple_args = args[0]
-            # If the number of tuple items matches our expected arguments,
-            # unpack it
-            if len(tuple_args) == len(self.tool.args):
-                kwargs = {
-                    arg.name: value
-                    for arg, value in zip(self.tool.args, tuple_args)
-                }
-                args = ()
-            else:
-                # If not matching, treat it as a single argument for the first
-                # parameter
-                kwargs = {self.tool.args[0].name: args[0]}
-                args = ()
-
+        
         # Handle single dict argument case
         elif len(args) == 1 and not kwargs and isinstance(args[0], dict):
             kwargs = args[0]
             args = ()
 
-        # Handle individual lists input format (Format 5)
-        # Example: tool([1, 2, 3], [4, 5, 6])
-        if len(args) > 1 and all(isinstance(arg, list) for arg in args):
-            # Check that all lists have the same length
-            list_lengths = set(len(arg) for arg in args)
-            if len(list_lengths) > 1:
-                raise ValueError("All arguments that are lists must be the same length")
-                
-            # Map positional args to parameter names
-            tool_args = [arg.name for arg in self.tool.args]
-            if len(args) > len(tool_args):
-                raise ValueError(f"Too many arguments provided. Expected {len(tool_args)}, got {len(args)}")
-                
-            # Create input dicts for each item in the lists
-            input_list = []
-            length = list_lengths.pop() if list_lengths else 0
-            for i in range(length):
-                input_dict = {}
-                for arg_idx, arg_list in enumerate(args):
-                    input_dict[tool_args[arg_idx]] = arg_list[i]
-                # Add any kwargs
-                for key, value in kwargs.items():
-                    input_dict[key] = value
-                input_list.append(input_dict)
-            return context, {"input": input_list}
-
-        # Map remaining positional args to their parameter names
-        tool_args = [arg.name for arg in self.tool.args]
-        for i, value in enumerate(args):
-            if i < len(tool_args):
-                if tool_args[i] in kwargs:
-                    raise TypeError(
-                        f"Got multiple values for argument '{tool_args[i]}'"
-                    )
-                kwargs[tool_args[i]] = value
-
-        # Now we go ahead and build a list of dict inputs based on the arguments
-        name_mapping = self._allowed_names()
-
-        # Check if 'input' is directly provided and handle it specially
-        # This fixes the bug where 'input' key in the input data conflicts with our internal use
-        input_list = None
-        if "input" in kwargs and isinstance(kwargs["input"], list):
-            # If 'input' is a list of dictionaries, use it directly
-            input_list = kwargs.pop("input")
-            
-            # Add any top-level arguments to each input dictionary
-            for input_dict in input_list:
-                for key, value in kwargs.items():
-                    if key not in input_dict:
-                        input_dict[key] = value
-        
-        # If input_list wasn't provided directly, process as normal
+        # If no special format detected, process as normal arguments
         if input_list is None:
-            # Check if any kwargs values are lists
-            list_lengths = set()
-            list_args = {}
-            non_list_args = {}
-
-            # Special case: If there's only one key in kwargs and its value is a list of dicts,
-            # treat it as a list of inputs for the first argument of the tool
-            if len(kwargs) == 1:
-                key, value = next(iter(kwargs.items()))
-                if isinstance(value, list) and all(isinstance(item, dict) for item in value):
-                    # This is a list of dictionaries for a key that might not be a direct argument
-                    # We'll treat each dict as a complete input for the tool
-                    input_list = []
-                    tool_arg_name = self.tool.args[0].name if self.tool.args else None
-                    
-                    for item in value:
-                        # Create an input dict with the key as the tool's first argument
-                        input_dict = {tool_arg_name: item} if tool_arg_name else {}
-                        input_list.append(input_dict)
-                    return context, {"input": input_list}
+            # Map remaining positional args to their parameter names
+            kwargs = self._map_positional_args_to_names(args, kwargs)
             
-            # Normal processing for other cases
-            for key, value in kwargs.items():
-                # Validate the argument name
-                if key not in name_mapping:
-                    # Check if this is a pluralized form of a valid argument
-                    singular_key = key[:-1] if key.endswith('s') else key
-                    if singular_key in name_mapping:
-                        canonical_name = name_mapping[singular_key]
-                    elif isinstance(value, list):
-                        # If the value is a list, we'll allow it as a special case
-                        # This handles cases like {"subject": [dict1, dict2, dict3]}
-                        canonical_name = key
-                    else:
-                        raise ValueError(f"Invalid argument: {key}")
-                else:
-                    # Map to canonical name
-                    canonical_name = name_mapping[key]
-
-                if isinstance(value, list):
-                    list_args[canonical_name] = value
-                    list_lengths.add(len(value))
-                else:
-                    non_list_args[canonical_name] = value
-
-            # Initialize input_list
-            input_list = []
-
-            # If we found lists, validate lengths and create input dicts
-            if list_args:
-                if len(list_lengths) > 1:
-                    raise ValueError(
-                        "All arguments that are lists must be the same length"
-                    )
-
-                length = list_lengths.pop() if list_lengths else 0
-
-                for i in range(length):
-                    input_dict = non_list_args.copy()
-                    for key, value in list_args.items():
-                        input_dict[key] = value[i]
-                    input_list.append(input_dict)
-            else:
-                # If no lists found, treat the entire kwargs as a single input
-                input_list = [kwargs]
+            # Process kwargs to build input list
+            input_list = self._process_kwargs(kwargs)
 
         # Return in the expected format
         return context, {"input": input_list}
+    
+    def _is_list_of_dicts_format(self, args):
+        """Check if args match Format 1: List of dicts"""
+        return (len(args) == 1 and 
+                isinstance(args[0], list) and 
+                all(isinstance(item, dict) for item in args[0]))
+    
+    def _process_list_of_dicts(self, arg_list):
+        """Process Format 1: List of dicts"""
+        return arg_list
+    
+    def _is_list_of_lists_format(self, args):
+        """Check if args match Format 4: List of lists"""
+        return (len(args) == 1 and 
+                isinstance(args[0], list) and 
+                all(isinstance(item, list) for item in args[0]))
+    
+    def _process_list_of_lists(self, list_of_lists):
+        """Process Format 4: List of lists"""
+        tool_args = [arg.name for arg in self.tool.args]
+        input_list = []
+        
+        for sublist in list_of_lists:
+            if len(sublist) > len(tool_args):
+                raise ValueError(f"Too many values in sublist: {sublist}. Expected {len(tool_args)} arguments.")
+            
+            input_dict = {}
+            for i, value in enumerate(sublist):
+                if i < len(tool_args):
+                    input_dict[tool_args[i]] = value
+            input_list.append(input_dict)
+            
+        return input_list
+    
+    def _is_individual_lists_format(self, args):
+        """Check if args match Format 5: Individual lists"""
+        return len(args) > 1 and all(isinstance(arg, list) for arg in args)
+    
+    def _process_individual_lists(self, args, kwargs):
+        """Process Format 5: Individual lists"""
+        # Check that all lists have the same length
+        list_lengths = set(len(arg) for arg in args)
+        if len(list_lengths) > 1:
+            raise ValueError("All arguments that are lists must be the same length")
+            
+        # Map positional args to parameter names
+        tool_args = [arg.name for arg in self.tool.args]
+        if len(args) > len(tool_args):
+            raise ValueError(f"Too many arguments provided. Expected {len(tool_args)}, got {len(args)}")
+            
+        # Create input dicts for each item in the lists
+        input_list = []
+        length = list_lengths.pop() if list_lengths else 0
+        
+        for i in range(length):
+            input_dict = {}
+            for arg_idx, arg_list in enumerate(args):
+                input_dict[tool_args[arg_idx]] = arg_list[i]
+            # Add any kwargs
+            for key, value in kwargs.items():
+                input_dict[key] = value
+            input_list.append(input_dict)
+            
+        return input_list
+    
+    def _process_tuple_arg(self, tuple_arg, kwargs):
+        """Process a tuple argument"""
+        # If the number of tuple items matches our expected arguments, unpack it
+        if len(tuple_arg) == len(self.tool.args):
+            return {
+                arg.name: value
+                for arg, value in zip(self.tool.args, tuple_arg)
+            }
+        else:
+            # If not matching, treat it as a single argument for the first parameter
+            return {self.tool.args[0].name: tuple_arg}
+    
+    def _map_positional_args_to_names(self, args, kwargs):
+        """Map positional arguments to their parameter names"""
+        tool_args = [arg.name for arg in self.tool.args]
+        result_kwargs = kwargs.copy()
+        
+        for i, value in enumerate(args):
+            if i < len(tool_args):
+                if tool_args[i] in result_kwargs:
+                    raise TypeError(f"Got multiple values for argument '{tool_args[i]}'")
+                result_kwargs[tool_args[i]] = value
+                
+        return result_kwargs
+    
+    def _process_kwargs(self, kwargs):
+        """Process kwargs to build the input list"""
+        name_mapping = self._allowed_names()
+        
+        # Check if 'input' is directly provided and handle it specially
+        if "input" in kwargs and isinstance(kwargs["input"], list):
+            return self._process_direct_input(kwargs)
+        
+        # Special case: list of dicts for a single argument
+        if self._is_single_key_with_list_of_dicts(kwargs):
+            return self._process_single_key_list_of_dicts(kwargs)
+        
+        # Process normal kwargs with potential lists
+        return self._process_normal_kwargs(kwargs, name_mapping)
+    
+    def _process_direct_input(self, kwargs):
+        """Process when 'input' key is directly provided"""
+        input_list = kwargs.pop("input")
+        
+        # Add any top-level arguments to each input dictionary
+        for input_dict in input_list:
+            for key, value in kwargs.items():
+                if key not in input_dict:
+                    input_dict[key] = value
+                    
+        return input_list
+    
+    def _is_single_key_with_list_of_dicts(self, kwargs):
+        """Check if kwargs has a single key with a list of dicts value"""
+        if len(kwargs) != 1:
+            return False
+            
+        key, value = next(iter(kwargs.items()))
+        return isinstance(value, list) and all(isinstance(item, dict) for item in value)
+    
+    def _process_single_key_list_of_dicts(self, kwargs):
+        """Process a single key with a list of dicts value"""
+        key, value = next(iter(kwargs.items()))
+        input_list = []
+        tool_arg_name = self.tool.args[0].name if self.tool.args else None
+        
+        for item in value:
+            # Create an input dict with the key as the tool's first argument
+            input_dict = {tool_arg_name: item} if tool_arg_name else {}
+            input_list.append(input_dict)
+            
+        return input_list
+    
+    def _process_normal_kwargs(self, kwargs, name_mapping):
+        """Process normal kwargs with potential lists"""
+        list_lengths = set()
+        list_args = {}
+        non_list_args = {}
+        
+        for key, value in kwargs.items():
+            # Validate and normalize the argument name
+            canonical_name = self._get_canonical_name(key, value, name_mapping)
+            
+            if isinstance(value, list):
+                list_args[canonical_name] = value
+                list_lengths.add(len(value))
+            else:
+                non_list_args[canonical_name] = value
+        
+        # If we found lists, validate lengths and create input dicts
+        if list_args:
+            return self._create_input_list_from_lists(list_args, non_list_args, list_lengths)
+        else:
+            # If no lists found, treat the entire kwargs as a single input
+            return [kwargs]
+    
+    def _get_canonical_name(self, key, value, name_mapping):
+        """Get the canonical name for an argument key"""
+        if key in name_mapping:
+            return name_mapping[key]
+            
+        # Check if this is a pluralized form of a valid argument
+        singular_key = key[:-1] if key.endswith('s') else key
+        if singular_key in name_mapping:
+            return name_mapping[singular_key]
+        elif isinstance(value, list):
+            # If the value is a list, we'll allow it as a special case
+            # This handles cases like {"subject": [dict1, dict2, dict3]}
+            return key
+        else:
+            raise ValueError(f"Invalid argument: {key}")
+    
+    def _create_input_list_from_lists(self, list_args, non_list_args, list_lengths):
+        """Create input list from lists and non-list arguments"""
+        if len(list_lengths) > 1:
+            raise ValueError("All arguments that are lists must be the same length")
+            
+        length = list_lengths.pop() if list_lengths else 0
+        input_list = []
+        
+        for i in range(length):
+            input_dict = non_list_args.copy()
+            for key, value in list_args.items():
+                input_dict[key] = value[i]
+            input_list.append(input_dict)
+            
+        return input_list
 
     def check_arguments(self, args: ToolArguments):
         # First verify we have the input key
@@ -400,6 +459,13 @@ class ParallelList(Tool):
                     missing_required_args=missing_args,
                     extraneous_args=extraneous_args,
                 )
+
+    def fulfill_defaults(self, args: ToolArguments) -> ToolArguments:
+        """
+        ParallelList itself should not touch or deal with defaults; we
+        pass it along for the underlying tool to handle.
+        """
+        return args
 
     def parallelize(
         self, context: Context, input: List[Dict[str, Any]]

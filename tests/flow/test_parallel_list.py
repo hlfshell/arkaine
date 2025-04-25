@@ -1,10 +1,12 @@
-import pytest
 import time
-from typing import Dict, Any
+from typing import Any, Dict
 
-from arkaine.tools.context import Context
-from arkaine.tools.tool import Tool, Argument
+import pytest
+
 from arkaine.flow.parallel_list import ParallelList
+from arkaine.tools.context import Context
+from arkaine.tools.tool import Argument, Tool
+from arkaine.tools.toolify import toolify
 
 
 @pytest.fixture
@@ -517,6 +519,7 @@ def test_list_of_dicts_input_format():
     Test that ParallelList can handle inputs in the format of a list of dictionaries.
     Format 1 from the documentation: results = tool([{"a": 1, "b": 2}, {"a": 3, "b": 4}])
     """
+
     class AddTool(Tool):
         def __init__(self):
             super().__init__(
@@ -524,7 +527,7 @@ def test_list_of_dicts_input_format():
                 description="Adds two numbers",
                 args=[
                     Argument("a", "First number", "int", required=True),
-                    Argument("b", "Second number", "int", required=True)
+                    Argument("b", "Second number", "int", required=True),
                 ],
                 func=self.execute,
             )
@@ -535,14 +538,10 @@ def test_list_of_dicts_input_format():
     add_tool = AddTool()
     pl = ParallelList(add_tool)
     context = Context(pl)
-    
+
     # Format 1: List of dicts
-    input_list = [
-        {"a": 1, "b": 2},
-        {"a": 3, "b": 4},
-        {"a": 5, "b": 6}
-    ]
-    
+    input_list = [{"a": 1, "b": 2}, {"a": 3, "b": 4}, {"a": 5, "b": 6}]
+
     results = pl(context, input_list)
     assert len(results) == 3
     assert results == [3, 7, 11]
@@ -553,6 +552,7 @@ def test_mixed_lists_and_individual_args():
     Test that ParallelList can handle inputs with mixed lists and individual arguments.
     Format 2 from the documentation: results = tool("hello", ["world", "Abby", "Clem Fandango"])
     """
+
     class GreetingTool(Tool):
         def __init__(self):
             super().__init__(
@@ -560,7 +560,7 @@ def test_mixed_lists_and_individual_args():
                 description="Creates a greeting with prefix and name",
                 args=[
                     Argument("prefix", "Greeting prefix", "str", required=True),
-                    Argument("name", "Person's name", "str", required=True)
+                    Argument("name", "Person's name", "str", required=True),
                 ],
                 func=self.execute,
             )
@@ -571,10 +571,10 @@ def test_mixed_lists_and_individual_args():
     greeting_tool = GreetingTool()
     pl = ParallelList(greeting_tool)
     context = Context(pl)
-    
+
     # Format 2: Mixed lists and individual arguments
     results = pl(context, "Hello", ["World", "Alice", "Bob"])
-    
+
     assert len(results) == 3
     assert results == ["Hello World!", "Hello Alice!", "Hello Bob!"]
 
@@ -584,6 +584,7 @@ def test_list_of_lists_input_format():
     Test that ParallelList can handle inputs in the format of a list of lists.
     Format 4 from the documentation: results = tool([[1, 2], [3, 4]])
     """
+
     class AddTool(Tool):
         def __init__(self):
             super().__init__(
@@ -591,7 +592,7 @@ def test_list_of_lists_input_format():
                 description="Adds two numbers",
                 args=[
                     Argument("a", "First number", "int", required=True),
-                    Argument("b", "Second number", "int", required=True)
+                    Argument("b", "Second number", "int", required=True),
                 ],
                 func=self.execute,
             )
@@ -602,10 +603,10 @@ def test_list_of_lists_input_format():
     add_tool = AddTool()
     pl = ParallelList(add_tool)
     context = Context(pl)
-    
+
     # Format 4: List of lists
     input_lists = [[1, 2], [3, 4], [5, 6]]
-    
+
     results = pl(context, input_lists)
     assert len(results) == 3
     assert results == [3, 7, 11]
@@ -616,6 +617,7 @@ def test_individual_lists_input_format():
     Test that ParallelList can handle inputs as individual lists.
     Format 5 from the documentation: results = tool([1, 2, 3], [4, 5, 6])
     """
+
     class AddTool(Tool):
         def __init__(self):
             super().__init__(
@@ -623,7 +625,7 @@ def test_individual_lists_input_format():
                 description="Adds two numbers",
                 args=[
                     Argument("a", "First number", "int", required=True),
-                    Argument("b", "Second number", "int", required=True)
+                    Argument("b", "Second number", "int", required=True),
                 ],
                 func=self.execute,
             )
@@ -634,10 +636,10 @@ def test_individual_lists_input_format():
     add_tool = AddTool()
     pl = ParallelList(add_tool)
     context = Context(pl)
-    
+
     # Format 5: Individual lists
     results = pl(context, [1, 3, 5], [2, 4, 6])
-    
+
     assert len(results) == 3
     assert results == [3, 7, 11]
 
@@ -647,13 +649,16 @@ def test_complex_nested_input_structures():
     Test that ParallelList can handle complex nested input structures,
     including dictionaries within lists within dictionaries.
     """
+
     class ProcessConfigTool(Tool):
         def __init__(self):
             super().__init__(
                 name="process_config",
                 description="Processes a configuration object",
                 args=[
-                    Argument("config", "Configuration object", "dict", required=True)
+                    Argument(
+                        "config", "Configuration object", "dict", required=True
+                    )
                 ],
                 func=self.execute,
             )
@@ -667,23 +672,26 @@ def test_complex_nested_input_structures():
     config_tool = ProcessConfigTool()
     pl = ParallelList(config_tool)
     context = Context(pl)
-    
+
     # Complex nested structure
     configs = [
         {
             "config": {
                 "name": "Service A",
-                "settings": [{"key": "timeout", "value": 30}, {"key": "retries", "value": 3}]
+                "settings": [
+                    {"key": "timeout", "value": 30},
+                    {"key": "retries", "value": 3},
+                ],
             }
         },
         {
             "config": {
                 "name": "Service B",
-                "settings": [{"key": "max_connections", "value": 100}]
+                "settings": [{"key": "max_connections", "value": 100}],
             }
-        }
+        },
     ]
-    
+
     results = pl(context, configs)
     assert len(results) == 2
     assert "Service A" in results[0]
@@ -697,6 +705,7 @@ def test_mixed_types_in_lists():
     Test that ParallelList can handle lists with mixed types,
     which should be correctly passed to the tool.
     """
+
     class TypeCheckerTool(Tool):
         def __init__(self):
             super().__init__(
@@ -714,10 +723,10 @@ def test_mixed_types_in_lists():
     type_tool = TypeCheckerTool()
     pl = ParallelList(type_tool)
     context = Context(pl)
-    
+
     # Mixed types in a list
     values = [42, "hello", {"key": "value"}, [1, 2, 3]]
-    
+
     results = pl(context, {"value": values})
     assert len(results) == 4
     assert "Type: int" in results[0]
@@ -731,14 +740,19 @@ def test_single_value_expanded():
     Test that a single non-list value is correctly expanded to all inputs
     when other arguments are lists.
     """
+
     class MultiplyTool(Tool):
         def __init__(self):
             super().__init__(
                 name="multiply_tool",
                 description="Multiplies a number by a factor",
                 args=[
-                    Argument("number", "Number to multiply", "int", required=True),
-                    Argument("factor", "Multiplication factor", "int", required=True)
+                    Argument(
+                        "number", "Number to multiply", "int", required=True
+                    ),
+                    Argument(
+                        "factor", "Multiplication factor", "int", required=True
+                    ),
                 ],
                 func=self.execute,
             )
@@ -749,10 +763,10 @@ def test_single_value_expanded():
     multiply_tool = MultiplyTool()
     pl = ParallelList(multiply_tool)
     context = Context(pl)
-    
+
     # Single value expanded to match list length
     results = pl(context, {"number": [1, 2, 3, 4], "factor": 10})
-    
+
     assert len(results) == 4
     assert results == [10, 20, 30, 40]
 
@@ -761,6 +775,7 @@ def test_multiple_result_formatters():
     """
     Test that different result formatters can transform the output in various ways.
     """
+
     class AddTool(Tool):
         def __init__(self):
             super().__init__(
@@ -768,7 +783,7 @@ def test_multiple_result_formatters():
                 description="Adds two numbers",
                 args=[
                     Argument("a", "First number", "int", required=True),
-                    Argument("b", "Second number", "int", required=True)
+                    Argument("b", "Second number", "int", required=True),
                 ],
                 func=self.execute,
             )
@@ -777,22 +792,25 @@ def test_multiple_result_formatters():
             return a + b
 
     add_tool = AddTool()
-    
+
     # Formatter 1: Return as a sum
     def sum_formatter(context, results):
         return {"sum": sum(results)}
-    
+
     pl1 = ParallelList(add_tool, result_formatter=sum_formatter)
     context1 = Context(pl1)
     results1 = pl1(context1, {"a": [1, 2, 3], "b": [4, 5, 6]})
     assert "sum" in results1
     assert results1["sum"] == 21  # 5 + 7 + 9 = 21
-    
+
     # Formatter 2: Return as a dictionary mapping inputs to outputs
     def mapping_formatter(context, results):
         inputs = context["original_input"]
-        return {f"{input['a']}+{input['b']}": result for input, result in zip(inputs, results)}
-    
+        return {
+            f"{input['a']}+{input['b']}": result
+            for input, result in zip(inputs, results)
+        }
+
     pl2 = ParallelList(add_tool, result_formatter=mapping_formatter)
     context2 = Context(pl2)
     results2 = pl2(context2, {"a": [1, 2, 3], "b": [4, 5, 6]})
@@ -806,6 +824,7 @@ def test_empty_and_none_values():
     """
     Test edge cases with empty lists and None values.
     """
+
     class ProcessValueTool(Tool):
         def __init__(self):
             super().__init__(
@@ -829,16 +848,16 @@ def test_empty_and_none_values():
     process_tool = ProcessValueTool()
     pl = ParallelList(process_tool)
     context = Context(pl)
-    
+
     # Test with empty list
     results1 = pl(context, {"value": []})
     assert len(results1) == 0  # Should be empty because input list is empty
-    
+
     # Test with list containing None values
     results2 = pl(context, {"value": [None, None]})
     assert len(results2) == 2
     assert all(r == "None value" for r in results2)
-    
+
     # Test with list containing empty structures
     results3 = pl(context, {"value": [[], {}, "", 0]})
     assert len(results3) == 4
@@ -850,28 +869,30 @@ def test_empty_and_none_values():
     # Define a custom formatter for the subject list test
     def subject_formatter(context, results):
         formatted_results = []
-        
+
         # Hard-code the expected results since we know what they should be
         # This avoids having to access the context data which might be structured differently
         subjects = [
             {"name": "Physics", "level": "advanced"},
             {"name": "Chemistry", "level": "intermediate"},
-            {"name": "Biology", "level": "beginner"}
+            {"name": "Biology", "level": "beginner"},
         ]
-        
+
         for i, result in enumerate(results):
             # Create a dictionary with the expected structure
             formatted_subject = {
                 "name": f"Research on {subjects[i]['name']}",
-                "priority": "high"
+                "priority": "high",
             }
             formatted_results.append({"subject": formatted_subject})
-        
+
         return formatted_results
-    
+
     # Now test with previously problematic format - list of dictionaries
     # This should now work correctly with our fix
-    pl_with_formatter = ParallelList(process_tool, result_formatter=subject_formatter)
+    pl_with_formatter = ParallelList(
+        process_tool, result_formatter=subject_formatter
+    )
     context2 = Context(pl_with_formatter)
     results2 = pl_with_formatter(
         context2,
@@ -904,3 +925,107 @@ def test_empty_and_none_values():
         assert (
             result["subject"]["priority"] == "high"
         ), f"Expected priority to be 'high' in result {i}"
+
+
+def test_parallel_list_default_value_bug():
+    """
+    Test that demonstrates a bug with ParallelList when a tool has default values.
+
+    The issue occurs when a tool has a default value for an argument, and the
+    input data has a similar but not identical key (e.g., pluralized version).
+    """
+
+    # Create a tool with default values
+    class QueryTool(Tool):
+        def __init__(self):
+            super().__init__(
+                name="query_tool",
+                description="A tool that queries a topic with a specific count",
+                args=[
+                    Argument("topic", "Topic to query", "str", required=True),
+                    Argument(
+                        "query_count",
+                        "Number of queries",
+                        "int",
+                        required=False,
+                        default=1,
+                    ),
+                ],
+                func=self.execute,
+            )
+
+        def execute(self, context, topic: str, query_count: int = 1):
+            return f"{query_count} queries about {topic}"
+
+    # Create an instance of the tool
+    query_tool = QueryTool()
+
+    # Wrap it with ParallelList
+    pl = ParallelList(query_tool)
+
+    # Test with the problematic input format
+    input_data = {"topics": ["A", "B", "C"], "query_count": 3}
+
+    # Extract arguments to see what's happening
+    context = Context()
+    extracted_args = pl.extract_arguments((context, input_data), {})
+
+    print("Extracted arguments:", extracted_args)
+
+    # Run the parallel list
+    context = Context(pl)
+    results = pl(context, input_data)
+
+    # Check results
+    assert len(results) == 3, f"Expected 3 results, got {len(results)}"
+
+    # If the bug exists, we'll see "1 queries about..." instead of "3 queries about..."
+    for i, result in enumerate(results):
+        print(f"Result {i}: {result}")
+        # The bug would cause this to fail because query_count=1 (default) would be used
+        # instead of query_count=3 from the input
+        assert (
+            "3 queries about" in result
+        ), f"Expected '3 queries about' in result, got '{result}'"
+
+
+def test_parallel_list_with_defaults():
+    """
+    An issue arose where default argument values were causing downstream issues
+    when being called via ParallelList. In truth, the default values
+    should be ignored when being called by ParallelList. This test confirmed
+    the problem, and is now here to ensure we don't re-break it.
+    """
+
+    @toolify
+    def query_tool(context, topic, query_count=1):
+        """A tool that queries a topic with a specific count"""
+        return f"{query_count} queries about {topic}"
+
+    # Wrap it with ParallelList
+    pl = ParallelList(query_tool)
+
+    # Test with the problematic input format
+    input_data = {"topics": ["A", "B", "C"], "query_count": 3}
+
+    # Extract arguments to see what's happening
+    context = Context()
+    extracted_args = pl.extract_arguments((context, input_data), {})
+
+    print("Extracted arguments with toolify:", extracted_args)
+
+    # Run the parallel list
+    context = Context(pl)
+    results = pl(context, input_data)
+
+    # Check results
+    assert len(results) == 3, f"Expected 3 results, got {len(results)}"
+
+    # If the bug exists, we'll see "1 queries about..." instead of "3 queries about..."
+    for i, result in enumerate(results):
+        print(f"Result {i}: {result}")
+        # The bug would cause this to fail because query_count=1 (default) would be used
+        # instead of query_count=3 from the input
+        assert (
+            "3 queries about" in result
+        ), f"Expected '3 queries about' in result, got '{result}'"
